@@ -442,10 +442,19 @@ export default function TasksPage() {
                       View Details
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openTaskInThread(task)} disabled={createSession.isPending}>
-                    <Terminal className="mr-2 h-4 w-4" />
-                    Open in Thread
-                  </DropdownMenuItem>
+                  {task.sessionId ? (
+                    <DropdownMenuItem asChild>
+                      <Link href={`/sessions/${task.sessionId}`}>
+                        <Terminal className="mr-2 h-4 w-4" />
+                        Open worker
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => openTaskInThread(task)} disabled={createSession.isPending}>
+                      <Terminal className="mr-2 h-4 w-4" />
+                      Open in Thread
+                    </DropdownMenuItem>
+                  )}
                   {task.externalSource && (
                     <DropdownMenuItem asChild>
                       <a
@@ -527,10 +536,19 @@ export default function TasksPage() {
                 View Details
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push(`/sessions?newSession=1&taskName=${encodeURIComponent(task.title)}&taskInstructions=${encodeURIComponent(task.description || '')}&projectId=${task.projectId || ''}`)}>
-              <Terminal className="mr-2 h-4 w-4" />
-              Open in Thread
-            </DropdownMenuItem>
+            {task.sessionId ? (
+              <DropdownMenuItem asChild>
+                <Link href={`/sessions/${task.sessionId}`}>
+                  <Terminal className="mr-2 h-4 w-4" />
+                  Open worker
+                </Link>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => router.push(`/sessions?newSession=1&taskName=${encodeURIComponent(task.title)}&taskInstructions=${encodeURIComponent(task.description || '')}&projectId=${task.projectId || ''}`)}>
+                <Terminal className="mr-2 h-4 w-4" />
+                Open in Thread
+              </DropdownMenuItem>
+            )}
             {task.externalSource && (
               <DropdownMenuItem asChild>
                 <a
@@ -757,6 +775,7 @@ export default function TasksPage() {
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="QUEUED">Queued</SelectItem>
               <SelectItem value="ANALYZING">Analyzing</SelectItem>
               <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
               <SelectItem value="REVIEW">Review</SelectItem>

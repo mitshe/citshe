@@ -31,6 +31,12 @@ export const taskStatusConfig: Record<
     variant: "outline",
     color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
   },
+  QUEUED: {
+    label: "Queued",
+    icon: <Clock className="w-4 h-4" />,
+    variant: "outline",
+    color: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  },
   ANALYZING: {
     label: "Analyzing",
     icon: <Search className="w-4 h-4 animate-pulse" />,

@@ -4,6 +4,7 @@ import type { Project } from "./project";
 
 export type TaskStatus =
   | "PENDING"
+  | "QUEUED"
   | "ANALYZING"
   | "IN_PROGRESS"
   | "REVIEW"
@@ -20,6 +21,7 @@ export interface Task {
   status: TaskStatus;
   priority?: TaskPriority;
   projectId: string | null;
+  sessionId?: string | null;
   assigneeId?: string | null;
   dueDate?: string | null;
   organizationId: string;

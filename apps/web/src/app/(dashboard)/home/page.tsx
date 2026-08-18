@@ -39,7 +39,7 @@ import type { Task, TaskStatus } from "@citshe/types";
 
 type Mode = "task" | "chat";
 
-const ACTIVE_STATUSES: TaskStatus[] = ["PENDING", "ANALYZING", "IN_PROGRESS", "REVIEW"];
+const ACTIVE_STATUSES: TaskStatus[] = ["PENDING", "QUEUED", "ANALYZING", "IN_PROGRESS", "REVIEW"];
 
 export default function HomePage() {
   const router = useRouter();
@@ -472,7 +472,8 @@ const STATUS_META: Record<
   TaskStatus,
   { label: string; icon: React.ReactNode; className: string }
 > = {
-  PENDING: { label: "Queued", icon: <Clock className="h-3.5 w-3.5" />, className: "text-muted-foreground" },
+  PENDING: { label: "Pending", icon: <Clock className="h-3.5 w-3.5" />, className: "text-muted-foreground" },
+  QUEUED: { label: "Queued", icon: <Clock className="h-3.5 w-3.5" />, className: "text-amber-500" },
   ANALYZING: { label: "Analyzing", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-blue-500" },
   IN_PROGRESS: { label: "Working", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-emerald-500" },
   REVIEW: { label: "In review", icon: <Clock className="h-3.5 w-3.5" />, className: "text-amber-500" },
