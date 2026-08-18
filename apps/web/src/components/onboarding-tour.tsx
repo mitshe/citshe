@@ -10,7 +10,7 @@ const TOUR_COMPLETED_KEY = "onboarding-tour-completed";
 const tourSteps: DriveStep[] = [
   {
     popover: {
-      title: "Welcome to mitshe!",
+      title: "Welcome to citshe!",
       description:
         "Manage all your portals from one place — right from your phone. Each portal is its own space. Quick tour!",
       side: "bottom",

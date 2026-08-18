@@ -96,15 +96,3 @@ export function useTestIntegrationBeforeConnect() {
     },
   });
 }
-
-export function useWebhookUrl() {
-  const getToken = useAuthToken();
-
-  return useQuery({
-    queryKey: [...queryKeys.integrations.all, "webhook-url"] as const,
-    queryFn: async () => {
-      const token = await getToken();
-      return api.integrations.getWebhookUrl(token);
-    },
-  });
-}

@@ -78,11 +78,11 @@ function SetupForm() {
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4 overflow-hidden">
       <span className="absolute bottom-0 left-0 right-0 text-center text-[28vw] font-brand font-bold text-foreground/[0.04] select-none pointer-events-none tracking-tighter leading-[0.7] translate-y-[25%]">
-        mitshe
+        citshe
       </span>
       <div className="w-full max-w-sm relative">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to <span className="font-brand">mitshe</span></h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome to <span className="font-brand">citshe</span></h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Create your account to start managing threads
           </p>
@@ -213,7 +213,7 @@ function LoginForm() {
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4 overflow-hidden">
       <span className="absolute bottom-0 left-0 right-0 text-center text-[28vw] font-brand font-bold text-foreground/[0.04] select-none pointer-events-none tracking-tighter leading-[0.7] translate-y-[25%]">
-        mitshe
+        citshe
       </span>
       <div className="w-full max-w-sm relative">
         <div className="text-center mb-8">
@@ -264,7 +264,7 @@ function LoginForm() {
         {isDesktopApp() && (
           <button
             type="button"
-            onClick={() => window.mitsheDesktop?.changeServer?.()}
+            onClick={() => window.citsheDesktop?.changeServer?.()}
             className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
           >
             <Server className="h-3 w-3" />

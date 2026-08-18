@@ -1,88 +1,60 @@
-# mitshe
+# citshe
 
-> Workspace manager for AI coding agents.
+> Slimmed-down agent-orchestration panel: Claude Code + GitHub + terminal in your browser, from your phone.
 
-[![CI](https://github.com/mitshe/mitshe/actions/workflows/ci.yml/badge.svg)](https://github.com/mitshe/mitshe/actions/workflows/ci.yml)
+[![CI](https://github.com/citshe/citshe/actions/workflows/ci.yml/badge.svg)](https://github.com/citshe/citshe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/KE2zm6njBf)
 
-Every task gets its own thread — an isolated Docker container with Claude Code, terminal, browser, and git. Switch between threads like tabs. No more `git stash`, no branch switching chaos. Self-hosted, bring your own API keys.
-
-![mitshe overview](docs/tour.gif)
+citshe is a lean fork of [mitshe](https://github.com/mitshe/mitshe), focused on the essentials: run **Claude Code** in isolated Docker threads, wire them to **GitHub**, and drive the whole thing from an in-browser **terminal** — including from a phone. Every task gets its own thread (an isolated container with Claude Code, terminal, and git). Switch between threads like tabs. Self-hosted, bring your own API keys.
 
 ## Install
 
 ```bash
-curl -fsSL https://mitshe.com/install.sh | sh
-```
-
-That's it. Opens **http://localhost:3000** when ready.
-
-<details>
-<summary>Manual install</summary>
-
-```bash
 docker run -d \
-  --name mitshe \
+  --name citshe \
   -p 3000:3000 \
   -p 3001:3001 \
-  -v mitshe-data:/build/data \
+  -v citshe-data:/build/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped \
-  ghcr.io/mitshe/mitshe:latest
+  ghcr.io/citshe/citshe:latest
 ```
-</details>
+
+Opens **http://localhost:3000** when ready.
 
 ## Update
 
 ```bash
-curl -fsSL https://mitshe.com/update.sh | sh
-```
-
-Your data is preserved in the `mitshe-data` Docker volume.
-
-<details>
-<summary>Manual update</summary>
-
-```bash
-docker pull ghcr.io/mitshe/mitshe:latest
-docker stop mitshe && docker rm mitshe
+docker pull ghcr.io/citshe/citshe:latest
+docker stop citshe && docker rm citshe
 docker run -d \
-  --name mitshe \
+  --name citshe \
   -p 3000:3000 \
   -p 3001:3001 \
-  -v mitshe-data:/build/data \
+  -v citshe-data:/build/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --restart unless-stopped \
-  ghcr.io/mitshe/mitshe:latest
+  ghcr.io/citshe/citshe:latest
 ```
-</details>
 
-## Desktop App
-
-Native desktop app for macOS, Windows, and Linux. Download from [Releases](https://github.com/mitshe/mitshe/releases).
-
-Connect to your local or remote mitshe instance. Adds native file picker for mounting local projects into sessions, tray icon, and keyboard shortcuts.
-
-Requires a running mitshe instance (see Install above).
+Your data is preserved in the `citshe-data` Docker volume.
 
 ## Features
 
-- **Threads** — isolated Docker containers per task, with terminal, browser, file editor, git
-- **Browser streaming** — live Chrome inside threads via noVNC, visible Playwright testing
+- **Threads** — isolated Docker containers per task, with terminal, file editor, git
+- **Mobile-first panel** — manage your portals and threads from the browser, including from a phone
 - **Branch management** — select branch per thread, push & create PRs directly
-- **Snapshots** — save a configured environment, reuse it as base for new threads
-- **Workflows** — automate: Jira issue → create thread → Claude Code works → notify Slack
-- **Skills** — reusable Claude Code slash commands, import from GitHub repos
-- **Integrations** — GitHub, GitLab, Jira, Slack
-- **Multi-provider** — Claude, OpenAI, OpenRouter, Gemini, Groq (BYOK)
+- **Integrations** — GitHub
+- **Claude Code** — powered by Claude, BYOK (bring your own API key)
 - **Self-hosted** — your data, your keys, single Docker container with SQLite
+
+_Planned:_ orchestrator + workers.
 
 ## Develop
 
 ```bash
-git clone https://github.com/mitshe/mitshe.git
-cd mitshe
+git clone https://github.com/citshe/citshe.git
+cd citshe
 just setup
 
 cp .env.example .env

@@ -90,7 +90,7 @@ export function SelfhostedSignUp() {
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>
-            Enter your details to get started with mitshe
+            Enter your details to get started with citshe
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

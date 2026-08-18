@@ -121,8 +121,8 @@ function VersionInfo() {
       .then((d) => setApiVersion(d.version))
       .catch(() => {});
 
-    if (typeof window !== "undefined" && window.mitsheDesktop?.getVersion) {
-      window.mitsheDesktop.getVersion().then((v: string) => setDesktopVersion(v)).catch(() => {});
+    if (typeof window !== "undefined" && window.citsheDesktop?.getVersion) {
+      window.citsheDesktop.getVersion().then((v: string) => setDesktopVersion(v)).catch(() => {});
     }
   }, []);
 

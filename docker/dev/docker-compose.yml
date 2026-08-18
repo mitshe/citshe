@@ -1,14 +1,14 @@
-name: mitshe-dev
+name: citshe-dev
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: mitshe-postgres
+    container_name: citshe-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mitshe
+      POSTGRES_DB: citshe
     ports:
       - "5432:5432"
     volumes:
@@ -21,7 +21,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: mitshe-redis
+    container_name: citshe-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -36,6 +36,6 @@ services:
 
 volumes:
   postgres_dev:
-    name: mitshe-postgres-dev
+    name: citshe-postgres-dev
   redis_dev:
-    name: mitshe-redis-dev
+    name: citshe-redis-dev

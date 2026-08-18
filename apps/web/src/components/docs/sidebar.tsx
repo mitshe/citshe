@@ -16,7 +16,7 @@ export function Sidebar({ currentSlug, onSearchClick }: SidebarProps) {
     <div className="flex flex-col h-full">
       <div className="p-5 border-b">
         <Link href="/docs" className="flex items-center gap-2">
-          <span className="font-semibold">mitshe</span>
+          <span className="font-semibold">citshe</span>
           <span className="text-xs text-muted-foreground">Docs</span>
         </Link>
       </div>

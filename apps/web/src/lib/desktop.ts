@@ -1,6 +1,6 @@
 /**
  * Desktop app (Electron) bridge.
- * When running inside the Electron wrapper, window.mitsheDesktop is available.
+ * When running inside the Electron wrapper, window.citsheDesktop is available.
  * In browser mode, all functions gracefully return null/false.
  */
 
@@ -13,20 +13,20 @@ interface MitsheDesktopAPI {
 
 declare global {
   interface Window {
-    mitsheDesktop?: MitsheDesktopAPI;
+    citsheDesktop?: MitsheDesktopAPI;
   }
 }
 
 export function isDesktopApp(): boolean {
-  return typeof window !== 'undefined' && !!window.mitsheDesktop;
+  return typeof window !== 'undefined' && !!window.citsheDesktop;
 }
 
 export async function selectLocalFolder(): Promise<string | null> {
-  if (!window.mitsheDesktop) return null;
-  return window.mitsheDesktop.selectFolder();
+  if (!window.citsheDesktop) return null;
+  return window.citsheDesktop.selectFolder();
 }
 
 export async function getDesktopVersion(): Promise<string | null> {
-  if (!window.mitsheDesktop) return null;
-  return window.mitsheDesktop.getVersion();
+  if (!window.citsheDesktop) return null;
+  return window.citsheDesktop.getVersion();
 }

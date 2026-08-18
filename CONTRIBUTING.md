@@ -1,12 +1,12 @@
-# Contributing to mitshe
+# Contributing to citshe
 
 ## Getting Started
 
 Prerequisites: Node.js 20+, pnpm 9+, Docker, just
 
 ```bash
-git clone https://github.com/mitshe/mitshe.git
-cd mitshe
+git clone https://github.com/citshe/citshe.git
+cd citshe
 just setup
 cp .env.example .env
 just infra
@@ -64,8 +64,8 @@ Email/password JWT authentication (selfhosted).
 
 ## Docker Images
 
-- `ghcr.io/mitshe/mitshe:latest` — all-in-one (SQLite + Redis)
-- `ghcr.io/mitshe/mitshe-executor:latest` — workflow executor
+- `ghcr.io/citshe/citshe:latest` — all-in-one (SQLite + Redis)
+- `ghcr.io/citshe/citshe-executor:latest` — workflow executor
 
 ## License
 

@@ -32,9 +32,9 @@ export interface RegisterResponse {
 }
 
 // Token storage keys
-const ACCESS_TOKEN_KEY = "mitshe_access_token";
-const TOKEN_EXPIRY_KEY = "mitshe_token_expiry";
-const CURRENT_ORG_KEY = "mitshe_current_org";
+const ACCESS_TOKEN_KEY = "citshe_access_token";
+const TOKEN_EXPIRY_KEY = "citshe_token_expiry";
+const CURRENT_ORG_KEY = "citshe_current_org";
 
 /**
  * Selfhosted auth service - manages JWT tokens and auth state

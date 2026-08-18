@@ -1,6 +1,6 @@
-# Contributing to mitshe
+# Contributing to citshe
 
-Thank you for your interest in contributing to mitshe! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to citshe! This document provides guidelines and information for contributors.
 
 ## Getting Started
 
@@ -87,7 +87,7 @@ Feature requests are welcome! Please:
 
 ## Questions?
 
-- Open a [GitHub Issue](https://github.com/mitshe/web/issues)
+- Open a [GitHub Issue](https://github.com/citshe/web/issues)
 - Reach out on [Twitter/X](https://x.com/t0tty3)
 
 ## License

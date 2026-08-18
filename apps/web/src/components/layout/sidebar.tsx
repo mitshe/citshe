@@ -219,8 +219,8 @@ export function Sidebar({
     <div className="flex h-full w-64 flex-col bg-sidebar border-1 border-border rounded-xl">
       <div className="flex h-14 items-center justify-between px-3 shrink-0">
         <Link href="/home" className="flex items-center gap-2 font-semibold">
-          <img src="/logo.svg" alt="mitshe" className="h-7 w-7" />
-          <span className="font-brand text-sm">mitshe</span>
+          <img src="/logo.svg" alt="citshe" className="h-7 w-7" />
+          <span className="font-brand text-sm">citshe</span>
         </Link>
         <button
           onClick={onToggle}

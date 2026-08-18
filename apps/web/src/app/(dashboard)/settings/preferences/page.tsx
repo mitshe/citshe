@@ -53,7 +53,7 @@ export default function PreferencesPage() {
   useEffect(() => {
     setMounted(true);
     // Load preferences from localStorage
-    const saved = localStorage.getItem("mitshe-preferences");
+    const saved = localStorage.getItem("citshe-preferences");
     if (saved) {
       try {
         setPreferences(JSON.parse(saved));
@@ -75,7 +75,7 @@ export default function PreferencesPage() {
     setIsSaving(true);
     try {
       // Save to localStorage
-      localStorage.setItem("mitshe-preferences", JSON.stringify(preferences));
+      localStorage.setItem("citshe-preferences", JSON.stringify(preferences));
       toast.success("Preferences saved");
       setHasChanges(false);
     } catch {
@@ -94,7 +94,7 @@ export default function PreferencesPage() {
       <div>
         <h1 className="text-2xl font-bold">Preferences</h1>
         <p className="text-muted-foreground">
-          Customize your mitshe experience
+          Customize your citshe experience
         </p>
       </div>
 
@@ -104,7 +104,7 @@ export default function PreferencesPage() {
           <CardHeader>
             <CardTitle>Appearance</CardTitle>
             <CardDescription>
-              Customize how mitshe looks on your device
+              Customize how citshe looks on your device
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

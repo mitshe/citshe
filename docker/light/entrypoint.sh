@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Starting mitshe..."
+echo "Starting citshe..."
 
 mkdir -p /build/data
 
@@ -12,7 +12,7 @@ if [ -S /var/run/docker.sock ]; then
         addgroup -g "$SOCK_GID" dockerhost 2>/dev/null || true
     fi
     DOCKER_GROUP=$(getent group "$SOCK_GID" | cut -d: -f1)
-    adduser mitshe "$DOCKER_GROUP" 2>/dev/null || true
+    adduser citshe "$DOCKER_GROUP" 2>/dev/null || true
 fi
 
 cd /build/apps/api
@@ -25,8 +25,8 @@ else
 fi
 echo "Database ready"
 
-# Fix data directory ownership (entrypoint runs as root, app runs as mitshe)
-chown -R mitshe:mitshe /build/data
+# Fix data directory ownership (entrypoint runs as root, app runs as citshe)
+chown -R citshe:citshe /build/data
 
 if [ -z "$ENCRYPTION_KEY" ]; then
     KEY_FILE="/build/data/.encryption_key"
@@ -40,7 +40,7 @@ if [ -z "$ENCRYPTION_KEY" ]; then
 fi
 
 if [ -S /var/run/docker.sock ]; then
-    EXECUTOR_IMAGE="${EXECUTOR_IMAGE:-ghcr.io/mitshe/mitshe-executor:latest}"
+    EXECUTOR_IMAGE="${EXECUTOR_IMAGE:-ghcr.io/citshe/citshe-executor:latest}"
     export EXECUTOR_IMAGE
     if ! docker image inspect "$EXECUTOR_IMAGE" > /dev/null 2>&1; then
         echo "Pulling executor image: $EXECUTOR_IMAGE"
@@ -49,7 +49,7 @@ if [ -S /var/run/docker.sock ]; then
 fi
 
 echo ""
-echo "mitshe is ready!"
+echo "citshe is ready!"
 echo "  Frontend: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
 echo "  API:      ${NEXT_PUBLIC_API_URL:-http://localhost:3001}"
 echo ""

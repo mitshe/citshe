@@ -1,15 +1,15 @@
 <p align="center">
-  <h1 align="center">mitshe</h1>
+  <h1 align="center">citshe</h1>
   <p align="center">
     Open-source AI-powered workflow automation for development teams
   </p>
 </p>
 
 <p align="center">
-  <a href="https://github.com/mitshe/web/blob/main/LICENSE">
+  <a href="https://github.com/citshe/web/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
   </a>
-  <a href="https://github.com/mitshe/web">
+  <a href="https://github.com/citshe/web">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" />
   </a>
   <img src="https://img.shields.io/badge/Next.js-16-black" alt="Next.js" />
@@ -18,9 +18,9 @@
 
 ---
 
-## What is mitshe?
+## What is citshe?
 
-**mitshe** is an open-source workflow automation platform designed for development teams. Connect your tools, create powerful automations, and let AI handle repetitive tasks.
+**citshe** is an open-source workflow automation platform designed for development teams. Connect your tools, create powerful automations, and let AI handle repetitive tasks.
 
 ### Key Features
 
@@ -62,7 +62,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/mitshe/web.git
+   git clone https://github.com/citshe/web.git
    cd web
    ```
 
@@ -104,30 +104,30 @@
 docker-compose up -d
 ```
 
-### mitshe-light (Recommended for Testing)
+### citshe-light (Recommended for Testing)
 
-**One command to try mitshe locally:**
+**One command to try citshe locally:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mitshe/web/main/docker/light/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/citshe/web/main/docker/light/install.sh | bash
 ```
 
 Or manually:
 
 ```bash
 docker run -d \
-  --name mitshe \
+  --name citshe \
   -p 3000:3000 \
   -p 3001:3001 \
-  -v mitshe-data:/app/data \
-  ghcr.io/mitshe/light:latest
+  -v citshe-data:/app/data \
+  ghcr.io/citshe/light:latest
 ```
 
-**mitshe-light** is a single container with:
+**citshe-light** is a single container with:
 - Frontend + Backend
 - SQLite database
 - Redis (embedded)
-- Everything you need to try mitshe
+- Everything you need to try citshe
 
 Open http://localhost:3000 after starting.
 
@@ -169,7 +169,7 @@ src/
 
 ## AI Providers (BYOK)
 
-mitshe uses a **Bring Your Own Key** model for AI providers:
+citshe uses a **Bring Your Own Key** model for AI providers:
 
 - **Anthropic Claude** - Claude 3.5 Sonnet, Claude 3 Opus
 - **OpenAI** - GPT-4, GPT-4 Turbo
@@ -217,7 +217,7 @@ npm run test
 
 ## Self-Hosting
 
-mitshe can be self-hosted on any platform that supports Node.js or Docker:
+citshe can be self-hosted on any platform that supports Node.js or Docker:
 
 - **Vercel** - Recommended for the frontend
 - **Railway** - Full-stack deployment
@@ -246,8 +246,8 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 ## Support
 
-- [Documentation](https://mitshe.dev/docs)
-- [GitHub Issues](https://github.com/mitshe/web/issues)
+- [Documentation](https://citshe.dev/docs)
+- [GitHub Issues](https://github.com/citshe/web/issues)
 - [Twitter/X](https://x.com/t0tty3)
 
 ## License

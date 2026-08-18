@@ -253,16 +253,6 @@ export const api = {
         body: JSON.stringify(data),
         token,
       }),
-
-    getWebhookUrl: (token: string) =>
-      request<{
-        urls: {
-          jira: string;
-          gitlab: string;
-          github: string;
-          trello: string;
-        };
-      }>("/integrations/webhook-url", { token }),
   },
 
   apiKeys: {

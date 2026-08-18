@@ -6,30 +6,6 @@ export interface TaskUpdatePayload {
   progress?: number;
 }
 
-export interface WorkflowExecutionPayload {
-  executionId: string;
-  workflowId: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
-  startedAt?: string;
-  completedAt?: string;
-  error?: string;
-  output?: Record<string, unknown>;
-}
-
-export interface WorkflowNodeExecutionPayload {
-  executionId: string;
-  workflowId: string;
-  nodeId: string;
-  nodeName: string;
-  nodeType: string;
-  status: "pending" | "running" | "completed" | "failed" | "skipped";
-  startedAt?: string;
-  completedAt?: string;
-  output?: Record<string, unknown>;
-  error?: string;
-  duration?: number;
-}
-
 export interface IntegrationEventPayload {
   type: "jira" | "github" | "gitlab" | "slack";
   event: string;
@@ -62,11 +38,6 @@ export type SocketEvent =
   | "task:completed"
   | "task:failed"
   | "agent:log"
-  | "workflow:execution:started"
-  | "workflow:execution:completed"
-  | "workflow:execution:failed"
-  | "workflow:execution:cancelled"
-  | "workflow:node:update"
   | "integration:event"
   | "notification"
   | "session:status"
@@ -83,11 +54,6 @@ export interface SocketEventPayloads {
     details?: Record<string, unknown>;
     timestamp: string;
   };
-  "workflow:execution:started": WorkflowExecutionPayload;
-  "workflow:execution:completed": WorkflowExecutionPayload;
-  "workflow:execution:failed": WorkflowExecutionPayload;
-  "workflow:execution:cancelled": WorkflowExecutionPayload;
-  "workflow:node:update": WorkflowNodeExecutionPayload;
   "integration:event": IntegrationEventPayload;
   notification: NotificationPayload;
   "session:status": SessionStatusPayload;

@@ -3,7 +3,7 @@
  * The key is the slug (e.g., "" for intro, "workflows" for workflows page).
  */
 export const docsContent: Record<string, string> = {
-  "": `# Welcome to mitshe
+  "": `# Welcome to citshe
 
 Build powerful automations with AI. Connect your development tools, create visual workflows, and automate repetitive tasks.
 
@@ -91,7 +91,7 @@ Use Manual triggers while learning. Switch to webhooks or schedules for producti
 | Field | Value |
 |-------|-------|
 | **Channel** | \`#general\` |
-| **Message** | \`Hello from mitshe! Triggered at {{trigger.timestamp}}\` |
+| **Message** | \`Hello from citshe! Triggered at {{trigger.timestamp}}\` |
 </example>
 
 ## Step 4: Save and run
@@ -113,13 +113,13 @@ A workflow is a series of automated steps. When something happens (trigger), do 
 
 ## Example: Automated code reviews
 
-Without mitshe:
+Without citshe:
 1. See a pull request notification
 2. Open the PR, read changes
 3. Write review comments
 4. Post them on GitHub
 
-With mitshe:
+With citshe:
 
 <diagram>
 trigger -> action -> action -> result
@@ -514,7 +514,7 @@ Expression not working?
 
   integrations: `# Integrations
 
-Connect your tools to mitshe. Automate across Git providers, issue trackers, and communication platforms.
+Connect your tools to citshe. Automate across Git providers, issue trackers, and communication platforms.
 
 ## Git Providers
 
@@ -562,7 +562,7 @@ All integrations follow the same steps:
 ### Create Token
 Generate an API token in the external service with required permissions.
 
-### Connect in mitshe
+### Connect in citshe
 [Settings → Integrations](/settings/integrations) → Click **Connect**
 
 ### Enter Credentials
@@ -609,7 +609,7 @@ Automate Git operations — branches, commits, pull requests.
 4. Select repositories to grant access
 5. Add permissions listed below
 
-### Connect to mitshe
+### Connect to citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on GitHub
@@ -717,10 +717,10 @@ Sync issues, automate transitions, and trigger workflows from Jira events.
 
 1. Go to [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 2. Click **Create API token**
-3. Label: \`mitshe\`
+3. Label: \`citshe\`
 4. Copy the token
 
-### Connect to mitshe
+### Connect to citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on Jira
@@ -853,7 +853,7 @@ Send notifications, alerts, and interactive messages to your team.
 
 1. Go to [Slack API → Your Apps](https://api.slack.com/apps)
 2. Click **Create New App** → **From scratch**
-3. Name: \`mitshe\`
+3. Name: \`citshe\`
 4. Select your workspace
 
 ### Add Bot Permissions
@@ -867,7 +867,7 @@ Send notifications, alerts, and interactive messages to your team.
 1. Click **Install to Workspace** → **Allow**
 2. Copy the **Bot User OAuth Token** (starts with \`xoxb-\`)
 
-### Connect in mitshe
+### Connect in citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on Slack
@@ -1025,11 +1025,11 @@ Automate Git operations with GitLab — branches, merge requests, pipelines.
 
 1. Go to GitLab → **Preferences → Access Tokens**
 2. For self-hosted: \`https://your-gitlab.com/-/profile/personal_access_tokens\`
-3. Token name: \`mitshe\`
+3. Token name: \`citshe\`
 4. Expiration: 90 days (recommended)
 5. Select scopes listed below
 
-### Connect to mitshe
+### Connect to citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on GitLab
@@ -1164,11 +1164,11 @@ Sync issues and automate project management with JetBrains YouTrack.
 1. Go to YouTrack → **Profile → Account Security**
 2. Or: \`https://your-youtrack.myjetbrains.com/users/me\`
 3. Under **Tokens**, click **New token**
-4. Name: \`mitshe\`
+4. Name: \`citshe\`
 5. Scope: **YouTrack**
 6. Copy the token
 
-### Connect to mitshe
+### Connect to citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on YouTrack
@@ -1294,7 +1294,7 @@ Connect your Obsidian vault to automate note-taking and knowledge management.
 
 ## What is Obsidian?
 
-[Obsidian](https://obsidian.md) is a powerful knowledge base that works on top of local Markdown files. With mitshe, you can:
+[Obsidian](https://obsidian.md) is a powerful knowledge base that works on top of local Markdown files. With citshe, you can:
 
 - **Search your notes** and use them as context for AI
 - **Create notes** automatically from workflow outputs
@@ -1315,7 +1315,7 @@ Connect your Obsidian vault to automate note-taking and knowledge management.
 
 The plugin only works when Obsidian is running. Keep it open or running in background.
 
-### Connect to mitshe
+### Connect to citshe
 
 1. Go to [Settings → Integrations](/settings/integrations)
 2. Click **Connect** on Obsidian
@@ -1480,7 +1480,7 @@ assignee: john
 
   "deployment/light": `# Light Mode
 
-Run mitshe as a single Docker container. Perfect for personal use, demos, and trying out the platform.
+Run citshe as a single Docker container. Perfect for personal use, demos, and trying out the platform.
 
 ## What is Light Mode?
 
@@ -1496,13 +1496,13 @@ No external dependencies. Just Docker.
 
 \`\`\`bash
 docker run -d -p 3000:3000 -p 3001:3001 \\
-  -v mitshe-data:/app/data \\
-  ghcr.io/mitshe/light:latest
+  -v citshe-data:/app/data \\
+  ghcr.io/citshe/light:latest
 \`\`\`
 
 Open [http://localhost:3000](http://localhost:3000).
 
-That's it. You're running mitshe.
+That's it. You're running citshe.
 
 ## Data Persistence
 
@@ -1510,11 +1510,11 @@ All data is stored in a single volume:
 
 | Path | Contents |
 |------|----------|
-| \`/app/data/mitshe.db\` | SQLite database |
+| \`/app/data/citshe.db\` | SQLite database |
 | \`/app/data/redis/\` | Redis persistence |
 
 :::warning
-**Backup your volume.** The \`mitshe-data\` volume contains all your workflows, executions, and settings.
+**Backup your volume.** The \`citshe-data\` volume contains all your workflows, executions, and settings.
 :::
 
 ## Configuration
@@ -1531,9 +1531,9 @@ Environment variables:
 
 \`\`\`bash
 docker run -d -p 3000:3000 -p 3001:3001 \\
-  -v mitshe-data:/app/data \\
+  -v citshe-data:/app/data \\
   -e ENCRYPTION_KEY="your-32-byte-hex-key" \\
-  ghcr.io/mitshe/light:latest
+  ghcr.io/citshe/light:latest
 \`\`\`
 
 Generate a secure key:
@@ -1548,17 +1548,17 @@ For easier management, use Docker Compose:
 \`\`\`yaml
 # docker-compose.yml
 services:
-  mitshe:
-    image: ghcr.io/mitshe/light:latest
+  citshe:
+    image: ghcr.io/citshe/light:latest
     ports:
       - "3000:3000"
       - "3001:3001"
     volumes:
-      - mitshe-data:/app/data
+      - citshe-data:/app/data
     restart: unless-stopped
 
 volumes:
-  mitshe-data:
+  citshe-data:
 \`\`\`
 
 \`\`\`bash
@@ -1595,14 +1595,14 @@ Light Mode is great for personal use but has constraints:
 
 Check logs:
 \`\`\`bash
-docker logs mitshe
+docker logs citshe
 \`\`\`
 
 ### Permission errors
 
 Ensure the data volume is writable:
 \`\`\`bash
-docker exec mitshe ls -la /app/data
+docker exec citshe ls -la /app/data
 \`\`\`
 
 ### Port conflicts
@@ -1615,7 +1615,7 @@ docker run -p 8080:3000 -p 8081:3001 ...
 
   "deployment/selfhosted": `# Selfhosted Deployment
 
-Deploy mitshe for your team with user accounts, organizations, and PostgreSQL.
+Deploy citshe for your team with user accounts, organizations, and PostgreSQL.
 
 ## Overview
 
@@ -1656,8 +1656,8 @@ Selfhosted mode provides:
 ### 1. Clone the repository
 
 \`\`\`bash
-git clone https://github.com/mitshe/mitshe.git
-cd mitshe
+git clone https://github.com/citshe/citshe.git
+cd citshe
 \`\`\`
 
 ### 2. Configure environment
@@ -1669,7 +1669,7 @@ cp .env.example .env
 Edit \`.env\`:
 \`\`\`bash
 # Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mitshe
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/citshe
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -1710,7 +1710,7 @@ For production, use the full Docker Compose stack:
 # docker-compose.prod.yml
 services:
   web:
-    image: ghcr.io/mitshe/web:latest
+    image: ghcr.io/citshe/web:latest
     ports:
       - "3000:3000"
     environment:
@@ -1719,11 +1719,11 @@ services:
       - api
 
   api:
-    image: ghcr.io/mitshe/api:latest
+    image: ghcr.io/citshe/api:latest
     ports:
       - "3001:3001"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mitshe
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/citshe
       - REDIS_URL=redis://redis:6379
       - ENCRYPTION_KEY=\${ENCRYPTION_KEY}
       - JWT_SECRET=\${JWT_SECRET}
@@ -1738,7 +1738,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=mitshe
+      - POSTGRES_DB=citshe
 
   redis:
     image: redis:7-alpine
@@ -1793,11 +1793,11 @@ For production, always use HTTPS. Use a reverse proxy like Nginx or Caddy:
 ### Caddy (recommended)
 
 \`\`\`
-mitshe.yourdomain.com {
+citshe.yourdomain.com {
     reverse_proxy localhost:3000
 }
 
-api.mitshe.yourdomain.com {
+api.citshe.yourdomain.com {
     reverse_proxy localhost:3001
 }
 \`\`\`
@@ -1807,7 +1807,7 @@ api.mitshe.yourdomain.com {
 \`\`\`nginx
 server {
     listen 443 ssl;
-    server_name mitshe.yourdomain.com;
+    server_name citshe.yourdomain.com;
 
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
@@ -1828,10 +1828,10 @@ server {
 
 \`\`\`bash
 # Backup
-pg_dump -h localhost -U postgres mitshe > backup.sql
+pg_dump -h localhost -U postgres citshe > backup.sql
 
 # Restore
-psql -h localhost -U postgres mitshe < backup.sql
+psql -h localhost -U postgres citshe < backup.sql
 \`\`\`
 
 ### Full backup script
@@ -1839,7 +1839,7 @@ psql -h localhost -U postgres mitshe < backup.sql
 \`\`\`bash
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump -h localhost -U postgres mitshe > backup_$DATE.sql
+pg_dump -h localhost -U postgres citshe > backup_$DATE.sql
 gzip backup_$DATE.sql
 # Upload to S3, etc.
 \`\`\`
@@ -1853,7 +1853,7 @@ Run multiple API instances behind a load balancer:
 \`\`\`yaml
 services:
   api:
-    image: ghcr.io/mitshe/api:latest
+    image: ghcr.io/citshe/api:latest
     deploy:
       replicas: 3
     # ... rest of config
@@ -1886,7 +1886,7 @@ docker compose logs -f web
 
 Check PostgreSQL is running and accessible:
 \`\`\`bash
-psql -h localhost -U postgres -d mitshe -c "SELECT 1"
+psql -h localhost -U postgres -d citshe -c "SELECT 1"
 \`\`\`
 
 ### Redis connection failed
@@ -1905,7 +1905,7 @@ npx prisma migrate deploy
 
   api: `# REST API
 
-Access mitshe programmatically. Interactive Swagger docs available at \`/api\` on your API server.
+Access citshe programmatically. Interactive Swagger docs available at \`/api\` on your API server.
 
 ## Authentication
 
@@ -2068,7 +2068,7 @@ curl -X POST http://localhost:3001/api/v1/workflows/wf_123/run \\
   // ─── Workspace ──────────────────────────────────────────────────
   "workspace": `# Workspace
 
-The Workspace module provides interactive AI agent threads with isolated Docker environments. Work directly with AI agents like Claude Code or OpenClaw in a browser-based terminal, edit files with a Monaco-powered code editor, and manage your codebase - all from mitshe.
+The Workspace module provides interactive AI agent threads with isolated Docker environments. Work directly with AI agents like Claude Code or OpenClaw in a browser-based terminal, edit files with a Monaco-powered code editor, and manage your codebase - all from citshe.
 
 ## Key Features
 
@@ -2278,7 +2278,7 @@ You can also pass a specific \`sessionId\` in the node config to target a differ
   // ─── AI Agent Integrations ──────────────────────────────────────
   "integrations/claude-code": `# Claude Code
 
-Claude Code is Anthropic's official CLI for AI-assisted development. In mitshe, it runs inside isolated Docker containers as part of Workspace threads.
+Claude Code is Anthropic's official CLI for AI-assisted development. In citshe, it runs inside isolated Docker containers as part of Workspace threads.
 
 ## Setup
 
@@ -2316,7 +2316,7 @@ Use the **Run Agent Task** workflow node with \`provider: claude\` to run Claude
 
   "integrations/openclaw": `# OpenClaw
 
-OpenClaw is an open-source AI agent platform supporting 50+ AI providers. In mitshe, it runs inside isolated Docker containers as part of Workspace threads.
+OpenClaw is an open-source AI agent platform supporting 50+ AI providers. In citshe, it runs inside isolated Docker containers as part of Workspace threads.
 
 ## Setup
 

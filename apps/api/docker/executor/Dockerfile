@@ -1,16 +1,16 @@
-# Mitshe Executor — isolated environment for AI coding threads
+# Citshe Executor — isolated environment for AI coding threads
 #
 # Two variants:
-#   docker build --target lite -t mitshe-executor:lite .   (terminal only, ~2GB)
-#   docker build --target full -t mitshe-executor:latest . (terminal + Chrome + browser streaming)
+#   docker build --target lite -t citshe-executor:lite .   (terminal only, ~2GB)
+#   docker build --target full -t citshe-executor:latest . (terminal + Chrome + browser streaming)
 
 # ============================================================================
 # BASE — shared foundation for both variants
 # ============================================================================
 FROM node:22-bookworm AS base
 
-LABEL maintainer="mitshe"
-LABEL description="Isolated execution environment for mitshe threads"
+LABEL maintainer="citshe"
+LABEL description="Isolated execution environment for citshe threads"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -87,8 +87,8 @@ WORKDIR /workspace
 USER executor
 RUN git config --global init.defaultBranch main \
     && git config --global pull.rebase false \
-    && git config --global user.email "executor@mitshe.com" \
-    && git config --global user.name "Mitshe Executor"
+    && git config --global user.email "executor@citshe.com" \
+    && git config --global user.name "Citshe Executor"
 
 # ============================================================================
 # LITE — terminal only, no browser/GUI (~2GB smaller)

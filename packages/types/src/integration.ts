@@ -13,13 +13,6 @@ export type IntegrationType =
   | "TEAMS"
   | "OBSIDIAN";
 
-export enum IntegrationCategory {
-  COMMUNICATION = "communication",
-  DEVELOPMENT = "development",
-  PROJECT = "project",
-  KNOWLEDGE = "knowledge",
-}
-
 export interface Integration {
   id: string;
   type: IntegrationType;

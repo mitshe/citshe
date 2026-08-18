@@ -1,17 +1,25 @@
-# CLAUDE.md - mitshe
+# CLAUDE.md - citshe
 
 > Ten plik jest czytany przez Claude Code jako kontekst projektu.
 > Aktualizuj go gdy zmieniasz architekturę lub dodajesz nowe moduły.
 
+> **citshe = odchudzony fork [mitshe](https://github.com/mitshe/mitshe).**
+> Skupiony zakres: **Claude Code + GitHub + terminal w przeglądarce**, panel
+> zarządzania z telefonu. Orchestrator + workery są planowane. Wycięte względem
+> mitshe: workflow builder / React Flow, issue trackery (Jira/YouTrack/Linear),
+> notyfikacje (Slack/Teams/Email), multi-provider AI (OpenAI/Gemini/Groq/...),
+> snapshoty.
+
 ## Quick Reference
 
 ```
-Nazwa projektu: mitshe
+Nazwa projektu: citshe
 Stack: Next.js 16 + NestJS 11 + TypeScript + Prisma + PostgreSQL/SQLite
 Architektura: Hexagonal + CQRS + Event-Driven (Monorepo)
 UI: shadcn/ui + Tailwind CSS 4
 Auth: Selfhosted (JWT)
 Build: pnpm + Turborepo
+Integracje: GitHub (git provider) + Claude (AI provider), BYOK
 ```
 
 ---
@@ -19,15 +27,15 @@ Build: pnpm + Turborepo
 ## 1. Struktura Monorepo
 
 ```
-mitshe/
+citshe/
 ├── apps/
-│   ├── web/                     # Next.js 16 frontend (@mitshe/web)
+│   ├── web/                     # Next.js 16 frontend (@citshe/web)
 │   │   ├── src/
 │   │   │   ├── app/             # App Router pages
 │   │   │   ├── components/      # React components
 │   │   │   └── lib/             # Utilities, API client
 │   │   └── Dockerfile
-│   └── api/                     # NestJS 11 backend (@mitshe/api)
+│   └── api/                     # NestJS 11 backend (@citshe/api)
 │       ├── src/
 │       │   ├── modules/         # Feature modules
 │       │   ├── infrastructure/  # Adapters, DB, queues
@@ -35,7 +43,7 @@ mitshe/
 │       ├── prisma/              # Database schema
 │       └── Dockerfile
 ├── packages/
-│   └── types/                   # Shared TypeScript types (@mitshe/types)
+│   └── types/                   # Shared TypeScript types (@citshe/types)
 ├── docker/
 │   ├── light/                   # All-in-one container (SQLite + Redis)
 │   ├── dev/                     # Development infra (PostgreSQL + Redis)
@@ -100,10 +108,8 @@ ADAPTERS (implementations) → apps/api/src/infrastructure/adapters/
 **Główne porty:**
 | Port | Plik | Adaptery |
 |------|------|----------|
-| `IssueTrackerPort` | `ports/issue-tracker.port.ts` | JiraAdapter, YouTrackAdapter, LinearAdapter |
-| `GitProviderPort` | `ports/git-provider.port.ts` | GitLabAdapter, GitHubAdapter |
-| `NotificationPort` | `ports/notification.port.ts` | SlackAdapter, TeamsAdapter, EmailAdapter |
-| `AIProviderPort` | `ports/ai-provider.port.ts` | ClaudeAPIAdapter, OpenAIAdapter |
+| `GitProviderPort` | `ports/git-provider.port.ts` | GitHubAdapter |
+| `AIProviderPort` | `ports/ai-provider.port.ts` | ClaudeAPIAdapter |
 
 ### 3.2 CQRS
 
@@ -126,28 +132,9 @@ Handlers → apps/api/src/application/events/handlers/
 
 **Główne eventy:**
 - `TaskCreatedEvent` → triggers AI processing queue
-- `TaskCompletedEvent` → triggers notifications
-- `MergeRequestCreatedEvent` → updates JIRA, notifies Slack
-- `TaskFailedEvent` → notifies human intervention needed
-
-### 3.4 Visual Workflow Builder
-
-**Kluczowa funkcjonalność:** Użytkownicy tworzą workflow za pomocą:
-1. **GUI** - Drag & drop blocks, visual editor (React Flow)
-2. **IaC (Infrastructure as Code)** - YAML/JSON definicje
-
-```
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│  JIRA   │───▶│   AI    │───▶│ GitLab  │───▶│  Slack  │
-│ Trigger │    │ Analyze │    │   MR    │    │ Notify  │
-└─────────┘    └─────────┘    └─────────┘    └─────────┘
-```
-
-**Node Types:**
-- **Triggers:** `trigger:jira:webhook`, `trigger:gitlab:webhook`, `trigger:manual`, `trigger:schedule`
-- **AI Agents:** `ai:analyze`, `ai:developer`, `ai:reviewer`, `ai:tester`, `ai:security`
-- **Actions:** `action:jira:update`, `action:gitlab:mr`, `action:slack:notify`
-- **Control Flow:** `control:condition`, `control:parallel`, `control:loop`
+- `TaskCompletedEvent` → aktualizuje status wątku
+- `PullRequestCreatedEvent` → aktualizuje status wątku
+- `TaskFailedEvent` → oznacza potrzebę interwencji człowieka
 
 ---
 
@@ -160,16 +147,16 @@ Handlers → apps/api/src/application/events/handlers/
 user.entity.ts          // Entity
 create-task.command.ts  // Command
 task.repository.ts      // Repository
-jira.adapter.ts         // Adapter
+github.adapter.ts       // Adapter
 
 // Klasy
 class User { }                    // Entity - PascalCase
 class CreateTaskCommand { }       // Command - PascalCase
 class TaskRepository { }          // Repository - PascalCase
-class JiraAdapter { }             // Adapter - PascalCase
+class GitHubAdapter { }           // Adapter - PascalCase
 
 // Interfaces (Ports)
-interface IssueTrackerPort { }    // Port - PascalCase + "Port" suffix
+interface GitProviderPort { }     // Port - PascalCase + "Port" suffix
 interface TaskRepository { }      // Repository interface
 
 // Functions
@@ -248,14 +235,14 @@ throw new InternalServerError('Database connection failed');
 **NIE rób tutaj:**
 - Background job processing
 - AI agent orchestration
-- External API integrations (JIRA, GitLab)
+- External API integrations (GitHub)
 - Long-running operations
 - Git operations
 
 ### 5.2 NestJS (apps/api)
 
 **Rób tutaj:**
-- Webhook endpoints (JIRA, GitLab)
+- Webhook endpoints (GitHub)
 - AI processing pipeline
 - Background jobs (BullMQ)
 - Git operations (clone, commit, push)
@@ -271,13 +258,13 @@ throw new InternalServerError('Database connection failed');
 ### 5.3 Shared Types (packages/types)
 
 Współdzielone typy między frontend i backend:
-- Task, Project, Workflow entities
+- Task, Project entities
 - API request/response types
 - Integration configurations
 
 ```typescript
 // Import w apps/web lub apps/api
-import { Task, TaskStatus, Workflow } from '@mitshe/types';
+import { Task, TaskStatus } from '@citshe/types';
 ```
 
 ---
@@ -297,10 +284,10 @@ Schema w `apps/api/prisma/schema.prisma` wspiera:
 just db-migrate
 
 # Aplikowanie w produkcji
-pnpm --filter @mitshe/api prisma migrate deploy
+pnpm --filter @citshe/api prisma migrate deploy
 
 # Reset (dev only!)
-pnpm --filter @mitshe/api prisma migrate reset
+pnpm --filter @citshe/api prisma migrate reset
 ```
 
 ---
@@ -310,7 +297,7 @@ pnpm --filter @mitshe/api prisma migrate reset
 ### Root .env (shared)
 ```bash
 # Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mitshe
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/citshe
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -353,10 +340,8 @@ Klienci podają własne API keys dla AI:
 ### 9.2 Pragmatyzm w Architekturze
 
 **Abstrakcja (Ports & Adapters) dla:**
-- Issue trackers (JIRA, YouTrack, Linear)
-- Git providers (GitLab, GitHub)
-- AI providers (Claude, OpenAI, local)
-- Notifications (Slack, Teams, Email)
+- Git providers (GitHub)
+- AI providers (Claude)
 
 **BEZ abstrakcji dla:**
 - Database (Prisma bezpośrednio)
@@ -372,7 +357,7 @@ Nigdy nie rób side effects w command handlers. Użyj eventów:
 // BAD - side effect w command handler
 async execute(command: CreateTaskCommand) {
   const task = await this.taskRepository.save(task);
-  await this.slackService.notify('Task created'); // ❌ Side effect!
+  await this.someService.doThing('Task created'); // ❌ Side effect!
   return task;
 }
 
@@ -387,7 +372,7 @@ async execute(command: CreateTaskCommand) {
 @EventsHandler(TaskCreatedEvent)
 class OnTaskCreated {
   handle(event: TaskCreatedEvent) {
-    await this.slackService.notify('Task created'); // ✅ Osobny handler
+    await this.someService.doThing('Task created'); // ✅ Osobny handler
   }
 }
 ```
@@ -402,14 +387,13 @@ class OnTaskCreated {
 - [NestJS CQRS](https://docs.nestjs.com/recipes/cqrs)
 - [BullMQ](https://docs.bullmq.io/)
 - [shadcn/ui](https://ui.shadcn.com/)
-- [React Flow](https://reactflow.dev/)
 - [Turborepo](https://turbo.build/repo/docs)
 
 ---
 
 ## 11. Portal-first UX (mobile-first, "vibecoder from your phone")
 
-mitshe manages a **portfolio of projects ("portals") from the browser,
+citshe manages a **portfolio of projects ("portals") from the browser,
 including from a phone**. Each portal is an `Organization`.
 
 - **`/home`** — the hub. Portal switcher + quick launchers (Terminal / Chat /
@@ -432,11 +416,11 @@ including from a phone**. Each portal is an `Organization`.
 - **Deployment**: engine runs on a **VPS with Docker + its own Postgres**
   (NOT Cloudflare Workers — NestJS long-running + Docker executor + Redis +
   WebSocket are incompatible with edge). Content portals are hosted separately
-  (e.g. Cloudflare); mitshe manages their repos over GitHub.
+  (e.g. Cloudflare); citshe manages their repos over GitHub.
 
 ---
 
-*Ostatnia aktualizacja: 2026-04-01*
+*Ostatnia aktualizacja: 2026-08-18*
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

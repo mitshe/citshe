@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * QueryClientProvider tree (see OrgSwitchQueryReset) clears the react-query
  * cache so all data refetches scoped to the new org.
  */
-export const ORG_SWITCHED_EVENT = "mitshe:org-switched";
+export const ORG_SWITCHED_EVENT = "citshe:org-switched";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);

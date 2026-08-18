@@ -85,8 +85,3 @@ export interface ImportConfirmDto {
   url: string;
   projectId?: string;
 }
-
-export interface RunWorkflowDto {
-  workflowId: string;
-  additionalData?: Record<string, unknown>;
-}

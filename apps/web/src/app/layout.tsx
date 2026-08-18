@@ -23,7 +23,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "mitshe",
+  title: "citshe",
   description: "Workspace manager for AI coding agents",
 };
 

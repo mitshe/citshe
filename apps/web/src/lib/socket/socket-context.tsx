@@ -18,10 +18,6 @@ interface SocketContextValue {
   subscribeToOrganization: (organizationId: string) => void;
   subscribeToTask: (taskId: string) => void;
   unsubscribeFromTask: (taskId: string) => void;
-  subscribeToWorkflow: (workflowId: string) => void;
-  unsubscribeFromWorkflow: (workflowId: string) => void;
-  subscribeToExecution: (executionId: string) => void;
-  unsubscribeFromExecution: (executionId: string) => void;
   subscribeToSession: (sessionId: string) => void;
   unsubscribeFromSession: (sessionId: string) => void;
 }
@@ -150,34 +146,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     [socket],
   );
 
-  const subscribeToWorkflow = useCallback(
-    (workflowId: string) => {
-      socket?.emit("subscribe:workflow", workflowId);
-    },
-    [socket],
-  );
-
-  const unsubscribeFromWorkflow = useCallback(
-    (workflowId: string) => {
-      socket?.emit("unsubscribe:workflow", workflowId);
-    },
-    [socket],
-  );
-
-  const subscribeToExecution = useCallback(
-    (executionId: string) => {
-      socket?.emit("subscribe:execution", executionId);
-    },
-    [socket],
-  );
-
-  const unsubscribeFromExecution = useCallback(
-    (executionId: string) => {
-      socket?.emit("unsubscribe:execution", executionId);
-    },
-    [socket],
-  );
-
   const subscribeToSession = useCallback(
     (sessionId: string) => {
       socket?.emit("subscribe:session", sessionId);
@@ -200,10 +168,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         subscribeToOrganization,
         subscribeToTask,
         unsubscribeFromTask,
-        subscribeToWorkflow,
-        unsubscribeFromWorkflow,
-        subscribeToExecution,
-        unsubscribeFromExecution,
         subscribeToSession,
         unsubscribeFromSession,
       }}
@@ -238,80 +202,6 @@ export function useSocketEvent<E extends SocketEvent>(
       socket.off(event, callback as any);
     };
   }, [socket, event, callback]);
-}
-
-export function useWorkflowExecution(executionId: string | null) {
-  const { socket, subscribeToExecution, unsubscribeFromExecution } =
-    useSocket();
-  const [status, setStatus] = useState<string>("pending");
-  const [nodeUpdates, setNodeUpdates] = useState<
-    Map<string, SocketEventPayloads["workflow:node:update"]>
-  >(new Map());
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!socket || !executionId) return;
-
-    subscribeToExecution(executionId);
-
-    const handleNodeUpdate = (
-      payload: SocketEventPayloads["workflow:node:update"],
-    ) => {
-      if (payload.executionId === executionId) {
-        setNodeUpdates((prev) => new Map(prev).set(payload.nodeId, payload));
-      }
-    };
-
-    const handleExecutionStarted = (
-      payload: SocketEventPayloads["workflow:execution:started"],
-    ) => {
-      if (payload.executionId === executionId) {
-        setStatus("running");
-      }
-    };
-
-    const handleExecutionCompleted = (
-      payload: SocketEventPayloads["workflow:execution:completed"],
-    ) => {
-      if (payload.executionId === executionId) {
-        setStatus("completed");
-      }
-    };
-
-    const handleExecutionFailed = (
-      payload: SocketEventPayloads["workflow:execution:failed"],
-    ) => {
-      if (payload.executionId === executionId) {
-        setStatus("failed");
-        setError(payload.error || "Unknown error");
-      }
-    };
-
-    const handleExecutionCancelled = (
-      payload: SocketEventPayloads["workflow:execution:cancelled"],
-    ) => {
-      if (payload.executionId === executionId) {
-        setStatus("cancelled");
-      }
-    };
-
-    socket.on("workflow:node:update", handleNodeUpdate);
-    socket.on("workflow:execution:started", handleExecutionStarted);
-    socket.on("workflow:execution:completed", handleExecutionCompleted);
-    socket.on("workflow:execution:failed", handleExecutionFailed);
-    socket.on("workflow:execution:cancelled", handleExecutionCancelled);
-
-    return () => {
-      unsubscribeFromExecution(executionId);
-      socket.off("workflow:node:update", handleNodeUpdate);
-      socket.off("workflow:execution:started", handleExecutionStarted);
-      socket.off("workflow:execution:completed", handleExecutionCompleted);
-      socket.off("workflow:execution:failed", handleExecutionFailed);
-      socket.off("workflow:execution:cancelled", handleExecutionCancelled);
-    };
-  }, [socket, executionId, subscribeToExecution, unsubscribeFromExecution]);
-
-  return { status, nodeUpdates, error };
 }
 
 export function useTaskUpdates(taskId: string | null) {

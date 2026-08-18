@@ -36,7 +36,7 @@ export function TopNav() {
           href="/home"
           className="flex md:hidden items-center gap-2 font-semibold"
         >
-          <img src="/logo.svg" alt="mitshe" className="h-8 w-8" />
+          <img src="/logo.svg" alt="citshe" className="h-8 w-8" />
         </Link>
 
         <button
@@ -77,7 +77,7 @@ export function TopNav() {
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="border-b px-4 h-14 flex flex-row items-center">
             <SheetTitle className="flex items-center gap-2">
-              <span className="font-semibold">mitshe</span>
+              <span className="font-semibold">citshe</span>
             </SheetTitle>
           </SheetHeader>
           <div className="overflow-y-auto px-3 py-4">

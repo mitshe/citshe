@@ -612,7 +612,7 @@ export default function RepositoriesPage() {
                             <AlertDialogDescription>
                               Are you sure you want to delete{" "}
                               <strong>{repo.name}</strong>? This will remove the
-                              repository from mitshe. You can re-sync it later
+                              repository from citshe. You can re-sync it later
                               from your Git provider.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
@@ -764,7 +764,7 @@ export default function RepositoriesPage() {
                                 <AlertDialogDescription>
                                   Are you sure you want to delete{" "}
                                   <strong>{repo.name}</strong>? This will remove
-                                  the repository from mitshe. You can re-sync it
+                                  the repository from citshe. You can re-sync it
                                   later from your Git provider.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>

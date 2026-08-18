@@ -1,8 +1,8 @@
-# 09 — Minimal terminal version of mitshe
+# 09 — Minimal terminal version of citshe
 
 ## Idea
-CLI-only mitshe. No web UI, no browser. Pure terminal.
-`mitshe thread new "Fix auth bug" --repo my-app --snapshot dev-env`
+CLI-only citshe. No web UI, no browser. Pure terminal.
+`citshe thread new "Fix auth bug" --repo my-app --snapshot dev-env`
 
 ## Why
 - Developers live in terminals
@@ -13,26 +13,26 @@ CLI-only mitshe. No web UI, no browser. Pure terminal.
 
 ## Commands
 ```bash
-mitshe thread list                    # list all threads
-mitshe thread new "name" [--repo X]   # create thread
-mitshe thread open <id>               # attach terminal to thread
-mitshe thread stop <id>               # stop thread
+citshe thread list                    # list all threads
+citshe thread new "name" [--repo X]   # create thread
+citshe thread open <id>               # attach terminal to thread
+citshe thread stop <id>               # stop thread
 
-mitshe snapshot list                  # list snapshots
-mitshe snapshot create <thread-id>    # snapshot from thread
+citshe snapshot list                  # list snapshots
+citshe snapshot create <thread-id>    # snapshot from thread
 
-mitshe task list                      # imported tasks
-mitshe task import --jira             # import from Jira
-mitshe task open <id>                 # create thread from task
+citshe task list                      # imported tasks
+citshe task import --jira             # import from Jira
+citshe task open <id>                 # create thread from task
 
-mitshe workflow run <id>              # trigger workflow
-mitshe status                         # overview: threads, tasks, workflows
+citshe workflow run <id>              # trigger workflow
+citshe status                         # overview: threads, tasks, workflows
 ```
 
 ## Implementation
-- Thin CLI that calls mitshe API (same endpoints as web)
+- Thin CLI that calls citshe API (same endpoints as web)
 - Written in Node.js or Go
-- Published as npm package: `npx mitshe` or `npm install -g mitshe-cli`
+- Published as npm package: `npx citshe` or `npm install -g citshe-cli`
 - Auth: API key or JWT token from login
 - Terminal attachment: WebSocket to session terminal
 

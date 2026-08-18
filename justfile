@@ -19,22 +19,22 @@ infra-logs:
     docker compose -f docker/dev/docker-compose.yml logs -f
 
 run:
-    docker run -d --name mitshe -p 3000:3000 -p 3001:3001 -v mitshe-data:/build/data -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/mitshe/mitshe:latest
-    @echo "mitshe is starting..."
+    docker run -d --name citshe -p 3000:3000 -p 3001:3001 -v citshe-data:/build/data -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/citshe/citshe:latest
+    @echo "citshe is starting..."
     @echo "  Frontend: http://localhost:3000"
     @echo "  API:      http://localhost:3001"
 
 stop:
-    docker stop mitshe && docker rm mitshe
+    docker stop citshe && docker rm citshe
 
 executor-build:
-    docker build --target full -t ghcr.io/mitshe/mitshe-executor:latest -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
+    docker build --target full -t ghcr.io/citshe/citshe-executor:latest -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
 
 executor-build-lite:
-    docker build --target lite -t ghcr.io/mitshe/mitshe-executor:lite -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
+    docker build --target lite -t ghcr.io/citshe/citshe-executor:lite -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
 
 light-build:
-    docker build -t ghcr.io/mitshe/mitshe:latest -f docker/light/Dockerfile .
+    docker build -t ghcr.io/citshe/citshe:latest -f docker/light/Dockerfile .
 
 light:
     docker compose -f docker/light/docker-compose.yml up
@@ -46,7 +46,7 @@ light-down:
     docker compose -f docker/light/docker-compose.yml down
 
 light-logs:
-    docker logs -f mitshe
+    docker logs -f citshe
 
 prod:
     docker compose -f docker/prod/docker-compose.yml --env-file .env up -d --build
@@ -70,43 +70,43 @@ build:
     pnpm run build
 
 build-api:
-    pnpm --filter @mitshe/api run build
+    pnpm --filter @citshe/api run build
 
 build-web:
-    pnpm --filter @mitshe/web run build
+    pnpm --filter @citshe/web run build
 
 build-types:
-    pnpm --filter @mitshe/types run build
+    pnpm --filter @citshe/types run build
 
 clean:
     rm -rf apps/web/.next apps/api/dist packages/types/dist node_modules/.cache
 
 db-generate:
-    pnpm --filter @mitshe/api run db:generate
+    pnpm --filter @citshe/api run db:generate
 
 db-migrate:
-    pnpm --filter @mitshe/api run db:migrate
+    pnpm --filter @citshe/api run db:migrate
 
 db-migrate-deploy:
-    pnpm --filter @mitshe/api run db:migrate:deploy
+    pnpm --filter @citshe/api run db:migrate:deploy
 
 db-push:
-    pnpm --filter @mitshe/api run db:push
+    pnpm --filter @citshe/api run db:push
 
 db-reset:
-    pnpm --filter @mitshe/api run db:reset
+    pnpm --filter @citshe/api run db:reset
 
 db-studio:
-    pnpm --filter @mitshe/api run db:studio
+    pnpm --filter @citshe/api run db:studio
 
 test:
     pnpm test
 
 test-api:
-    pnpm --filter @mitshe/api test
+    pnpm --filter @citshe/api test
 
 test-web:
-    pnpm --filter @mitshe/web test
+    pnpm --filter @citshe/web test
 
 lint:
     pnpm run lint

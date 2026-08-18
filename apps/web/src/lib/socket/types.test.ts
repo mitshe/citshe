@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type {
   TaskUpdatePayload,
-  WorkflowExecutionPayload,
-  WorkflowNodeExecutionPayload,
   IntegrationEventPayload,
   NotificationPayload,
   SocketEvent,
@@ -35,89 +33,6 @@ describe("Socket Types", () => {
       expect(payload.taskId).toBeDefined();
       expect(payload.status).toBeDefined();
       expect(payload.message).toBeUndefined();
-    });
-  });
-
-  describe("WorkflowExecutionPayload", () => {
-    it("should have correct structure for running execution", () => {
-      const payload: WorkflowExecutionPayload = {
-        executionId: "exec-123",
-        workflowId: "workflow-456",
-        status: "running",
-        startedAt: "2024-01-20T10:00:00Z",
-      };
-
-      expect(payload.executionId).toBe("exec-123");
-      expect(payload.workflowId).toBe("workflow-456");
-      expect(payload.status).toBe("running");
-      expect(payload.startedAt).toBeDefined();
-    });
-
-    it("should have correct structure for failed execution", () => {
-      const payload: WorkflowExecutionPayload = {
-        executionId: "exec-123",
-        workflowId: "workflow-456",
-        status: "failed",
-        startedAt: "2024-01-20T10:00:00Z",
-        completedAt: "2024-01-20T10:05:00Z",
-        error: "Node ai_1 failed: API rate limit exceeded",
-      };
-
-      expect(payload.status).toBe("failed");
-      expect(payload.error).toBeDefined();
-      expect(payload.completedAt).toBeDefined();
-    });
-
-    it("should have correct structure for completed execution", () => {
-      const payload: WorkflowExecutionPayload = {
-        executionId: "exec-123",
-        workflowId: "workflow-456",
-        status: "completed",
-        startedAt: "2024-01-20T10:00:00Z",
-        completedAt: "2024-01-20T10:05:00Z",
-        output: { result: "success" },
-      };
-
-      expect(payload.status).toBe("completed");
-      expect(payload.output).toEqual({ result: "success" });
-    });
-  });
-
-  describe("WorkflowNodeExecutionPayload", () => {
-    it("should have correct structure", () => {
-      const payload: WorkflowNodeExecutionPayload = {
-        executionId: "exec-123",
-        workflowId: "workflow-456",
-        nodeId: "node-789",
-        nodeName: "AI Analyze",
-        nodeType: "action:ai_analyze",
-        status: "completed",
-        startedAt: "2024-01-20T10:01:00Z",
-        completedAt: "2024-01-20T10:02:00Z",
-        output: { analysis: { summary: "Test result" } },
-        duration: 60000,
-      };
-
-      expect(payload.nodeId).toBe("node-789");
-      expect(payload.nodeName).toBe("AI Analyze");
-      expect(payload.nodeType).toBe("action:ai_analyze");
-      expect(payload.status).toBe("completed");
-      expect(payload.duration).toBe(60000);
-    });
-
-    it("should handle failed node", () => {
-      const payload: WorkflowNodeExecutionPayload = {
-        executionId: "exec-123",
-        workflowId: "workflow-456",
-        nodeId: "node-789",
-        nodeName: "JIRA Create",
-        nodeType: "action:jira_create_issue",
-        status: "failed",
-        error: "Project not found",
-      };
-
-      expect(payload.status).toBe("failed");
-      expect(payload.error).toBe("Project not found");
     });
   });
 
@@ -194,16 +109,11 @@ describe("Socket Types", () => {
         "task:completed",
         "task:failed",
         "agent:log",
-        "workflow:execution:started",
-        "workflow:execution:completed",
-        "workflow:execution:failed",
-        "workflow:execution:cancelled",
-        "workflow:node:update",
         "integration:event",
         "notification",
       ];
 
-      expect(events).toHaveLength(11);
+      expect(events).toHaveLength(6);
     });
   });
 });

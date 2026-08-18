@@ -994,7 +994,7 @@ export default function ApiDocsPage() {
         {/* Header */}
         <div className="p-5 border-b">
           <Link href="/docs" className="flex items-center gap-2">
-            <span className="font-semibold">mitshe</span>
+            <span className="font-semibold">citshe</span>
             <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-1.5 py-0.5 rounded">
               API
             </span>

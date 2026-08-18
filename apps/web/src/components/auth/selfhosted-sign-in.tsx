@@ -50,7 +50,7 @@ export function SelfhostedSignIn() {
               m
             </div>
           </div>
-          <CardTitle className="text-2xl">Sign in to mitshe</CardTitle>
+          <CardTitle className="text-2xl">Sign in to citshe</CardTitle>
           <CardDescription>
             Enter your email and password to continue
           </CardDescription>

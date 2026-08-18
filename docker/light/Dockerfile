@@ -1,8 +1,8 @@
-# mitshe-light: All-in-one container with frontend, backend, SQLite, and Redis
+# citshe-light: All-in-one container with frontend, backend, SQLite, and Redis
 # Perfect for local testing and demos
 #
 # Build from monorepo root:
-#   docker build -t ghcr.io/mitshe/light:latest -f docker/light/Dockerfile .
+#   docker build -t ghcr.io/citshe/light:latest -f docker/light/Dockerfile .
 
 FROM node:20-alpine AS base
 
@@ -78,9 +78,9 @@ RUN pnpm run build
 # ==========================================
 FROM node:20-alpine AS production
 
-LABEL org.opencontainers.image.title="mitshe-light"
-LABEL org.opencontainers.image.description="All-in-one mitshe container for local testing"
-LABEL org.opencontainers.image.source="https://github.com/mitshe/mitshe"
+LABEL org.opencontainers.image.title="citshe-light"
+LABEL org.opencontainers.image.description="All-in-one citshe container for local testing"
+LABEL org.opencontainers.image.source="https://github.com/citshe/citshe"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Install runtime dependencies
@@ -121,9 +121,9 @@ WORKDIR /build
 
 # Create non-root user with docker group access
 RUN addgroup -g 998 docker 2>/dev/null || true && \
-    adduser -D -u 1001 mitshe && \
-    addgroup mitshe docker 2>/dev/null || true && \
-    chown -R mitshe:mitshe /build /var/log/supervisor
+    adduser -D -u 1001 citshe && \
+    addgroup citshe docker 2>/dev/null || true && \
+    chown -R citshe:citshe /build /var/log/supervisor
 
 # Copy configuration files
 COPY docker/light/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -132,7 +132,7 @@ RUN chmod +x /entrypoint.sh
 
 # Environment variables for light mode
 ENV NODE_ENV=production
-ENV DATABASE_URL=file:/build/data/mitshe.db
+ENV DATABASE_URL=file:/build/data/citshe.db
 ENV REDIS_URL=redis://localhost:6379
 ENV PORT=3001
 ENV NEXT_PUBLIC_API_URL=http://localhost:3001
@@ -149,7 +149,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:3000 && curl -f http://localhost:3001/health || exit 1
 
 # Note: entrypoint runs as root for initialization (Redis, DB setup, Docker pull).
-# Application processes (web, api) run as 'mitshe' user via supervisor config.
+# Application processes (web, api) run as 'citshe' user via supervisor config.
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

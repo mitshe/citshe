@@ -1,20 +1,20 @@
 services:
-  mitshe:
+  citshe:
     build:
       context: ../..
       dockerfile: docker/light/Dockerfile
-    image: ghcr.io/mitshe/mitshe:latest
-    container_name: mitshe
+    image: ghcr.io/citshe/citshe:latest
+    container_name: citshe
     restart: unless-stopped
     ports:
       - "3000:3000"
       - "3001:3001"
     volumes:
-      - mitshe-data:/build/data
+      - citshe-data:/build/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
-      - DATABASE_URL=file:/build/data/mitshe.db
+      - DATABASE_URL=file:/build/data/citshe.db
       - REDIS_URL=redis://localhost:6379
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
@@ -24,5 +24,5 @@ services:
       retries: 3
 
 volumes:
-  mitshe-data:
-    name: mitshe-data
+  citshe-data:
+    name: citshe-data

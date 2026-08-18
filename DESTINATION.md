@@ -1,8 +1,8 @@
-# DESTINATION — Where mitshe is going
+# DESTINATION — Where citshe is going
 
 ## One sentence
 
-mitshe is where developers manage their work threads — isolated AI-powered workspaces per task, with everything needed to go from Jira ticket to merged PR.
+citshe is where developers manage their work threads — isolated AI-powered workspaces per task, with everything needed to go from Jira ticket to merged PR.
 
 ## The problem we solve
 
@@ -28,7 +28,7 @@ Every task = a thread (session). Each thread is an isolated container with its o
 
 **Automatic:** External event (webhook, schedule, git push) triggers workflow. Requires public URL for webhooks (ngrok for local).
 
-Both are first-class. Mitshe must not force users to set up integrations to be useful.
+Both are first-class. Citshe must not force users to set up integrations to be useful.
 
 ## Key concepts
 
@@ -37,7 +37,7 @@ Both are first-class. Mitshe must not force users to set up integrations to be u
 - **Workflow** = automation that creates threads, runs Claude, notifies you
 - **Browser** = live Chrome inside threads, for testing and browsing
 
-## What makes mitshe irreplaceable
+## What makes citshe irreplaceable
 
 1. **Isolation per task** — no more git stash, no branch switching
 2. **AI starts before you** — workflow creates thread, Claude begins, you arrive to review
