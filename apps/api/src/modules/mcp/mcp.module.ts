@@ -4,6 +4,8 @@ import { SessionTools } from './tools/session.tools';
 import { TaskTools } from './tools/task.tools';
 import { RepositoryTools } from './tools/repository.tools';
 import { SkillTools } from './tools/skill.tools';
+import { OrchestrationTools } from './tools/orchestration.tools';
+import { OrchestrationService } from './orchestration/orchestration.service';
 import { TasksModule } from '../tasks/tasks.module';
 import { RepositoriesModule } from '../repositories/repositories.module';
 import { SkillsModule } from '../skills/skills.module';
@@ -17,6 +19,8 @@ import { SkillsModule } from '../skills/skills.module';
     TaskTools,
     RepositoryTools,
     SkillTools,
+    OrchestrationTools,
+    OrchestrationService,
   ],
   exports: [McpService],
 })

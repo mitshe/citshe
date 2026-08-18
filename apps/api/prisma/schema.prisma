@@ -82,15 +82,13 @@ model Organization {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  // Orchestrator: when true, dispatched tasks stay QUEUED instead of
+  // auto-starting a worker thread.
+  queuePaused Boolean @default(false) @map("queue_paused")
+
   // Per-org webhook secrets (encrypted)
-  jiraWebhookSecret   Bytes? @map("jira_webhook_secret")
-  jiraWebhookSecretIv Bytes? @map("jira_webhook_secret_iv")
-  gitlabWebhookSecret   Bytes? @map("gitlab_webhook_secret")
-  gitlabWebhookSecretIv Bytes? @map("gitlab_webhook_secret_iv")
   githubWebhookSecret   Bytes? @map("github_webhook_secret")
   githubWebhookSecretIv Bytes? @map("github_webhook_secret_iv")
-  trelloWebhookSecret   Bytes? @map("trello_webhook_secret")
-  trelloWebhookSecretIv Bytes? @map("trello_webhook_secret_iv")
 
   // Relations
   owner         User?    @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -179,6 +177,7 @@ model Project {
 
 enum TaskStatus {
   PENDING
+  QUEUED
   ANALYZING
   IN_PROGRESS
   REVIEW
@@ -198,6 +197,9 @@ model Task {
   assigneeId     String?    @map("assignee_id")
   dueDate        DateTime?  @map("due_date")
 
+  // Worker thread that executes this task (orchestrator dispatch)
+  sessionId String? @map("session_id")
+
   // External issue reference (Jira, GitLab, etc.)
   externalSource   String? @map("external_source") // JIRA, GITLAB, GITHUB, etc.
   externalIssueId  String? @map("external_issue_id")
@@ -215,12 +217,14 @@ model Task {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session      AgentSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([projectId])
   @@index([status])
+  @@index([sessionId])
   @@index([externalIssueId])
   @@map("tasks")
 }
@@ -605,6 +609,7 @@ model AgentSession {
   messages        SessionMessage[]
   repositories    SessionRepository[]
   integrations    SessionIntegration[]
+  tasks           Task[]
 
   @@index([organizationId])
   @@index([status])

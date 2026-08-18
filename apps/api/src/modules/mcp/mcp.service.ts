@@ -5,6 +5,7 @@ import { SessionTools } from './tools/session.tools';
 import { TaskTools } from './tools/task.tools';
 import { RepositoryTools } from './tools/repository.tools';
 import { SkillTools } from './tools/skill.tools';
+import { OrchestrationTools } from './tools/orchestration.tools';
 
 @Injectable()
 export class McpService {
@@ -16,12 +17,14 @@ export class McpService {
     private readonly taskTools: TaskTools,
     private readonly repositoryTools: RepositoryTools,
     private readonly skillTools: SkillTools,
+    private readonly orchestrationTools: OrchestrationTools,
   ) {
     this.registerTools();
   }
 
   private registerTools() {
     const allTools = [
+      ...this.orchestrationTools.getTools(),
       ...this.sessionTools.getTools(),
       ...this.taskTools.getTools(),
       ...this.repositoryTools.getTools(),
