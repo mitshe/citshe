@@ -1,0 +1,886 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import * as path from 'path';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { SessionStatus } from '@prisma/client';
+import { SessionsService } from '../services/sessions.service';
+import { SessionContainerService } from '../services/session-container.service';
+import { TerminalManagerService } from '../services/terminal-manager.service';
+import { EventsGateway } from '../../../infrastructure/websocket/events.gateway';
+import { SkillsService } from '../../skills/services/skills.service';
+import {
+  CreateSessionDto,
+  ExecCommandDto,
+  RecreateSessionDto,
+  UpdateSessionMetadataDto,
+  WriteFileDto,
+  StartTerminalDto,
+  TerminalInputDto,
+  SessionListResponseDto,
+  SessionDetailResponseDto,
+} from '../dto/session.dto';
+import { AuthGuard } from '@/shared/auth';
+import {
+  OrganizationId,
+  UserId,
+} from '../../../shared/decorators/organization.decorator';
+import { ApiRateLimit } from '../../../shared/decorators/throttle.decorator';
+import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
+
+@ApiTags('Sessions')
+@ApiBearerAuth('bearer')
+@Controller('api/v1/sessions')
+@UseGuards(AuthGuard)
+@ApiRateLimit()
+export class SessionsController {
+  private readonly logger = new Logger(SessionsController.name);
+
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly containerService: SessionContainerService,
+    private readonly terminalManager: TerminalManagerService,
+    private readonly eventsGateway: EventsGateway,
+    private readonly skillsService: SkillsService,
+    private readonly adapterFactory: AdapterFactoryService,
+  ) {}
+
+  /**
+   * Validate and resolve a file path to ensure it's under /workspace.
+   * Prevents path traversal attacks (e.g., ../../etc/passwd).
+   */
+  private validateFilePath(filePath: string): string {
+    const WORKSPACE = '/workspace';
+    // Resolve to absolute path relative to workspace
+    const resolved = filePath.startsWith('/')
+      ? path.resolve(filePath)
+      : path.resolve(WORKSPACE, filePath);
+
+    if (!resolved.startsWith(WORKSPACE + '/') && resolved !== WORKSPACE) {
+      throw new BadRequestException('Path must be within /workspace');
+    }
+
+    return resolved;
+  }
+
+  // ─── Session CRUD ──────────────────────────────────────────────
+
+  @Post()
+  @ApiOperation({ summary: 'Create and start a new agent session' })
+  @ApiResponse({ status: 201, type: SessionDetailResponseDto })
+  async create(
+    @OrganizationId() organizationId: string,
+    @Body() dto: CreateSessionDto,
+    @UserId() userId: string,
+  ) {
+    const session = await this.sessionsService.create(
+      organizationId,
+      userId,
+      dto,
+    );
+
+    // Resolve skills as separate command files
+    const skills =
+      dto.skillIds && dto.skillIds.length > 0
+        ? await this.skillsService.getSkillsForSession(
+            organizationId,
+            dto.skillIds,
+          )
+        : undefined;
+
+    const [repos, integrationConfigs, envConfig] = await Promise.all([
+      this.sessionsService.buildRepoConfigs(
+        session.repositories,
+        organizationId,
+        dto.branch,
+      ),
+      this.sessionsService.resolveIntegrationConfigs(
+        dto.integrationIds,
+        organizationId,
+        dto.environmentId,
+        session.id,
+      ),
+      dto.environmentId
+        ? this.sessionsService.loadEnvironmentConfig(
+            dto.environmentId,
+            organizationId,
+          )
+        : undefined,
+    ]);
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    setImmediate(async () => {
+      try {
+        const containerId = await this.containerService.createAndStart({
+          sessionId: session.id,
+          organizationId,
+          repos,
+          instructions: session.instructions,
+          provider: session.aiCredential?.provider,
+          enableDocker: session.enableDocker,
+          enableBrowser: session.enableBrowser,
+          localPath: dto.localPath,
+          environment: envConfig,
+          integrations:
+            integrationConfigs.length > 0 ? integrationConfigs : undefined,
+          skills,
+        });
+
+        await this.sessionsService.updateStatus(
+          session.id,
+          'RUNNING',
+          containerId,
+        );
+        this.eventsGateway.emitSessionStatus(
+          organizationId,
+          session.id,
+          'RUNNING',
+        );
+      } catch (err) {
+        await this.sessionsService.updateStatus(session.id, 'FAILED');
+        this.eventsGateway.emitSessionStatus(
+          organizationId,
+          session.id,
+          'FAILED',
+          (err as Error).message,
+        );
+      }
+    });
+
+    // Timeout: if session is still CREATING after 5 minutes, mark as FAILED
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    setTimeout(async () => {
+      try {
+        const s = await this.sessionsService.findOneById(session.id);
+        if (s && s.status === 'CREATING') {
+          await this.sessionsService.updateStatus(session.id, 'FAILED');
+          this.eventsGateway.emitSessionStatus(
+            organizationId,
+            session.id,
+            'FAILED',
+            'Session creation timed out after 5 minutes',
+          );
+        }
+      } catch {
+        /* session may have been deleted */
+      }
+    }, 300000);
+
+    return { session };
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List agent sessions' })
+  @ApiResponse({ status: 200, type: SessionListResponseDto })
+  @ApiQuery({ name: 'status', required: false, enum: SessionStatus })
+  @ApiQuery({ name: 'projectId', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async findAll(
+    @OrganizationId() organizationId: string,
+    @Query('status') status?: SessionStatus,
+    @Query('projectId') projectId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page || '1', 10) || 1);
+    const limitNum = Math.min(
+      100,
+      Math.max(1, parseInt(limit || '20', 10) || 20),
+    );
+
+    const result = await this.sessionsService.findAll(organizationId, {
+      status,
+      projectId,
+      page: pageNum,
+      limit: limitNum,
+    });
+    return result;
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get agent session' })
+  @ApiResponse({ status: 200, type: SessionDetailResponseDto })
+  async findOne(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+    return { session };
+  }
+
+  @Get(':id/browser')
+  @ApiOperation({ summary: 'Get browser (noVNC) connection info for session' })
+  async getBrowserInfo(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (session.status !== 'RUNNING' || !session.containerId) {
+      throw new BadRequestException('Session is not running');
+    }
+
+    // Start browser on demand (idempotent)
+    await this.containerService.startBrowser(session.containerId);
+
+    // Get host-mapped port for noVNC
+    let port: number | null = null;
+    for (let i = 0; i < 5; i++) {
+      port = await this.containerService.getBrowserPort(session.containerId);
+      if (port) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    if (!port) {
+      throw new BadRequestException('Browser port not available. Try again.');
+    }
+
+    const host = process.env.BROWSER_HOST || 'localhost';
+
+    return {
+      wsUrl: `ws://${host}:${port}/websockify`,
+      httpUrl: `http://${host}:${port}`,
+      status: 'ready',
+    };
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Update session metadata (name, projectId, instructions)',
+  })
+  @ApiResponse({ status: 200, type: SessionDetailResponseDto })
+  async updateMetadata(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateSessionMetadataDto,
+  ) {
+    const session = await this.sessionsService.updateMetadata(
+      organizationId,
+      id,
+      dto,
+    );
+    return { session };
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary:
+      'Reconfigure and recreate a stopped session container (preserves session ID and workspace)',
+  })
+  @ApiResponse({ status: 200, type: SessionDetailResponseDto })
+  async recreate(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: RecreateSessionDto,
+  ) {
+    const existing = await this.sessionsService.findOne(organizationId, id);
+
+    if (existing.status !== 'COMPLETED' && existing.status !== 'FAILED') {
+      throw new BadRequestException(
+        'Session must be stopped (COMPLETED or FAILED) to reconfigure. Stop it first.',
+      );
+    }
+
+    const { session } = await this.sessionsService.applyRecreateConfig(
+      organizationId,
+      id,
+      dto,
+    );
+
+    const previousContainerId = existing.containerId;
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    setImmediate(async () => {
+      let snapshotImage: string | null = null;
+      try {
+        if (previousContainerId) {
+          const state =
+            await this.containerService.getContainerState(previousContainerId);
+          if (state !== 'gone') {
+            snapshotImage = await this.containerService.commitContainer(
+              previousContainerId,
+              `${id}-${Date.now()}`,
+            );
+          }
+        }
+
+        this.terminalManager.closeByPrefix(`${id}:`);
+        if (previousContainerId) {
+          await this.containerService.stopContainer(previousContainerId);
+          await this.containerService.removeContainer(previousContainerId);
+        }
+
+        const sessionIntegrationIds = session.integrations.map(
+          (i) => i.integrationId,
+        );
+        const [repos, integrationConfigs, envConfig] = await Promise.all([
+          this.sessionsService.buildRepoConfigs(
+            session.repositories,
+            organizationId,
+          ),
+          this.sessionsService.resolveIntegrationConfigs(
+            sessionIntegrationIds,
+            organizationId,
+            session.environmentId,
+          ),
+          session.environmentId
+            ? this.sessionsService.loadEnvironmentConfig(
+                session.environmentId,
+                organizationId,
+              )
+            : undefined,
+        ]);
+
+        const containerId = await this.containerService.createAndStart({
+          sessionId: id,
+          organizationId,
+          repos,
+          instructions: session.instructions,
+          provider: session.aiCredential?.provider,
+          enableDocker: session.enableDocker,
+          enableBrowser: session.enableBrowser,
+          environment: envConfig,
+          integrations:
+            integrationConfigs.length > 0 ? integrationConfigs : undefined,
+          image: snapshotImage ?? undefined,
+        });
+
+        await this.sessionsService.updateStatus(id, 'RUNNING', containerId);
+        this.eventsGateway.emitSessionStatus(organizationId, id, 'RUNNING');
+
+        if (snapshotImage) {
+          await this.containerService.removeImage(snapshotImage);
+        }
+      } catch (err) {
+        await this.sessionsService.updateStatus(id, 'FAILED');
+        this.eventsGateway.emitSessionStatus(
+          organizationId,
+          id,
+          'FAILED',
+          (err as Error).message,
+        );
+      }
+    });
+
+    return { session };
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete session and stop container' })
+  async remove(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    this.terminalManager.closeByPrefix(`${id}:`);
+
+    if (session.containerId) {
+      try {
+        await this.containerService.stopContainer(session.containerId);
+        await this.containerService.removeContainer(session.containerId, id);
+      } catch (err) {
+        this.logger.warn(
+          `Container cleanup failed for session ${id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    await this.sessionsService.remove(organizationId, id);
+  }
+
+  @Post(':id/clone')
+  @ApiOperation({ summary: 'Clone session with Docker snapshot' })
+  @ApiResponse({ status: 201, type: SessionDetailResponseDto })
+  async clone(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ) {
+    const sourceSession = await this.sessionsService.findOne(
+      organizationId,
+      id,
+    );
+
+    if (!sourceSession.containerId) {
+      throw new BadRequestException('Source session has no container to clone');
+    }
+
+    const cloned = await this.sessionsService.clone(organizationId, userId, id);
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    setImmediate(async () => {
+      try {
+        // 1. Commit source container to image
+        const imageName = await this.containerService.commitContainer(
+          sourceSession.containerId!,
+          cloned.id,
+        );
+
+        const envConfig = sourceSession.environmentId
+          ? await this.sessionsService.loadEnvironmentConfig(
+              sourceSession.environmentId,
+              organizationId,
+            )
+          : undefined;
+
+        // 2. Create new container from committed image
+        const containerId =
+          await this.containerService.createFromCommittedImage(imageName, {
+            sessionId: cloned.id,
+            organizationId,
+            enableDocker: sourceSession.enableDocker,
+            environment: envConfig,
+          });
+
+        // 4. Update status to RUNNING
+        await this.sessionsService.updateStatus(
+          cloned.id,
+          'RUNNING',
+          containerId,
+        );
+        this.eventsGateway.emitSessionStatus(
+          organizationId,
+          cloned.id,
+          'RUNNING',
+        );
+
+        // 5. Cleanup: remove the committed image to save disk space
+        await this.containerService.removeImage(imageName);
+      } catch (err) {
+        await this.sessionsService.updateStatus(cloned.id, 'FAILED');
+        this.eventsGateway.emitSessionStatus(
+          organizationId,
+          cloned.id,
+          'FAILED',
+          (err as Error).message,
+        );
+      }
+    });
+
+    return { session: cloned };
+  }
+
+  // ─── Session Lifecycle ─────────────────────────────────────────
+
+  @Post(':id/pause')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pause session (terminals keep running)' })
+  async pause(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+    if (session.status !== 'RUNNING') {
+      throw new BadRequestException('Can only pause a running session');
+    }
+
+    await this.sessionsService.updateStatus(id, 'PAUSED');
+    this.eventsGateway.emitSessionStatus(organizationId, id, 'PAUSED');
+    const updated = await this.sessionsService.findOne(organizationId, id);
+    return { session: updated };
+  }
+
+  @Post(':id/resume')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume paused or stopped session' })
+  async resume(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (session.status !== 'PAUSED' && session.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        'Can only resume a paused or completed session',
+      );
+    }
+
+    if (!session.containerId) {
+      throw new BadRequestException(
+        'No container associated with this session',
+      );
+    }
+
+    const containerState = await this.containerService.getContainerState(
+      session.containerId,
+    );
+
+    if (containerState === 'gone') {
+      throw new BadRequestException(
+        'Container no longer exists and cannot be recovered',
+      );
+    }
+
+    if (containerState === 'stopped') {
+      await this.containerService.restartContainer(session.containerId);
+    }
+
+    await this.sessionsService.updateStatus(id, 'RUNNING');
+    this.eventsGateway.emitSessionStatus(organizationId, id, 'RUNNING');
+    const updated = await this.sessionsService.findOne(organizationId, id);
+    return { session: updated };
+  }
+
+  @Post(':id/stop')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Stop session and its container' })
+  async stop(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+    if (session.status !== 'RUNNING' && session.status !== 'PAUSED') {
+      throw new BadRequestException('Session is already stopped');
+    }
+
+    this.terminalManager.closeByPrefix(`${id}:`);
+
+    if (session.containerId) {
+      await this.containerService.stopContainer(session.containerId);
+    }
+
+    await this.sessionsService.updateStatus(id, 'COMPLETED');
+    this.eventsGateway.emitSessionStatus(organizationId, id, 'COMPLETED');
+    const updated = await this.sessionsService.findOne(organizationId, id);
+    return { session: updated };
+  }
+
+  // ─── Command Execution (non-interactive, for workflows) ────────
+
+  @Post(':id/exec')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Execute command in session container (non-interactive)',
+  })
+  async exec(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() body: ExecCommandDto,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (session.status !== 'RUNNING' && session.status !== 'PAUSED') {
+      throw new BadRequestException('Session is not running');
+    }
+
+    if (!session.containerId) {
+      throw new BadRequestException('Session has no container');
+    }
+
+    const startTime = Date.now();
+    const cmd = ['bash', '-c', body.command];
+    const stdout = await this.containerService.execCommand(
+      session.containerId,
+      cmd,
+    );
+
+    return {
+      stdout,
+      exitCode: 0,
+      duration: Date.now() - startTime,
+    };
+  }
+
+  // ─── Terminal Management ───────────────────────────────────────
+
+  @Post(':id/terminals')
+  @ApiOperation({ summary: 'Start a new terminal in the session' })
+  async startTerminal(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() body?: StartTerminalDto,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (session.status !== 'RUNNING') {
+      throw new BadRequestException('Session is not running');
+    }
+
+    if (!session.containerId) {
+      throw new BadRequestException('Session has no container');
+    }
+
+    const terminalId = body?.terminalId || `${id}:term-${Date.now()}`;
+    const cmd = body?.cmd || ['bash'];
+
+    // Already active — return buffer for reconnect
+    if (this.terminalManager.isActive(terminalId)) {
+      const buffer = this.terminalManager.getBuffer(terminalId);
+      return { terminalId, status: 'already_active', buffer };
+    }
+
+    await this.terminalManager.start(
+      terminalId,
+      session.containerId,
+      (data) => {
+        this.eventsGateway.emitSessionOutput(terminalId, data);
+      },
+      () => {
+        this.eventsGateway.emitSessionOutput(
+          terminalId,
+          '\r\n\x1b[90m[Process exited]\x1b[0m\r\n',
+        );
+      },
+      { cmd },
+    );
+
+    const buffer = this.terminalManager.getBuffer(terminalId);
+    return { terminalId, status: 'started', buffer };
+  }
+
+  @Delete(':id/terminals/:terminalId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Close a terminal' })
+  async closeTerminal(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Param('terminalId') terminalId: string,
+  ) {
+    await this.sessionsService.findOne(organizationId, id);
+    this.terminalManager.close(terminalId);
+    return { status: 'closed' };
+  }
+
+  @Post(':id/terminals/:terminalId/input')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send input to a terminal' })
+  async sendTerminalInput(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Param('terminalId') terminalId: string,
+    @Body() body: TerminalInputDto,
+  ) {
+    await this.sessionsService.findOne(organizationId, id);
+
+    const sent = this.terminalManager.sendInput(terminalId, body.input);
+    if (!sent) {
+      throw new BadRequestException('Terminal not active');
+    }
+
+    await this.sessionsService.touchLastActive(id);
+    return { status: 'sent' };
+  }
+
+  // ─── File Operations ───────────────────────────────────────────
+
+  @Get(':id/files')
+  @ApiOperation({ summary: 'Get file tree' })
+  async getFiles(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Query('path') path?: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (
+      !session.containerId ||
+      !(await this.containerService.isContainerRunning(session.containerId))
+    ) {
+      return { files: [] };
+    }
+
+    const safePath = path ? this.validateFilePath(path) : '/workspace';
+    const files = await this.containerService.getFileTree(
+      session.containerId,
+      safePath,
+    );
+    return { files };
+  }
+
+  @Get(':id/git-status')
+  @ApiOperation({ summary: 'Get git status' })
+  async getGitStatus(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (
+      !session.containerId ||
+      !(await this.containerService.isContainerRunning(session.containerId))
+    ) {
+      return { statuses: [] };
+    }
+
+    const statuses = await this.containerService.getGitStatus(
+      session.containerId,
+    );
+    return { statuses };
+  }
+
+  @Post(':id/push-and-pr')
+  @ApiOperation({
+    summary: 'Push changes and create a pull request from session',
+  })
+  async pushAndCreatePR(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body()
+    body: { title?: string; description?: string; targetBranch?: string },
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (!session.containerId || session.status !== 'RUNNING') {
+      throw new BadRequestException('Session must be running');
+    }
+
+    if (!session.repositories || session.repositories.length === 0) {
+      throw new BadRequestException('Session has no repositories');
+    }
+
+    const repo = session.repositories[0];
+
+    if (!repo.repository.integrationId) {
+      throw new BadRequestException(
+        'Repository has no git integration configured. Connect a git provider in Settings.',
+      );
+    }
+
+    const repoDir = `/workspace/${repo.repository.name}`;
+
+    // Get current branch name
+    const branchName = (
+      await this.containerService.execCommand(
+        session.containerId,
+        ['git', 'branch', '--show-current'],
+        repoDir,
+      )
+    ).trim();
+
+    if (!branchName) {
+      throw new BadRequestException('Could not determine current branch');
+    }
+
+    // Push the branch
+    const pushResult = await this.containerService.execCommand(
+      session.containerId,
+      ['git', 'push', '-u', 'origin', branchName],
+      repoDir,
+      30000,
+    );
+
+    // Create PR via git provider
+    const gitProvider =
+      await this.adapterFactory.createGitProviderFromIntegration(
+        organizationId,
+        repo.repository.integrationId,
+      );
+
+    const pr = await gitProvider.createMergeRequest(
+      repo.repository.externalId,
+      {
+        title: body.title || session.name,
+        description:
+          body.description || `Created from mitshe session "${session.name}"`,
+        sourceBranch: branchName,
+        targetBranch: body.targetBranch || repo.repository.defaultBranch,
+      },
+    );
+
+    return {
+      branch: branchName,
+      pushResult: pushResult.trim(),
+      pr: {
+        id: pr.id,
+        title: pr.title,
+        webUrl: pr.webUrl,
+        status: pr.status,
+      },
+    };
+  }
+
+  @Get(':id/file')
+  @ApiOperation({ summary: 'Read file content' })
+  async readFile(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Query('path') filePath: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (
+      !session.containerId ||
+      !(await this.containerService.isContainerRunning(session.containerId))
+    ) {
+      throw new BadRequestException('Container is not running');
+    }
+
+    const safePath = this.validateFilePath(filePath);
+    const content = await this.containerService.readFile(
+      session.containerId,
+      safePath,
+    );
+    return { path: safePath, content };
+  }
+
+  @Delete(':id/file')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a file' })
+  async deleteFile(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Query('path') filePath: string,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (!session.containerId) {
+      throw new BadRequestException('Session has no container');
+    }
+
+    const safePath = this.validateFilePath(filePath);
+    await this.containerService.execCommand(session.containerId, [
+      'rm',
+      '-f',
+      safePath,
+    ]);
+    return { status: 'deleted' };
+  }
+
+  @Post(':id/file')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Write file content' })
+  async writeFile(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() body: WriteFileDto,
+  ) {
+    const session = await this.sessionsService.findOne(organizationId, id);
+
+    if (
+      !session.containerId ||
+      !(await this.containerService.isContainerRunning(session.containerId))
+    ) {
+      throw new BadRequestException('Container is not running');
+    }
+
+    const safePath = this.validateFilePath(body.path);
+    await this.containerService.writeFile(
+      session.containerId,
+      safePath,
+      body.content,
+    );
+    return { status: 'saved' };
+  }
+}

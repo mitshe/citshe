@@ -1,0 +1,399 @@
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
+import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
+import { McpService } from '../../mcp/mcp.service';
+import {
+  Message,
+  ToolResultContent,
+  ToolUseContent,
+} from '../../../ports/ai-provider.port';
+import {
+  CreateConversationDto,
+  SendMessageDto,
+  UpdateConversationDto,
+} from '../dto/chat.dto';
+
+const SYSTEM_PROMPT = `You are mitshe AI assistant — a workspace manager for AI coding agents.
+
+In mitshe, we call isolated workspaces "threads" (each task gets its own thread).
+Internally the API uses "session" but always say "thread" to the user.
+
+CRITICAL RULES:
+1. ALWAYS use tools to perform actions. NEVER claim you did something without calling the tool.
+2. Only describe results AFTER you receive the tool response. Never fabricate IDs or statuses.
+3. If a tool call fails, tell the user what went wrong honestly.
+4. After completing tool calls, ALWAYS end with a text summary. Never end with only tool calls.
+
+Available tools:
+- session_* — Create/manage threads (isolated Docker containers with terminal, browser, git)
+  - session_create — Create thread. Options: repositoryIds, branch, localPath, skillIds
+  - session_agent — Send prompt to Claude Code inside a running thread
+- workflow_* — Create, run, manage workflows (automated pipelines)
+- task_* — Create, update, track tasks
+- repository_* — List/sync Git repositories from connected providers
+- integration_* — Connect/test integrations (GitHub, GitLab, Jira, Slack)
+  - integration_create — Connect a service with API token
+- snapshot_* — Create/list/delete snapshots (saved thread states)
+- skill_* — Create/list/update/delete skills (Claude Code slash commands)
+
+Key concepts:
+- THREAD = isolated Docker container with Claude Code, terminal, browser (Chrome), and git
+- SNAPSHOT = saved thread state (tools, repos, configs) — reusable base for new threads
+- SKILL = reusable instructions installed as Claude Code slash commands
+- Every thread has a browser tab with Google Chrome
+- Threads can mount local folders and select specific git branches
+- Users can push code and create PRs directly from threads
+
+Onboarding:
+1. Connect GitHub/GitLab: ask for Personal Access Token → integration_create
+2. Sync repositories: repository_sync
+3. Create a thread with repos, branch, and snapshot
+
+Workflow node types (use these when building workflows):
+Triggers: trigger:manual, trigger:webhook, trigger:schedule, trigger:jira_issue_created, trigger:github_pr, trigger:git_push
+Thread actions: action:session_create (name, repositoryIds, snapshotId, instructions), action:session_agent (prompt, timeout), action:session_exec (command), action:session_stop
+AI actions: action:ai_prompt (systemPrompt, prompt, maxTokens), action:ai_code_review
+Git actions: action:git_create_branch, action:git_commit, action:git_create_mr
+Notifications: action:slack_message (channel, text), action:email
+Control: control:condition, control:parallel, control:delay
+Data: data:get_repository, data:get_jira_issue
+
+Workflow definition format: { version: "1.0", nodes: [...], edges: [...], variables: {...} }
+Each node: { id, type, name, position: {x,y}, config: {...} }
+Each edge: { id, source, target }
+
+Node config reference (key fields for each node type):
+- trigger:manual — config: {} (no config needed, user triggers from UI)
+- trigger:task — config: { requiresTask: true } (runs with task data, variables: {{trigger.task.title}}, {{trigger.task.description}})
+- trigger:jira_issue_created — config: { projectKey: "PROJ", events: ["created"] } (variables: {{trigger.issueKey}}, {{trigger.summary}}, {{trigger.description}})
+- trigger:webhook — config: { path: "/my-hook" } (variables: {{trigger.body}}, {{trigger.headers}})
+- trigger:schedule — config: { cron: "0 9 * * 1-5" } (variables: {{trigger.scheduledAt}})
+- trigger:github_pr — config: { events: ["opened"] } (variables: {{trigger.pr.title}}, {{trigger.pr.body}})
+- action:session_create — config: { name: "Thread name", repositoryIds: ["repo-id"], instructions: "task for agent", snapshotId: "" }
+  After this node: {{ctx.sessionId}} is available for subsequent session nodes
+- action:session_agent — config: { sessionId: "{{ctx.sessionId}}", prompt: "Do X", timeout: 300000 }
+  Output: {{nodes.nodeId.output}} contains agent's response
+- action:session_exec — config: { sessionId: "{{ctx.sessionId}}", command: "npm test", timeout: 60000 }
+- action:session_stop — config: { sessionId: "{{ctx.sessionId}}", delete: false }
+- action:ai_prompt — config: { prompt: "Analyze: {{trigger.summary}}", systemPrompt: "You are...", maxTokens: 4096 }
+- action:git_create_branch — config: { sessionId: "{{ctx.sessionId}}", branchName: "feature/{{trigger.issueKey}}" }
+- action:git_commit — config: { sessionId: "{{ctx.sessionId}}", message: "fix: {{trigger.summary}}" }
+- action:git_create_mr — config: { sessionId: "{{ctx.sessionId}}", title: "{{trigger.summary}}", targetBranch: "main" }
+- action:slack_message — config: { channel: "#engineering", message: "Done: {{trigger.summary}}" }
+- control:condition — config: { expression: "{{nodes.prevNode.output}}", operator: "contains", value: "success" }
+
+When creating workflows, follow these patterns:
+1. SIMPLE: trigger:manual → action:session_create → action:session_agent → action:session_stop
+2. WITH NOTIFICATION: add action:slack_message after session_agent
+3. JIRA AUTOMATION: trigger:jira_issue_created → action:session_create (repos + instructions with {{trigger.summary}}) → action:session_agent → action:git_create_mr → action:slack_message
+4. CODE REVIEW: trigger:github_pr → action:session_create → action:session_agent (review prompt with {{trigger.pr.body}}) → action:slack_message
+5. TASK-BASED: trigger:task → action:session_create (name: {{trigger.task.title}}, instructions: {{trigger.task.description}}) → action:session_agent → action:session_stop
+
+Layout: place nodes vertically ~150px apart, x=250, start trigger at y=50. Use descriptive names.
+
+Be concise. NEVER ask the user to go to a settings page — do it yourself with tools.`;
+
+const MAX_TOOL_ITERATIONS = 15;
+
+@Injectable()
+export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adapterFactory: AdapterFactoryService,
+    private readonly mcpService: McpService,
+  ) {}
+
+  async createConversation(
+    organizationId: string,
+    userId: string,
+    dto: CreateConversationDto,
+  ) {
+    return this.prisma.chatConversation.create({
+      data: {
+        organizationId,
+        userId,
+        title: dto.title,
+        aiCredentialId: dto.aiCredentialId,
+        model: dto.model,
+      },
+    });
+  }
+
+  async findAllConversations(
+    organizationId: string,
+    userId: string,
+    limit = 8,
+  ) {
+    return this.prisma.chatConversation.findMany({
+      where: { organizationId, userId },
+      include: {
+        _count: { select: { messages: true } },
+        aiCredential: { select: { id: true, provider: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async findConversation(organizationId: string, userId: string, id: string) {
+    const conversation = await this.prisma.chatConversation.findFirst({
+      where: { id, organizationId, userId },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+        aiCredential: { select: { id: true, provider: true } },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    return conversation;
+  }
+
+  async updateConversation(
+    organizationId: string,
+    userId: string,
+    id: string,
+    dto: UpdateConversationDto,
+  ) {
+    const conversation = await this.findConversation(
+      organizationId,
+      userId,
+      id,
+    );
+
+    return this.prisma.chatConversation.update({
+      where: { id: conversation.id },
+      data: { title: dto.title },
+    });
+  }
+
+  async deleteConversation(organizationId: string, userId: string, id: string) {
+    const conversation = await this.findConversation(
+      organizationId,
+      userId,
+      id,
+    );
+    return this.prisma.chatConversation.delete({
+      where: { id: conversation.id },
+    });
+  }
+
+  async sendMessage(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+    dto: SendMessageDto,
+  ): Promise<{
+    userMessage: any;
+    assistantMessage: any;
+    toolCalls: Array<{ name: string; input: any; result: any }>;
+  }> {
+    const conversation = await this.findConversation(
+      organizationId,
+      userId,
+      conversationId,
+    );
+
+    // Resolve AI provider
+    const credentialId = dto.aiCredentialId || conversation.aiCredentialId;
+    let aiProvider;
+    try {
+      if (credentialId) {
+        aiProvider = await this.adapterFactory.createAIProviderFromCredential(
+          organizationId,
+          credentialId,
+        );
+      } else {
+        aiProvider =
+          await this.adapterFactory.getDefaultAIProvider(organizationId);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to load AI provider: ${msg}`);
+      throw new BadRequestException(
+        `Failed to load AI provider. The API key may be corrupted or the ENCRYPTION_KEY changed. Please re-add your AI credential in Settings → AI Providers. (${msg})`,
+      );
+    }
+
+    if (!aiProvider) {
+      throw new BadRequestException(
+        'No AI provider configured. Add an AI credential in Settings → AI Providers.',
+      );
+    }
+
+    // Save user message
+    const userMessage = await this.prisma.chatMessage.create({
+      data: {
+        conversationId,
+        role: 'user',
+        content: dto.content,
+      },
+    });
+
+    // Build message history from DB
+    const messages = this.buildMessages(conversation.messages, dto.content);
+
+    // Get MCP tools as AI tool definitions
+    const tools = this.mcpService.getToolDefinitions();
+
+    // Tool use loop
+    const allToolCalls: Array<{
+      name: string;
+      input: any;
+      result: any;
+    }> = [];
+    let currentMessages = messages;
+    let finalContent = '';
+    let iterations = 0;
+
+    while (iterations < MAX_TOOL_ITERATIONS) {
+      iterations++;
+
+      const response = await aiProvider.completeWithTools(
+        currentMessages,
+        tools,
+        {
+          systemPrompt: SYSTEM_PROMPT,
+          model: dto.model || conversation.model || undefined,
+          maxTokens: 4096,
+        },
+      );
+
+      // Collect text content
+      finalContent = response.content;
+
+      // If no tool calls, we're done
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        break;
+      }
+
+      // Execute tool calls
+      const toolResults: ToolResultContent[] = [];
+      const toolUseBlocks: ToolUseContent[] = [];
+
+      for (const toolCall of response.toolCalls) {
+        const result = await this.mcpService.executeTool(
+          toolCall.name,
+          organizationId,
+          userId,
+          toolCall.input,
+        );
+
+        allToolCalls.push({
+          name: toolCall.name,
+          input: toolCall.input,
+          result: (() => {
+            try {
+              return JSON.parse(result.content);
+            } catch {
+              return { message: result.content };
+            }
+          })(),
+        });
+
+        toolUseBlocks.push({
+          type: 'tool_use',
+          id: toolCall.id,
+          name: toolCall.name,
+          input: toolCall.input,
+        });
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolCall.id,
+          content: result.content,
+          is_error: result.isError,
+        });
+      }
+
+      // Append assistant message with tool use + tool results for next iteration
+      currentMessages = [
+        ...currentMessages,
+        {
+          role: 'assistant' as const,
+          content: [
+            ...(response.content
+              ? [{ type: 'text' as const, text: response.content }]
+              : []),
+            ...toolUseBlocks,
+          ],
+        },
+        {
+          role: 'user' as const,
+          content: toolResults,
+        },
+      ];
+
+      // If stop reason is not tool_use, we're done
+      if (response.stopReason !== 'tool_use') {
+        break;
+      }
+
+      // If all tool calls errored, break to avoid infinite loop
+      const allErrored = toolResults.every((r) => r.is_error);
+      if (allErrored) {
+        this.logger.warn(
+          `All ${toolResults.length} tool calls returned errors — breaking loop`,
+        );
+        break;
+      }
+    }
+
+    if (iterations >= MAX_TOOL_ITERATIONS) {
+      this.logger.warn(
+        `Chat reached MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS})`,
+      );
+    }
+
+    // Save assistant message with tool calls
+    const assistantMessage = await this.prisma.chatMessage.create({
+      data: {
+        conversationId,
+        role: 'assistant',
+        content: finalContent,
+        toolUse: allToolCalls.length > 0 ? (allToolCalls as any) : undefined,
+      },
+    });
+
+    // Auto-generate title from first message if not set
+    if (!conversation.title && dto.content.length > 0) {
+      const title = dto.content.slice(0, 100);
+      await this.prisma.chatConversation.update({
+        where: { id: conversationId },
+        data: { title },
+      });
+    }
+
+    return { userMessage, assistantMessage, toolCalls: allToolCalls };
+  }
+
+  private buildMessages(
+    existingMessages: Array<{ role: string; content: string; toolUse: any }>,
+    newUserContent: string,
+  ): Message[] {
+    const messages: Message[] = [];
+
+    for (const msg of existingMessages) {
+      messages.push({
+        role: msg.role as any,
+        content: msg.content,
+      });
+    }
+
+    messages.push({
+      role: 'user',
+      content: newUserContent,
+    });
+
+    return messages;
+  }
+}

@@ -1,0 +1,4 @@
+- [ ] Blue/green deploy (zero-downtime)
+- [ ] PostgreSQL backups (pg_dump cron)
+- [ ] Monitoring (healthcheck alerts)
+- [ ] Log rotation

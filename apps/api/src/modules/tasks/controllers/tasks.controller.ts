@@ -1,0 +1,190 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { TasksService } from '../services/tasks.service';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskFilterDto,
+  TaskWrapperResponseDto,
+  TaskWithMessageResponseDto,
+  TaskListResponseDto,
+} from '../dto/task.dto';
+import { AuthGuard } from '@/shared/auth';
+import {
+  OrganizationId,
+  UserId,
+} from '../../../shared/decorators/organization.decorator';
+import { ApiRateLimit } from '../../../shared/decorators/throttle.decorator';
+
+@ApiTags('Tasks')
+@ApiBearerAuth('bearer')
+@Controller('api/v1/tasks')
+@UseGuards(AuthGuard)
+@ApiRateLimit()
+export class TasksController {
+  constructor(private readonly tasksService: TasksService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new task' })
+  @ApiResponse({
+    status: 201,
+    description: 'Task created successfully',
+    type: TaskWrapperResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async create(
+    @OrganizationId() organizationId: string,
+    @UserId() userId: string,
+    @Body() dto: CreateTaskDto,
+  ) {
+    const task = await this.tasksService.create(organizationId, userId, dto);
+    return { task };
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Get all tasks with optional filtering and pagination',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns paginated list of tasks',
+    type: TaskListResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiQuery({
+    name: 'projectId',
+    required: false,
+    description: 'Filter by project ID',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter by status',
+  })
+  @ApiQuery({
+    name: 'externalIssueId',
+    required: false,
+    description: 'Filter by external issue ID',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Items per page (default: 20, max: 100)',
+  })
+  async findAll(
+    @OrganizationId() organizationId: string,
+    @Query() filter: TaskFilterDto,
+  ) {
+    return this.tasksService.findAll(organizationId, filter);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a task by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the task',
+    type: TaskWrapperResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findOne(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.findOne(organizationId, id);
+    return { task };
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task updated successfully',
+    type: TaskWrapperResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async update(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+  ) {
+    const task = await this.tasksService.update(organizationId, id, dto);
+    return { task };
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a task' })
+  @ApiResponse({ status: 204, description: 'Task deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async remove(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    await this.tasksService.remove(organizationId, id);
+  }
+
+  // =========================================================================
+  // Task Processing Endpoints
+  // =========================================================================
+
+  @Post(':id/process')
+  @ApiOperation({ summary: 'Start AI processing for a task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task processing started',
+    type: TaskWithMessageResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async startProcessing(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.startProcessing(organizationId, id);
+    return { task, message: 'Task processing started' };
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel a task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task cancelled',
+    type: TaskWithMessageResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async cancel(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.cancel(organizationId, id);
+    return { task, message: 'Task cancelled' };
+  }
+}

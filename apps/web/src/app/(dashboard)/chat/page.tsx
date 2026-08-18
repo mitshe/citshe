@@ -1,0 +1,612 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  useChatConversations,
+  useChatConversation,
+  useCreateChatConversation,
+  useSendChatMessage,
+  useAICredentials,
+} from "@/lib/api/hooks";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Send,
+  Loader2,
+  KeyRound,
+  AlertCircle,
+  Zap,
+  Workflow,
+  Terminal,
+  ListTodo,
+  GitBranch,
+  Plug,
+  Check,
+  Sparkles,
+  ExternalLink,
+  HardDrive,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { ChatToolCall } from "@citshe/types";
+import { ChatHistoryList, ChatHistoryDrawer } from "./chat-history-panel";
+
+export default function ChatPage() {
+  const searchParams = useSearchParams();
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState(() => {
+    const prompt = searchParams.get("prompt");
+    if (prompt) return prompt;
+    try {
+      return sessionStorage.getItem("chat-draft:new") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [selectedCredentialId, setSelectedCredentialId] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { data: conversations = [] } = useChatConversations();
+  const { data: activeConversation, isLoading: loadingConversation } =
+    useChatConversation(activeConversationId || "");
+  const { data: credentials = [], isLoading: loadingCredentials } = useAICredentials();
+  const createConversation = useCreateChatConversation();
+  const sendMessage = useSendChatMessage();
+
+  const hasCredentials = credentials.length > 0;
+  const messages = activeConversation?.messages || [];
+
+  useEffect(() => {
+    if (credentials.length > 0 && !selectedCredentialId) {
+      const defaultCred = credentials.find((c: { isDefault?: boolean }) => c.isDefault) || credentials[0];
+      setSelectedCredentialId(defaultCred.id);
+    }
+  }, [credentials, selectedCredentialId]);
+
+  useEffect(() => {
+    if (!activeConversationId && conversations.length > 0) {
+      setActiveConversationId(conversations[0].id);
+    }
+  }, [conversations, activeConversationId]);
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setActiveConversationId(e.detail.conversationId);
+      setErrorMessage(null);
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    };
+    window.addEventListener("chat:select", handler as EventListener);
+    return () => window.removeEventListener("chat:select", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, sendMessage.isPending, pendingUserMessage]);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const hasMountedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) return;
+    const key = `chat-draft:${activeConversationId || "new"}`;
+    try {
+      if (inputValue) {
+        sessionStorage.setItem(key, inputValue);
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    } catch {}
+  }, [inputValue, activeConversationId]);
+
+  useEffect(() => {
+    const key = `chat-draft:${activeConversationId || "new"}`;
+    try {
+      const saved = sessionStorage.getItem(key);
+      setInputValue(saved || "");
+    } catch {
+      setInputValue("");
+    }
+    hasMountedRef.current = true;
+  }, [activeConversationId]);
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || sendMessage.isPending) return;
+
+    let convId = activeConversationId;
+    if (!convId) {
+      if (!selectedCredentialId) return;
+      const conversation = await createConversation.mutateAsync({
+        aiCredentialId: selectedCredentialId,
+      });
+      convId = conversation.id;
+      setActiveConversationId(convId);
+    }
+
+    setErrorMessage(null);
+    const content = inputValue;
+    setInputValue("");
+    try { sessionStorage.removeItem(`chat-draft:${convId}`); } catch {}
+    setPendingUserMessage(content);
+    if (textareaRef.current) textareaRef.current.style.height = "48px";
+
+    try {
+      await sendMessage.mutateAsync({ conversationId: convId, data: { content } });
+    } catch (err: unknown) {
+      const error = err as { data?: { message?: string; statusCode?: number }; message?: string };
+      const backendMsg = error?.data?.message;
+      const msg = backendMsg || error?.message || "Something went wrong.";
+      const isEncryptionError =
+        msg.includes("ENCRYPTION_KEY") || msg.includes("Unsupported state") || msg.includes("corrupted") || msg.includes("re-add");
+      const cleanMsg = isEncryptionError
+        ? "AI provider key could not be loaded. Please re-add your API key in Settings → AI Providers."
+        : msg;
+      setErrorMessage(cleanMsg);
+    } finally {
+      setPendingUserMessage(null);
+    }
+  };
+
+  const sendFromCard = async (msg: string) => {
+    if (sendMessage.isPending || !activeConversationId) return;
+    setErrorMessage(null);
+    setPendingUserMessage(msg);
+    try {
+      await sendMessage.mutateAsync({
+        conversationId: activeConversationId,
+        data: { content: msg },
+      });
+    } catch {
+      setErrorMessage("Failed to send. Try again.");
+    } finally {
+      setPendingUserMessage(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  if (!loadingCredentials && !hasCredentials) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+            <KeyRound className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-semibold">Set up an AI provider</h2>
+          <p className="text-sm text-muted-foreground">
+            Add your API key for Claude, OpenAI, OpenRouter, or another provider to start chatting.
+          </p>
+          <Button asChild>
+            <Link href="/settings/ai">Go to AI Providers</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const isEmptyState = (!activeConversationId || (messages.length === 0 && !loadingConversation)) && !pendingUserMessage;
+
+  const inputBox = (
+    <div className="rounded-2xl border border-border bg-muted/30 focus-within:border-primary/50 transition-colors overflow-hidden">
+      <textarea
+        ref={textareaRef}
+        value={inputValue}
+        onChange={(e) => {
+          setInputValue(e.target.value);
+          const el = e.target;
+          el.style.height = "0";
+          el.style.height = Math.min(el.scrollHeight, 200) + "px";
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={isEmptyState ? "Ask anything..." : "Reply..."}
+        className="w-full min-h-[48px] max-h-[200px] resize-none text-sm bg-transparent px-4 pt-3.5 pb-1 outline-none placeholder:text-muted-foreground overflow-y-auto"
+        rows={1}
+      />
+      <div className="flex items-center justify-between px-3 pb-2.5">
+        <Select value={selectedCredentialId} onValueChange={setSelectedCredentialId}>
+          <SelectTrigger className="h-7 w-auto gap-1.5 border-0 bg-transparent text-xs text-muted-foreground hover:text-foreground px-1.5 shadow-none focus:ring-0">
+            <SelectValue placeholder="Provider" />
+          </SelectTrigger>
+          <SelectContent>
+            {credentials.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.provider}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleSend}
+              disabled={!inputValue.trim() || sendMessage.isPending || !selectedCredentialId}
+              className="h-7 w-7 rounded-lg"
+            >
+              {sendMessage.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            Send <kbd className="ml-1 font-mono text-[10px] opacity-70">⌘↵</kbd>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-full">
+      {/* Chat history — its own panel, not in the global navigation */}
+      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border bg-muted/20">
+        <ChatHistoryList
+          activeId={activeConversationId}
+          onSelect={(id) => {
+            setActiveConversationId(id);
+            setErrorMessage(null);
+            setTimeout(() => textareaRef.current?.focus(), 50);
+          }}
+        />
+      </aside>
+
+      <div className="flex flex-1 flex-col h-full min-w-0">
+        {/* Mobile: history opens in a drawer */}
+        <div className="flex md:hidden items-center gap-2 border-b border-border px-3 py-2">
+          <ChatHistoryDrawer
+            activeId={activeConversationId}
+            onSelect={(id) => {
+              setActiveConversationId(id);
+              setErrorMessage(null);
+            }}
+          />
+        </div>
+
+      {isEmptyState ? (
+        <div className="flex-1 flex items-start justify-center pt-[18vh]">
+          <div className="w-full max-w-2xl px-4 space-y-6">
+            <div className="flex items-center justify-center gap-4">
+              <img src="/logo.svg" alt="mitshe" className="h-8 w-8 sm:h-12 sm:w-12" />
+              <h2 className="text-2xl sm:text-4xl font-light tracking-tight text-foreground/80">
+                {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening"}
+              </h2>
+            </div>
+
+            {inputBox}
+
+            <div className="flex flex-wrap justify-center gap-2 text-xs sm:text-sm">
+              {[
+                { text: "Connect GitHub", icon: <Plug className="h-3.5 w-3.5" /> },
+                { text: "Start a thread", icon: <Terminal className="h-3.5 w-3.5" /> },
+                { text: "Build a workflow", icon: <Workflow className="h-3.5 w-3.5" /> },
+                { text: "Show my repos", icon: <GitBranch className="h-3.5 w-3.5" /> },
+              ].map((prompt) => (
+                <button
+                  key={prompt.text}
+                  onClick={() => {
+                    setInputValue(prompt.text);
+                    textareaRef.current?.focus();
+                  }}
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full border border-border hover:bg-muted/50 transition-all text-muted-foreground hover:text-foreground hover:border-primary/20"
+                >
+                  {prompt.icon}
+                  <span>{prompt.text}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+              {loadingConversation ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                messages.map((msg, idx) => (
+                  <ChatMessage
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    toolUse={msg.toolUse as ChatToolCall[] | null}
+                    onSendFromCard={idx === messages.length - 1 ? sendFromCard : undefined}
+                  />
+                ))
+              )}
+
+              {pendingUserMessage && (
+                <ChatMessage role="user" content={pendingUserMessage} toolUse={null} />
+              )}
+
+              {sendMessage.isPending && <ThinkingIndicator />}
+
+              {errorMessage && (
+                <div className="flex gap-4">
+                  <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                  <div className="rounded-xl bg-destructive/5 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                    {errorMessage}
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+
+          <div className="p-4 pb-6">
+            <div className="max-w-3xl mx-auto">
+              {inputBox}
+            </div>
+          </div>
+        </>
+      )}
+      </div>
+    </div>
+  );
+}
+
+const THINKING_PHRASES = [
+  "Thinking...",
+  "Working on it...",
+  "Processing...",
+  "Analyzing...",
+  "On it...",
+  "Almost there...",
+  "Figuring it out...",
+  "Crunching...",
+];
+
+function ThinkingIndicator() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % THINKING_PHRASES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex gap-4">
+      <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5 animate-pulse" />
+      <span className="text-sm text-muted-foreground transition-opacity duration-300">
+        {THINKING_PHRASES[index]}
+      </span>
+    </div>
+  );
+}
+
+/* ─── Chat message ─── */
+
+function ChatMessage({
+  role,
+  content,
+  toolUse,
+  onSendFromCard,
+}: {
+  role: string;
+  content: string;
+  toolUse: ChatToolCall[] | null;
+  onSendFromCard?: (msg: string) => void;
+}) {
+  if (role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="rounded-2xl bg-primary text-primary-foreground px-4 py-2.5 text-sm max-w-[75%] whitespace-pre-wrap">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-4">
+      <Sparkles className="h-5 w-5 text-primary shrink-0 mt-1" />
+      <div className="flex-1 min-w-0 space-y-2">
+        {content && (
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-3 prose-code:before:content-none prose-code:after:content-none prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-a:text-primary prose-a:no-underline hover:prose-a:underline">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        )}
+        {toolUse && toolUse.length > 0 && (
+          <CollapsibleToolChips toolCalls={toolUse} />
+        )}
+        {content && <CredentialPrompt content={content} onSubmit={onSendFromCard} />}
+      </div>
+    </div>
+  );
+}
+
+const MAX_VISIBLE_CHIPS = 4;
+
+function CollapsibleToolChips({ toolCalls }: { toolCalls: ChatToolCall[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? toolCalls : toolCalls.slice(0, MAX_VISIBLE_CHIPS);
+  const hiddenCount = toolCalls.length - MAX_VISIBLE_CHIPS;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 pt-1">
+      {visible.map((tool, i) => (
+        <ToolChip key={i} toolCall={tool} />
+      ))}
+      {hiddenCount > 0 && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] bg-muted/40 text-muted-foreground hover:bg-muted transition-colors"
+        >
+          +{hiddenCount} more
+        </button>
+      )}
+      {expanded && hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] bg-muted/40 text-muted-foreground hover:bg-muted transition-colors"
+        >
+          Show less
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ─── Tool chip ─── */
+
+const TOOL_META: Record<string, { icon: React.ReactNode; color: string; basePath: string }> = {
+  session: { icon: <Terminal className="h-3 w-3" />, color: "text-emerald-500", basePath: "/sessions" },
+  workflow: { icon: <Workflow className="h-3 w-3" />, color: "text-blue-500", basePath: "" },
+  task: { icon: <ListTodo className="h-3 w-3" />, color: "text-amber-500", basePath: "/tasks" },
+  repository: { icon: <GitBranch className="h-3 w-3" />, color: "text-purple-500", basePath: "" },
+  integration: { icon: <Plug className="h-3 w-3" />, color: "text-cyan-500", basePath: "" },
+  snapshot: { icon: <HardDrive className="h-3 w-3" />, color: "text-orange-500", basePath: "" },
+  skill: { icon: <Zap className="h-3 w-3" />, color: "text-yellow-500", basePath: "" },
+};
+
+function ToolChip({ toolCall }: { toolCall: ChatToolCall }) {
+  const prefix = toolCall.name.split("_")[0];
+  const meta = TOOL_META[prefix] || { icon: <Zap className="h-3 w-3" />, color: "text-muted-foreground", basePath: "" };
+  const action = toolCall.name.replace(/_/g, " ");
+
+  const isError = toolCall.result?.message
+    ? String(toolCall.result.message).toLowerCase().includes("error") ||
+      String(toolCall.result.message).toLowerCase().includes("invalid") ||
+      String(toolCall.result.message).toLowerCase().includes("failed") ||
+      String(toolCall.result.message).includes("no running container")
+    : false;
+
+  const resultMsg = toolCall.result?.message
+    ? String(toolCall.result.message)
+    : toolCall.result?.name
+      ? String(toolCall.result.name)
+      : null;
+
+  const resourceId = toolCall.result?.id as string | undefined;
+  const href = !isError && resourceId && meta.basePath ? `${meta.basePath}/${resourceId}` : null;
+
+  // Short display message
+  const shortMsg = resultMsg
+    ? resultMsg.length > 40
+      ? resultMsg.slice(0, 40) + "..."
+      : resultMsg
+    : null;
+
+  const chip = (
+    <span className={cn(
+      "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] transition-colors",
+      isError
+        ? "bg-destructive/10 text-destructive"
+        : "bg-muted/60 text-muted-foreground",
+      href && "hover:bg-muted cursor-pointer",
+    )}>
+      {isError ? (
+        <AlertCircle className="h-2.5 w-2.5 shrink-0" />
+      ) : (
+        <Check className="h-2.5 w-2.5 text-emerald-500 shrink-0" />
+      )}
+      <span className="capitalize font-medium">{action}</span>
+      {shortMsg && (
+        <>
+          <span className="opacity-30">&middot;</span>
+          <span className="truncate max-w-[200px] opacity-70">{shortMsg}</span>
+        </>
+      )}
+      {href && <ExternalLink className="h-2.5 w-2.5 opacity-40 shrink-0" />}
+    </span>
+  );
+
+  if (href) {
+    return <Link href={href}>{chip}</Link>;
+  }
+
+  return chip;
+}
+
+/* ─── Credential prompt — inline form when AI asks for token/URL ─── */
+
+const CREDENTIAL_PATTERNS = [
+  { match: /jira/i, fields: [{ key: "url", label: "Jira URL", placeholder: "https://your-domain.atlassian.net" }, { key: "email", label: "Email", placeholder: "your-email@company.com" }, { key: "token", label: "API Token", placeholder: "Paste your Jira API token", type: "password" as const }], template: (v: Record<string, string>) => `Connect my Jira:\nURL: ${v.url}\nEmail: ${v.email}\nAPI Token: ${v.token}` },
+  { match: /github/i, fields: [{ key: "token", label: "Personal Access Token", placeholder: "ghp_...", type: "password" as const }], template: (v: Record<string, string>) => `Connect my GitHub with token: ${v.token}` },
+  { match: /gitlab/i, fields: [{ key: "token", label: "Personal Access Token", placeholder: "glpat-...", type: "password" as const }], template: (v: Record<string, string>) => `Connect my GitLab with token: ${v.token}` },
+  { match: /slack/i, fields: [{ key: "token", label: "Bot Token", placeholder: "xoxb-...", type: "password" as const }], template: (v: Record<string, string>) => `Connect my Slack with bot token: ${v.token}` },
+  { match: /openai|openrouter|claude|api.key|ai.provider/i, fields: [{ key: "token", label: "API Key", placeholder: "sk-...", type: "password" as const }], template: (v: Record<string, string>) => `Connect AI provider with key: ${v.token}` },
+];
+
+function CredentialPrompt({
+  content,
+  onSubmit,
+}: {
+  content: string;
+  onSubmit?: (msg: string) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  if (!onSubmit || submitted) return null;
+
+  // Find matching credential pattern
+  const pattern = CREDENTIAL_PATTERNS.find((p) => p.match.test(content));
+  if (!pattern) return null;
+
+  // Check if AI is actually asking for credentials (not just mentioning the service)
+  const isAsking = /token|key|podaj|provide|paste|wklej|credential/i.test(content);
+  if (!isAsking) return null;
+
+  const allFilled = pattern.fields.every((f) => values[f.key]?.trim());
+
+  const handleSubmit = () => {
+    if (!allFilled) return;
+    setSubmitted(true);
+    onSubmit(pattern.template(values));
+  };
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2 mt-2">
+      {pattern.fields.map((field) => (
+        <div key={field.key}>
+          <label className="text-[11px] text-muted-foreground font-medium">{field.label}</label>
+          <input
+            type={field.type || "text"}
+            placeholder={field.placeholder}
+            value={values[field.key] || ""}
+            onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+            className="w-full mt-0.5 px-2.5 py-1.5 rounded-md border border-border bg-background text-sm outline-none focus:border-primary/50 transition-colors"
+            onKeyDown={(e) => { if (e.key === "Enter" && allFilled) handleSubmit(); }}
+          />
+        </div>
+      ))}
+      <button
+        onClick={handleSubmit}
+        disabled={!allFilled}
+        className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 transition-opacity"
+      >
+        Connect
+      </button>
+    </div>
+  );
+}

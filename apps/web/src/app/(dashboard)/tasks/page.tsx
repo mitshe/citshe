@@ -1,0 +1,887 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Plus,
+  Loader2,
+  MoreHorizontal,
+  Eye,
+  Trash2,
+  ListTodo,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Search,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Terminal,
+} from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
+import {
+  useTasks,
+  useProjects,
+  useCreateTask,
+  useDeleteTask,
+  useRefreshAllTasks,
+  useCreateSession,
+} from "@/lib/api/hooks";
+import { formatDistanceToNow } from "@/lib/utils";
+import { toast } from "sonner";
+import { useDebounce } from "@/lib/hooks/use-debounce";
+import type { Task, TaskPriority } from "@/lib/api/types";
+import {
+  getTaskStatus,
+  getPriority,
+} from "@/lib/status-config";
+import { ImportTaskDialog } from "./components/import-task-dialog";
+
+const ITEMS_PER_PAGE = 15;
+
+export default function TasksPage() {
+  const router = useRouter();
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
+  const refreshAllTasks = useRefreshAllTasks();
+  const createSession = useCreateSession();
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: "",
+    description: "",
+    priority: "medium" as TaskPriority,
+    projectId: "",
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const searchParams = useSearchParams();
+  const [filterProjectId, setFilterProjectId] = useState<string>(
+    searchParams.get("projectId") || "all",
+  );
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  type SortField = "title" | "project" | "status" | "priority" | "createdAt";
+  type SortDirection = "asc" | "desc";
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page when filters change (React "adjusting state during render" pattern)
+  const filterFingerprint = `${debouncedSearchQuery}-${filterProjectId}-${filterPriority}-${filterStatus}`;
+  const [prevFilterFingerprint, setPrevFilterFingerprint] =
+    useState(filterFingerprint);
+  if (prevFilterFingerprint !== filterFingerprint) {
+    setPrevFilterFingerprint(filterFingerprint);
+    setCurrentPage(1);
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 text-muted-foreground" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="ml-1 h-3 w-3" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3" />
+    );
+  };
+
+  const isLoading = tasksLoading || projectsLoading;
+
+  const filteredTasks = useMemo(() => {
+    let result = tasks;
+
+    if (filterStatus !== "all") {
+      result = result.filter((task) => task.status === filterStatus);
+    }
+
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
+      result = result.filter(
+        (task) =>
+          task.title.toLowerCase().includes(query) ||
+          task.description?.toLowerCase().includes(query),
+      );
+    }
+
+    if (filterProjectId !== "all") {
+      result = result.filter((task) => task.projectId === filterProjectId);
+    }
+
+    if (filterPriority !== "all") {
+      result = result.filter((task) => task.priority === filterPriority);
+    }
+
+    const priorityOrder: Record<string, number> = {
+      urgent: 0,
+      high: 1,
+      medium: 2,
+      low: 3,
+    };
+    const statusOrder: Record<string, number> = {
+      IN_PROGRESS: 0,
+      ANALYZING: 1,
+      PENDING: 2,
+      REVIEW: 3,
+      COMPLETED: 4,
+      FAILED: 5,
+      CANCELLED: 6,
+    };
+
+    result = [...result].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case "title":
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case "project":
+          comparison = (a.project?.name || "").localeCompare(
+            b.project?.name || "",
+          );
+          break;
+        case "status":
+          comparison =
+            (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+          break;
+        case "priority":
+          comparison =
+            (priorityOrder[a.priority || ""] ?? 99) -
+            (priorityOrder[b.priority || ""] ?? 99);
+          break;
+        case "createdAt":
+          comparison =
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return result;
+  }, [
+    tasks,
+    filterStatus,
+    debouncedSearchQuery,
+    filterProjectId,
+    filterPriority,
+    sortField,
+    sortDirection,
+  ]);
+
+  const hasActiveFilters =
+    searchQuery ||
+    filterProjectId !== "all" ||
+    filterPriority !== "all" ||
+    filterStatus !== "all";
+
+  const totalPages = Math.ceil(filteredTasks.length / ITEMS_PER_PAGE);
+  const paginatedTasks = filteredTasks.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilterProjectId("all");
+    setFilterPriority("all");
+    setFilterStatus("all");
+  };
+
+  const handleCreateTask = async () => {
+    if (!newTask.title.trim()) return;
+
+    try {
+      await createTask.mutateAsync({
+        title: newTask.title,
+        description: newTask.description || undefined,
+        priority: newTask.priority,
+        projectId: newTask.projectId || undefined,
+      });
+      setCreateDialogOpen(false);
+      setNewTask({
+        title: "",
+        description: "",
+        priority: "medium",
+        projectId: "",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create task";
+      toast.error(message);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    setDeletingId(taskId);
+    try {
+      await deleteTask.mutateAsync(taskId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete task";
+      toast.error(message);
+    } finally {
+      setDeleteTarget(null);
+      setDeletingId(null);
+    }
+  };
+
+  const openTaskInThread = async (task: Task) => {
+    try {
+      const session = await createSession.mutateAsync({
+        name: task.title,
+        projectId: task.projectId || undefined,
+        repositoryIds: [],
+        instructions: task.description || task.title,
+      });
+      toast.success("Thread created");
+      router.push(`/sessions/${session.id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create thread";
+      toast.error(message);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const renderTaskTable = (taskList: Task[]) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              onClick={() => handleSort("title")}
+            >
+              Title
+              <SortIcon field="title" />
+            </Button>
+          </TableHead>
+          <TableHead>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              onClick={() => handleSort("project")}
+            >
+              Project
+              <SortIcon field="project" />
+            </Button>
+          </TableHead>
+          <TableHead>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              onClick={() => handleSort("status")}
+            >
+              Status
+              <SortIcon field="status" />
+            </Button>
+          </TableHead>
+          <TableHead>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              onClick={() => handleSort("priority")}
+            >
+              Priority
+              <SortIcon field="priority" />
+            </Button>
+          </TableHead>
+          <TableHead>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-3 h-8 data-[state=open]:bg-accent"
+              onClick={() => handleSort("createdAt")}
+            >
+              Created
+              <SortIcon field="createdAt" />
+            </Button>
+          </TableHead>
+          <TableHead className="w-[50px]"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {taskList.map((task) => (
+          <TableRow key={task.id} className="cursor-pointer" onClick={() => router.push(`/tasks/${task.id}`)}>
+            <TableCell>
+              <Link href={`/tasks/${task.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                <span className="font-medium">{task.title}</span>
+                {task.description && (
+                  <p className="text-xs text-muted-foreground truncate max-w-md">{task.description}</p>
+                )}
+              </Link>
+            </TableCell>
+            <TableCell>
+              {task.project ? (
+                <Link
+                  href={`/projects/${task.projectId}`}
+                  className="hover:underline text-muted-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {task.project.name}
+                </Link>
+              ) : (
+                <span className="text-muted-foreground">-</span>
+              )}
+            </TableCell>
+            <TableCell>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className={getTaskStatus(task.status).color}>
+                  {getTaskStatus(task.status).label}
+                </Badge>
+                {task.externalStatus && (
+                  <Badge variant="secondary" className="text-xs">
+                    {task.externalStatus}
+                  </Badge>
+                )}
+              </div>
+            </TableCell>
+            <TableCell>
+              {task.priority ? (
+                <Badge variant="outline" className={getPriority(task.priority).color}>
+                  {getPriority(task.priority).label}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">-</span>
+              )}
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              {formatDistanceToNow(new Date(task.createdAt))}
+            </TableCell>
+            <TableCell>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/tasks/${task.id}`}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Details
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openTaskInThread(task)} disabled={createSession.isPending}>
+                    <Terminal className="mr-2 h-4 w-4" />
+                    Open in Thread
+                  </DropdownMenuItem>
+                  {task.externalSource && (
+                    <DropdownMenuItem asChild>
+                      <a
+                        href={task.externalIssueUrl || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View in {task.externalSource}
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => setDeleteTarget(task.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+  const renderEmptyState = () => (
+    <div className="text-center py-12 text-muted-foreground">
+      <ListTodo className="w-12 h-12 mx-auto mb-4" />
+      <p className="mb-4">
+        {hasActiveFilters
+          ? "No tasks match your filters"
+          : "No tasks yet. Create your first task to get started."}
+      </p>
+      {hasActiveFilters ? (
+        <Button variant="outline" onClick={clearFilters}>
+          Clear filters
+        </Button>
+      ) : (
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <Plus className="mr-2 h-4 w-4" />
+              Create a task
+            </Button>
+          </DialogTrigger>
+        </Dialog>
+      )}
+    </div>
+  );
+
+  const renderTaskCard = (task: Task) => (
+    <div
+      key={task.id}
+      className="flex flex-col gap-3 p-4 border rounded-lg bg-card cursor-pointer hover:bg-muted/50 transition-colors"
+      onClick={() => router.push(`/tasks/${task.id}`)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <Link
+          href={`/tasks/${task.id}`}
+          className="font-medium hover:underline line-clamp-2 flex-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {task.title}
+        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={`/tasks/${task.id}`}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push(`/sessions?newSession=1&taskName=${encodeURIComponent(task.title)}&taskInstructions=${encodeURIComponent(task.description || '')}&projectId=${task.projectId || ''}`)}>
+              <Terminal className="mr-2 h-4 w-4" />
+              Open in Thread
+            </DropdownMenuItem>
+            {task.externalSource && (
+              <DropdownMenuItem asChild>
+                <a
+                  href={task.externalIssueUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View in {task.externalSource}
+                </a>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => setDeleteTarget(task.id)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={getTaskStatus(task.status).variant}>
+          {getTaskStatus(task.status).label}
+        </Badge>
+        {task.priority && (
+          <Badge variant={getPriority(task.priority).variant}>
+            {getPriority(task.priority).label}
+          </Badge>
+        )}
+        {task.externalStatus && (
+          <Badge variant="secondary" className="text-xs">
+            {task.externalStatus}
+          </Badge>
+        )}
+      </div>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        {task.project ? (
+          <Link
+            href={`/projects/${task.projectId}`}
+            className="hover:underline truncate"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {task.project.name}
+          </Link>
+        ) : (
+          <span>No project</span>
+        )}
+        <span className="shrink-0">
+          {formatDistanceToNow(new Date(task.createdAt))}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderMobileTaskList = (taskList: Task[]) => (
+    <div className="space-y-3">{taskList.map(renderTaskCard)}</div>
+  );
+
+  return (
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage and monitor AI-processed tasks
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+              variant="ghost"
+              size="sm"
+              disabled={refreshAllTasks.isPending}
+              onClick={async () => {
+                try {
+                  const result = await refreshAllTasks.mutateAsync();
+                  toast.success(`Synced ${result.refreshed} task(s)`, {
+                    description: result.failed > 0 ? `${result.failed} failed to sync` : undefined,
+                  });
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : "Failed to sync tasks";
+                  toast.error(message);
+                }
+              }}
+            >
+              {refreshAllTasks.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+              Sync
+            </Button>
+          <ImportTaskDialog
+            open={importDialogOpen}
+            onOpenChange={setImportDialogOpen}
+            projects={projects}
+          >
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Import
+              </Button>
+            </DialogTrigger>
+          </ImportTaskDialog>
+
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>New Task</DialogTitle>
+                <DialogDescription>
+                  Create a task manually or import from Jira/YouTrack.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogBody className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    placeholder="Task title"
+                    value={newTask.title}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, title: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe the task..."
+                    value={newTask.description}
+                    onChange={(e) =>
+                      setNewTask({ ...newTask, description: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="priority">Priority</Label>
+                    <Select
+                      value={newTask.priority}
+                      onValueChange={(value: TaskPriority) =>
+                        setNewTask({ ...newTask, priority: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project">Project</Label>
+                    <Select
+                      value={newTask.projectId}
+                      onValueChange={(value) =>
+                        setNewTask({ ...newTask, projectId: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateTask}
+                  disabled={createTask.isPending}
+                >
+                  {createTask.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Task"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="ANALYZING">Analyzing</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+              <SelectItem value="REVIEW">Review</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="FAILED">Failed</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px]">
+              <SelectValue placeholder="All Priorities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterProjectId} onValueChange={setFilterProjectId}>
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-[180px]">
+              <SelectValue placeholder="All Projects" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Projects</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 sm:gap-x-6 sm:gap-y-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <ListTodo className="h-4 w-4" />
+          <span>Total</span>
+          <span className="font-semibold text-foreground">
+            {filteredTasks.length}
+          </span>
+          {hasActiveFilters && (
+            <span className="text-xs">of {tasks.length}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <span className="hidden sm:inline">Completed</span>
+          <span className="sm:hidden">Done</span>
+          <span className="font-semibold text-foreground">
+            {tasks.filter((t) => t.status === "COMPLETED").length}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Clock className="h-4 w-4 text-blue-500" />
+          <span className="hidden sm:inline">In Progress</span>
+          <span className="sm:hidden">Active</span>
+          <span className="font-semibold text-foreground">
+            {
+              tasks.filter(
+                (t) => t.status === "IN_PROGRESS" || t.status === "ANALYZING",
+              ).length
+            }
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <AlertCircle className="h-4 w-4 text-yellow-500" />
+          <span>Pending</span>
+          <span className="font-semibold text-foreground">
+            {tasks.filter((t) => t.status === "PENDING").length}
+          </span>
+        </div>
+      </div>
+
+      {/* Mobile: Card list */}
+      <div className="md:hidden">
+        {filteredTasks.length === 0
+          ? renderEmptyState()
+          : renderMobileTaskList(paginatedTasks)}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden md:block">
+          {filteredTasks.length === 0
+            ? renderEmptyState()
+            : renderTaskTable(paginatedTasks)}
+      </div>
+
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+      )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && handleDeleteTask(deleteTarget)}
+              disabled={!!deletingId}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {deletingId ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

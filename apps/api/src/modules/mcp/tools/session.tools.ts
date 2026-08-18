@@ -1,0 +1,463 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { SessionsService } from '../../sessions/services/sessions.service';
+import { SessionContainerService } from '../../sessions/services/session-container.service';
+import { SkillsService } from '../../skills/services/skills.service';
+import { EventsGateway } from '../../../infrastructure/websocket/events.gateway';
+import { McpTool, McpToolResult } from '../mcp.types';
+
+@Injectable()
+export class SessionTools {
+  private readonly logger = new Logger(SessionTools.name);
+
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly containerService: SessionContainerService,
+    private readonly skillsService: SkillsService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
+
+  getTools(): McpTool[] {
+    return [
+      {
+        name: 'session_list',
+        description:
+          'List all agent sessions. Can filter by status (CREATING, RUNNING, PAUSED, COMPLETED, FAILED) and projectId.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              description: 'Filter by status',
+              enum: ['CREATING', 'RUNNING', 'PAUSED', 'COMPLETED', 'FAILED'],
+            },
+            projectId: {
+              type: 'string',
+              description: 'Filter by project ID',
+            },
+          },
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const result = await this.sessionsService.findAll(orgId, {
+            status: input.status as any,
+            projectId: input.projectId as string,
+          });
+          return {
+            content: JSON.stringify(
+              result.sessions.map((s) => ({
+                id: s.id,
+                name: s.name,
+                status: s.status,
+                project: (s as any).project?.name,
+                enableDocker: s.enableDocker,
+                createdAt: s.createdAt,
+                lastActiveAt: s.lastActiveAt,
+              })),
+            ),
+          };
+        },
+      },
+      {
+        name: 'session_get',
+        description: 'Get details of a specific agent session by ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: {
+              type: 'string',
+              description: 'Session ID',
+            },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          return { content: JSON.stringify(session) };
+        },
+      },
+      {
+        name: 'session_create',
+        description:
+          'Create a new agent session. Use repository_list first to get valid repository IDs. ' +
+          'If no repositoryIds provided, session starts without repos (Claude Code can clone manually).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Session name' },
+            repositoryIds: {
+              type: 'string',
+              description:
+                'Comma-separated repository IDs (from repository_list). ' +
+                'Leave empty to create session without repos.',
+            },
+            projectId: { type: 'string', description: 'Project ID' },
+            aiCredentialId: { type: 'string', description: 'AI credential ID' },
+            integrationIds: {
+              type: 'string',
+              description: 'Comma-separated integration IDs',
+            },
+            instructions: {
+              type: 'string',
+              description: 'System instructions for the agent',
+            },
+            enableDocker: {
+              type: 'string',
+              description: 'Enable Docker-in-Docker (true/false)',
+            },
+            skillIds: {
+              type: 'string',
+              description:
+                'Comma-separated skill IDs to install as slash commands',
+            },
+          },
+          required: ['name'],
+        },
+        execute: async (orgId, userId, input): Promise<McpToolResult> => {
+          const repoIds = input.repositoryIds
+            ? (input.repositoryIds as string)
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [];
+          const integrationIds = input.integrationIds
+            ? (input.integrationIds as string)
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : undefined;
+          const skillIdList = input.skillIds
+            ? (input.skillIds as string)
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [];
+
+          try {
+            const session = await this.sessionsService.create(orgId, userId, {
+              name: input.name as string,
+              repositoryIds: repoIds,
+              projectId: input.projectId as string,
+              aiCredentialId: input.aiCredentialId as string,
+              integrationIds,
+              instructions: input.instructions as string,
+              enableDocker: input.enableDocker === 'true',
+            });
+
+            // Start container in background (same as sessions controller)
+            const [repos, integrationConfigs, skills] = await Promise.all([
+              this.sessionsService.buildRepoConfigs(
+                session.repositories,
+                orgId,
+              ),
+              this.sessionsService.resolveIntegrationConfigs(
+                integrationIds,
+                orgId,
+                undefined,
+                session.id,
+              ),
+              this.skillsService.getSkillsForSession(orgId, skillIdList),
+            ]);
+
+            // eslint-disable-next-line @typescript-eslint/no-misused-promises
+            setImmediate(async () => {
+              try {
+                const containerId = await this.containerService.createAndStart({
+                  sessionId: session.id,
+                  organizationId: orgId,
+                  repos,
+                  instructions: session.instructions,
+                  provider: session.aiCredential?.provider,
+                  enableDocker: session.enableDocker,
+                  integrations:
+                    integrationConfigs.length > 0
+                      ? integrationConfigs
+                      : undefined,
+                  skills: skills.length > 0 ? skills : undefined,
+                });
+                await this.sessionsService.updateStatus(
+                  session.id,
+                  'RUNNING',
+                  containerId,
+                );
+                this.eventsGateway.emitSessionStatus(
+                  orgId,
+                  session.id,
+                  'RUNNING',
+                );
+              } catch (err) {
+                this.logger.error(
+                  `Failed to start session: ${(err as Error).message}`,
+                );
+                await this.sessionsService.updateStatus(session.id, 'FAILED');
+                this.eventsGateway.emitSessionStatus(
+                  orgId,
+                  session.id,
+                  'FAILED',
+                  (err as Error).message,
+                );
+              }
+            });
+
+            return {
+              content: JSON.stringify({
+                id: session.id,
+                name: session.name,
+                status: 'CREATING',
+                message: `Session "${session.name}" created. Container is starting...`,
+              }),
+            };
+          } catch (error) {
+            const msg = (error as Error).message;
+            if (msg.includes('Foreign key')) {
+              return {
+                content:
+                  'Invalid repository IDs. Use repository_list first to get valid IDs, then pass them to session_create.',
+                isError: true,
+              };
+            }
+            throw error;
+          }
+        },
+      },
+      {
+        name: 'session_stop',
+        description: 'Stop a running session.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          if (session.containerId) {
+            await this.containerService.stopContainer(session.containerId);
+          }
+          await this.sessionsService.updateStatus(session.id, 'COMPLETED');
+          return {
+            content: JSON.stringify({
+              message: `Session "${session.name}" stopped.`,
+            }),
+          };
+        },
+      },
+      {
+        name: 'session_pause',
+        description: 'Pause a running session.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          await this.sessionsService.updateStatus(session.id, 'PAUSED');
+          return {
+            content: JSON.stringify({
+              message: `Session "${session.name}" paused.`,
+            }),
+          };
+        },
+      },
+      {
+        name: 'session_resume',
+        description: 'Resume a paused or stopped session.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          if (session.containerId) {
+            await this.containerService.restartContainer(session.containerId);
+          }
+          await this.sessionsService.updateStatus(session.id, 'RUNNING');
+          return {
+            content: JSON.stringify({
+              message: `Session "${session.name}" resumed.`,
+            }),
+          };
+        },
+      },
+      {
+        name: 'session_clone',
+        description:
+          'Clone an existing session (creates a snapshot and new session with same workspace).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID to clone' },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, userId, input): Promise<McpToolResult> => {
+          const cloned = await this.sessionsService.clone(
+            orgId,
+            userId,
+            input.sessionId as string,
+          );
+          return {
+            content: JSON.stringify({
+              id: cloned.id,
+              name: cloned.name,
+              status: cloned.status,
+              message: `Session cloned as "${cloned.name}".`,
+            }),
+          };
+        },
+      },
+      {
+        name: 'session_exec',
+        description:
+          'Execute a shell command in a running session container. Returns stdout and exit code.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+            command: {
+              type: 'string',
+              description: 'Shell command to execute',
+            },
+          },
+          required: ['sessionId', 'command'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          if (!session.containerId) {
+            return {
+              content: 'Session has no running container.',
+              isError: true,
+            };
+          }
+          const stdout = await this.containerService.execCommand(
+            session.containerId,
+            ['bash', '-c', input.command as string],
+          );
+          return {
+            content: JSON.stringify({ stdout }),
+          };
+        },
+      },
+      {
+        name: 'session_agent',
+        description:
+          'Send a prompt to Claude Code running inside a session. Claude Code will execute the task ' +
+          '(install packages, configure projects, write code, run tests, etc.) and return the result. ' +
+          'The session must be RUNNING. Use this to automate setup, coding tasks, and testing inside sessions.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+            prompt: {
+              type: 'string',
+              description:
+                'Prompt for Claude Code. Be specific about what to do. ' +
+                'Example: "Install PHP 8.3 and Composer. Clone repo at /workspace/api. Run composer install."',
+            },
+            timeout: {
+              type: 'string',
+              description:
+                'Timeout in seconds (default: 300). Increase for long tasks like installing dependencies.',
+            },
+          },
+          required: ['sessionId', 'prompt'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.findOne(
+            orgId,
+            input.sessionId as string,
+          );
+          if (!session.containerId) {
+            return {
+              content: 'Session has no running container.',
+              isError: true,
+            };
+          }
+          if (session.status !== 'RUNNING') {
+            return {
+              content: `Session is ${session.status}, not RUNNING.`,
+              isError: true,
+            };
+          }
+          const timeoutSec = parseInt((input.timeout as string) || '300', 10);
+          const timeoutMs = timeoutSec * 1000;
+          try {
+            // Write prompt to temp file to avoid shell escaping issues
+            const promptB64 = Buffer.from(input.prompt as string).toString(
+              'base64',
+            );
+            const stdout = await this.containerService.execCommand(
+              session.containerId,
+              [
+                'bash',
+                '-c',
+                `echo '${promptB64}' | base64 -d | claude -p --dangerously-skip-permissions --output-format text`,
+              ],
+              '/workspace',
+              timeoutMs,
+            );
+            // Truncate very long outputs
+            const maxLen = 4000;
+            const truncated =
+              stdout.length > maxLen
+                ? stdout.slice(0, maxLen) + '\n... (output truncated)'
+                : stdout;
+            return {
+              content: JSON.stringify({
+                output: truncated,
+                message: 'Claude Code completed the task.',
+              }),
+            };
+          } catch (error) {
+            return {
+              content: `Claude Code failed: ${(error as Error).message}`,
+              isError: true,
+            };
+          }
+        },
+      },
+      {
+        name: 'session_delete',
+        description: 'Delete a session and its container.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Session ID' },
+          },
+          required: ['sessionId'],
+        },
+        execute: async (orgId, _userId, input): Promise<McpToolResult> => {
+          const session = await this.sessionsService.remove(
+            orgId,
+            input.sessionId as string,
+          );
+          return {
+            content: JSON.stringify({
+              message: `Session "${session.name}" deleted.`,
+            }),
+          };
+        },
+      },
+    ];
+  }
+}
