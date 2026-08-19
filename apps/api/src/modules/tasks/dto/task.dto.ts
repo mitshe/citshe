@@ -3,6 +3,8 @@ import {
   IsOptional,
   IsEnum,
   IsObject,
+  IsArray,
+  ArrayMaxSize,
   MinLength,
   MaxLength,
   IsUrl,
@@ -29,6 +31,13 @@ export class CreateTaskDto {
   @IsOptional()
   @MaxLength(50)
   priority?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  labels?: string[];
 
   @IsString()
   @IsOptional()
@@ -67,6 +76,13 @@ export class UpdateTaskDto {
   @IsOptional()
   @MaxLength(50)
   priority?: string;
+
+  @IsArray()
+  @IsOptional()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  labels?: string[];
 
   @IsString()
   @IsOptional()
@@ -136,6 +152,9 @@ export class TaskResponseDto {
 
   @ApiPropertyOptional({ description: 'Task priority', nullable: true })
   priority: string | null;
+
+  @ApiProperty({ description: 'Free-form labels', type: [String] })
+  labels: string[];
 
   @ApiPropertyOptional({
     description: 'External issue ID (e.g., JIRA-123)',

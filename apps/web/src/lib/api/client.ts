@@ -8,6 +8,7 @@ import type {
   UpdateProjectDto,
   Task,
   QueueOverview,
+  RefinedTask,
   CreateTaskDto,
   UpdateTaskDto,
   Integration,
@@ -32,11 +33,6 @@ import type {
   CreateSessionDto,
   UpdateSessionMetadataDto,
   RecreateSessionDto,
-  ChatConversation,
-  ChatMessage,
-  CreateConversationDto,
-  SendMessageDto,
-  SendMessageResponse,
   Skill,
   CreateSkillDto,
   UpdateSkillDto,
@@ -148,6 +144,16 @@ export const api = {
 
     create: (data: CreateTaskDto, token: string) =>
       request<{ task: Task }>("/tasks", {
+        method: "POST",
+        body: JSON.stringify(data),
+        token,
+      }),
+
+    refine: (
+      data: { title: string; description?: string },
+      token: string,
+    ) =>
+      request<RefinedTask>("/tasks/refine", {
         method: "POST",
         body: JSON.stringify(data),
         token,
@@ -559,38 +565,6 @@ export const api = {
         pushResult: string;
         pr: { id: number; title: string; webUrl: string; status: string };
       }>(`/sessions/${id}/push-and-pr`, {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-  },
-
-  chat: {
-    listConversations: (token: string) =>
-      request<{ conversations: ChatConversation[] }>("/chat/conversations", {
-        token,
-      }),
-
-    getConversation: (id: string, token: string) =>
-      request<{
-        conversation: ChatConversation & { messages: ChatMessage[] };
-      }>(`/chat/conversations/${id}`, { token }),
-
-    createConversation: (data: CreateConversationDto, token: string) =>
-      request<{ conversation: ChatConversation }>("/chat/conversations", {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    deleteConversation: (id: string, token: string) =>
-      request<void>(`/chat/conversations/${id}`, {
-        method: "DELETE",
-        token,
-      }),
-
-    sendMessage: (id: string, data: SendMessageDto, token: string) =>
-      request<SendMessageResponse>(`/chat/conversations/${id}/messages`, {
         method: "POST",
         body: JSON.stringify(data),
         token,

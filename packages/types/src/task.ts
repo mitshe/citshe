@@ -20,6 +20,7 @@ export interface Task {
   description: string | null;
   status: TaskStatus;
   priority?: TaskPriority;
+  labels?: string[];
   projectId: string | null;
   sessionId?: string | null;
   assigneeId?: string | null;
@@ -59,11 +60,20 @@ export interface QueueOverview {
   review: QueueTask[];
 }
 
+/** AI suggestion returned by the task composer while drafting a task. */
+export interface RefinedTask {
+  title: string;
+  description: string;
+  labels: string[];
+  subtasks: { title: string; description: string; labels: string[] }[];
+}
+
 export interface CreateTaskDto {
   title: string;
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  labels?: string[];
   projectId?: string;
   assigneeId?: string;
   dueDate?: string;
@@ -74,6 +84,7 @@ export interface UpdateTaskDto {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  labels?: string[];
   projectId?: string;
   assigneeId?: string;
   dueDate?: string;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Sparkles,
@@ -13,7 +12,6 @@ import {
   Clock,
   KeyRound,
   Terminal,
-  MessageCircle,
   Pause,
   Play,
   Cpu,
@@ -42,12 +40,9 @@ import {
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import type { Task, TaskStatus, QueueOverview } from "@citshe/types";
 
-type Mode = "task" | "chat";
-
 const ACTIVE_STATUSES: TaskStatus[] = ["PENDING", "QUEUED", "ANALYZING", "IN_PROGRESS", "REVIEW"];
 
 export default function HomePage() {
-  const router = useRouter();
   const { currentOrg } = useAuthContext();
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
   const { data: sessions = [] } = useSessions();
@@ -58,7 +53,6 @@ export default function HomePage() {
   const quickLaunch = useQuickLaunch();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [mode, setMode] = useState<Mode>("task");
   const [input, setInput] = useState("");
 
   const hasCredentials = credentials.length > 0;
@@ -93,12 +87,7 @@ export default function HomePage() {
     const text = input.trim();
     if (!text || busy) return;
 
-    if (mode === "chat") {
-      router.push(`/chat?prompt=${encodeURIComponent(text)}`);
-      return;
-    }
-
-    // Task mode: first line is the title, the rest the description.
+    // First line is the title, the rest the description.
     const [firstLine, ...rest] = text.split("\n");
     try {
       const task = await createTask.mutateAsync({
@@ -150,21 +139,18 @@ export default function HomePage() {
       <div className="grid grid-cols-3 gap-2">
         <TerminalLauncher quickLaunch={quickLaunch} disabled={!hasCredentials} />
         <LauncherCard
-          href="/chat"
-          icon={<MessageCircle className="h-5 w-5" />}
-          title="Chat"
-          subtitle="Ask AI"
-          accent="text-blue-500"
-        />
-        <LauncherCard
-          onClick={() => {
-            setMode("task");
-            textareaRef.current?.focus();
-          }}
+          onClick={() => textareaRef.current?.focus()}
           icon={<ListPlus className="h-5 w-5" />}
           title="Task"
           subtitle="Delegate"
           accent="text-amber-500"
+        />
+        <LauncherCard
+          href="/tasks"
+          icon={<Sparkles className="h-5 w-5" />}
+          title="All tasks"
+          subtitle="Plan with AI"
+          accent="text-blue-500"
         />
       </div>
 
@@ -172,8 +158,6 @@ export default function HomePage() {
         <MissingCredentials />
       ) : (
         <Composer
-          mode={mode}
-          setMode={setMode}
           input={input}
           setInput={setInput}
           onSubmit={handleSubmit}
@@ -366,8 +350,6 @@ function LauncherCard({
 }
 
 function Composer({
-  mode,
-  setMode,
   input,
   setInput,
   onSubmit,
@@ -375,8 +357,6 @@ function Composer({
   busy,
   textareaRef,
 }: {
-  mode: Mode;
-  setMode: (m: Mode) => void;
   input: string;
   setInput: (v: string) => void;
   onSubmit: () => void;
@@ -386,20 +366,6 @@ function Composer({
 }) {
   return (
     <div className="rounded-2xl border border-border bg-muted/30 focus-within:border-primary/50 transition-colors overflow-hidden shadow-sm">
-      <div className="flex items-center gap-1 border-b border-border/60 px-2 py-1.5">
-        <ModeTab
-          active={mode === "task"}
-          onClick={() => setMode("task")}
-          icon={<ListPlus className="h-3.5 w-3.5" />}
-          label="Delegate a task"
-        />
-        <ModeTab
-          active={mode === "chat"}
-          onClick={() => setMode("chat")}
-          icon={<Sparkles className="h-3.5 w-3.5" />}
-          label="Ask AI"
-        />
-      </div>
       <textarea
         ref={textareaRef}
         value={input}
@@ -410,19 +376,17 @@ function Composer({
           el.style.height = Math.min(el.scrollHeight, 200) + "px";
         }}
         onKeyDown={onKeyDown}
-        placeholder={
-          mode === "task"
-            ? 'What should AI do? e.g. "Add a blog post about the A2 drone exam"'
-            : "Ask anything, or plan your next move..."
-        }
+        placeholder='Delegate a task — e.g. "Add a blog post about the A2 drone exam"'
         className="w-full min-h-[72px] max-h-[200px] resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground overflow-y-auto"
         rows={2}
       />
       <div className="flex items-center justify-between px-3 pb-2.5">
         <span className="text-[11px] text-muted-foreground/70">
-          {mode === "task"
-            ? "AI clones the repo, makes changes and pushes"
-            : "Conversation, no code changes"}
+          AI clones the repo, makes changes and pushes —{" "}
+          <Link href="/tasks" className="underline hover:text-foreground">
+            open Tasks
+          </Link>{" "}
+          to refine with AI first
         </span>
         <Button
           size="sm"
@@ -435,37 +399,10 @@ function Composer({
           ) : (
             <ArrowRight className="h-4 w-4" />
           )}
-          {mode === "task" ? "Delegate" : "Send"}
+          Delegate
         </Button>
       </div>
     </div>
-  );
-}
-
-function ModeTab({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
 

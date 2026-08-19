@@ -10,7 +10,6 @@ interface BreadcrumbItem {
 }
 
 const pathLabels: Record<string, string> = {
-  chat: "Chat",
   tasks: "Tasks",
   sessions: "Threads",
   projects: "Projects",
@@ -43,7 +42,7 @@ function isDynamicSegment(segment: string): boolean {
 export function BreadcrumbsWrapper() {
   const pathname = usePathname();
 
-  if (/^\/sessions\/[^/]+$/.test(pathname) || pathname.startsWith("/chat") || pathname.endsWith("/terminal")) {
+  if (/^\/sessions\/[^/]+$/.test(pathname) || pathname.endsWith("/terminal")) {
     return null;
   }
 
@@ -89,7 +88,7 @@ export function BreadcrumbsWrapper() {
       className="flex items-center gap-1 text-sm text-muted-foreground px-6 pt-4"
     >
       <Link
-        href="/chat"
+        href="/home"
         className="flex items-center hover:text-foreground transition-colors"
       >
         <Home className="h-4 w-4" />

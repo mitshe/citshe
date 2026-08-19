@@ -8,6 +8,5 @@ export * from "./api-keys";
 export * from "./ai-credentials";
 export * from "./repositories";
 export * from "./sessions";
-export * from "./chat";
 export * from "./skills";
 export * from "./orchestration";

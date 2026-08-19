@@ -28,21 +28,11 @@ const tourSteps: DriveStep[] = [
     },
   },
   {
-    element: "[data-tour='nav-chat']",
-    popover: {
-      title: "Chat",
-      description:
-        "Talk to your assistant — ask, plan, delegate. Chat history lives in its own panel.",
-      side: "right",
-      align: "start",
-    },
-  },
-  {
     element: "[data-tour='nav-tasks']",
     popover: {
       title: "Tasks",
       description:
-        "All tasks for this portal. Each one can be run by AI in an isolated container and pushed to your repo.",
+        "All tasks for this portal. Write a rough note, let AI shape it, then a worker runs it in an isolated container and pushes to your repo.",
       side: "right",
       align: "start",
     },

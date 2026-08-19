@@ -52,7 +52,7 @@ export default function DashboardError({ error, reset }: ErrorProps) {
             Try again
           </Button>
           <Button asChild>
-            <Link href="/chat">
+            <Link href="/home">
               <Home className="mr-2 h-4 w-4" />
               Home
             </Link>

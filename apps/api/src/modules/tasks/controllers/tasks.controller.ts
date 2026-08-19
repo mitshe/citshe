@@ -19,6 +19,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { TasksService } from '../services/tasks.service';
+import { TaskComposerService } from '../services/task-composer.service';
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -40,7 +41,27 @@ import { ApiRateLimit } from '../../../shared/decorators/throttle.decorator';
 @UseGuards(AuthGuard)
 @ApiRateLimit()
 export class TasksController {
-  constructor(private readonly tasksService: TasksService) {}
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly composer: TaskComposerService,
+  ) {}
+
+  @Post('refine')
+  @ApiOperation({
+    summary: 'AI-refine a rough task draft (title/description/labels/subtasks)',
+  })
+  @ApiResponse({ status: 200, description: 'Refined task suggestion' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @HttpCode(HttpStatus.OK)
+  async refine(
+    @OrganizationId() organizationId: string,
+    @Body() body: { title: string; description?: string },
+  ) {
+    return this.composer.refine(organizationId, {
+      title: body?.title ?? '',
+      description: body?.description,
+    });
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new task' })

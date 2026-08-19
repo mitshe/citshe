@@ -10,7 +10,6 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  MessageCircle,
   Zap,
   Home,
   ChevronDown,
@@ -31,7 +30,6 @@ interface NavItem {
 /** Primary, always-visible actions — the simple flow. */
 const primaryNav: NavItem[] = [
   { title: "Home", href: "/home", icon: Home, tourId: "nav-home" },
-  { title: "Chat", href: "/chat", icon: MessageCircle, tourId: "nav-chat" },
   { title: "Tasks", href: "/tasks", icon: ListTodo, tourId: "nav-tasks" },
 ];
 

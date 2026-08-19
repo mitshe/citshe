@@ -53,6 +53,18 @@ export function useCreateTask() {
   });
 }
 
+/** Ask AI to tighten a rough draft into a well-formed task (title/labels/subtasks). */
+export function useRefineTask() {
+  const getToken = useAuthToken();
+
+  return useMutation({
+    mutationFn: async (data: { title: string; description?: string }) => {
+      const token = await getToken();
+      return api.tasks.refine(data, token);
+    },
+  });
+}
+
 export function useUpdateTask() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

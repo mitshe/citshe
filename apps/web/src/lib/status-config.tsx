@@ -26,7 +26,7 @@ export const taskStatusConfig: Record<
   }
 > = {
   PENDING: {
-    label: "Pending",
+    label: "Open",
     icon: <Clock className="w-4 h-4" />,
     variant: "outline",
     color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
@@ -56,7 +56,7 @@ export const taskStatusConfig: Record<
     color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
   },
   COMPLETED: {
-    label: "Completed",
+    label: "Closed",
     icon: <CheckCircle2 className="w-4 h-4" />,
     variant: "default",
     color: "bg-green-500/10 text-green-600 border-green-500/20",

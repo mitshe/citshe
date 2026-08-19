@@ -1,29 +1,18 @@
 import { Global, Module } from '@nestjs/common';
-import { McpService } from './mcp.service';
-import { SessionTools } from './tools/session.tools';
-import { TaskTools } from './tools/task.tools';
-import { RepositoryTools } from './tools/repository.tools';
-import { SkillTools } from './tools/skill.tools';
-import { OrchestrationTools } from './tools/orchestration.tools';
 import { OrchestrationService } from './orchestration/orchestration.service';
 import { OrchestrationController } from './orchestration/orchestration.controller';
 import { TasksModule } from '../tasks/tasks.module';
-import { RepositoriesModule } from '../repositories/repositories.module';
-import { SkillsModule } from '../skills/skills.module';
 
+/**
+ * Orchestration: the task queue and worker dispatch that sit behind the Tasks
+ * UI. (The former conversational MCP tool-loop was removed with the chat
+ * surface — workers are driven from the queue, not a chat agent.)
+ */
 @Global()
 @Module({
-  imports: [TasksModule, RepositoriesModule, SkillsModule],
+  imports: [TasksModule],
   controllers: [OrchestrationController],
-  providers: [
-    McpService,
-    SessionTools,
-    TaskTools,
-    RepositoryTools,
-    SkillTools,
-    OrchestrationTools,
-    OrchestrationService,
-  ],
-  exports: [McpService],
+  providers: [OrchestrationService],
+  exports: [OrchestrationService],
 })
 export class McpModule {}

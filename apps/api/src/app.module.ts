@@ -37,7 +37,6 @@ import { UsersModule } from './modules/users/users.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { McpModule } from './modules/mcp/mcp.module';
 import { SkillsModule } from './modules/skills/skills.module';
-import { ChatModule } from './modules/chat/chat.module';
 
 // App
 import { AppController } from './app.controller';
@@ -159,7 +158,6 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     UsersModule,
     SessionsModule,
     McpModule,
-    ChatModule,
     SkillsModule,
   ],
   controllers: [AppController],

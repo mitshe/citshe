@@ -194,6 +194,7 @@ model Task {
   description    String?
   status         TaskStatus @default(PENDING)
   priority       String?
+  labels         String[]   @default([])
   assigneeId     String?    @map("assignee_id")
   dueDate        DateTime?  @map("due_date")
 

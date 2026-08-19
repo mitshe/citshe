@@ -30,8 +30,7 @@ interface CommandPaletteProps {
 }
 
 const navigationItems = [
-  { label: "Start", path: "/home", icon: MessageSquare },
-  { label: "Chat", path: "/chat", icon: MessageSquare },
+  { label: "Home", path: "/home", icon: MessageSquare },
   { label: "Threads", path: "/sessions", icon: Terminal },
   { label: "Tasks", path: "/tasks", icon: ListTodo },
   { label: "Projects", path: "/projects", icon: FolderOpen },
@@ -102,16 +101,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       action: () => handleSelect("/sessions?newSession=1"),
     },
     {
-      label: "New Chat",
-      icon: MessageSquare,
-      shortcut: "C",
-      action: () => handleSelect("/chat"),
-    },
-    {
       label: "New Task",
       icon: Plus,
       shortcut: "T",
-      action: () => handleSelect("/tasks?create=true"),
+      action: () => handleSelect("/tasks"),
     },
   ];
 

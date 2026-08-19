@@ -45,9 +45,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Loader2, Zap, Pencil, Github, Download, Sparkles, MoreHorizontal, CheckSquare } from "lucide-react";
+import { Plus, Trash2, Loader2, Zap, Pencil, Github, Download, MoreHorizontal, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
-import Link from "next/link";
 import type { Skill } from "@citshe/types";
 
 const CATEGORIES = [
@@ -222,12 +221,6 @@ export default function SkillsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href="/chat?prompt=Create a new skill for Claude Code that...">
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Ask AI to create
-                    </Link>
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
                     <Github className="h-4 w-4 mr-2" />
                     Import from GitHub
