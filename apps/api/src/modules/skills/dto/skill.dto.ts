@@ -29,7 +29,7 @@ export class ImportGitHubSkillsDto {
   @IsString()
   @IsNotEmpty()
   @Matches(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/, {
-    message: 'Must be owner/repo format (e.g. mitshe/skills)',
+    message: 'Must be owner/repo format (e.g. owner/skills)',
   })
   @ApiProperty({
     description: 'GitHub repository in owner/repo format',

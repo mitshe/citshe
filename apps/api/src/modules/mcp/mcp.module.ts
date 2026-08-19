@@ -6,6 +6,7 @@ import { RepositoryTools } from './tools/repository.tools';
 import { SkillTools } from './tools/skill.tools';
 import { OrchestrationTools } from './tools/orchestration.tools';
 import { OrchestrationService } from './orchestration/orchestration.service';
+import { OrchestrationController } from './orchestration/orchestration.controller';
 import { TasksModule } from '../tasks/tasks.module';
 import { RepositoriesModule } from '../repositories/repositories.module';
 import { SkillsModule } from '../skills/skills.module';
@@ -13,6 +14,7 @@ import { SkillsModule } from '../skills/skills.module';
 @Global()
 @Module({
   imports: [TasksModule, RepositoriesModule, SkillsModule],
+  controllers: [OrchestrationController],
   providers: [
     McpService,
     SessionTools,

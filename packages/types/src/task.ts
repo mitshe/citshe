@@ -38,6 +38,27 @@ export interface Task {
   agentLogs?: Record<string, unknown>[] | null;
 }
 
+/** A trimmed task as it appears in the orchestrator queue overview. */
+export interface QueueTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority | null;
+  sessionId: string | null;
+  projectId: string | null;
+}
+
+/** Live snapshot of the orchestrator queue and its workers. */
+export interface QueueOverview {
+  queuePaused: boolean;
+  runningWorkers: number;
+  maxWorkers: number;
+  pending: QueueTask[];
+  queued: QueueTask[];
+  inProgress: QueueTask[];
+  review: QueueTask[];
+}
+
 export interface CreateTaskDto {
   title: string;
   description?: string;

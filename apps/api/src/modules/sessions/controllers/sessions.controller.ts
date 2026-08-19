@@ -793,7 +793,7 @@ export class SessionsController {
       {
         title: body.title || session.name,
         description:
-          body.description || `Created from mitshe session "${session.name}"`,
+          body.description || `Created from citshe session "${session.name}"`,
         sourceBranch: branchName,
         targetBranch: body.targetBranch || repo.repository.defaultBranch,
       },

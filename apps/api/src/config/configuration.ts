@@ -9,7 +9,7 @@ function getOrGenerateSecret(envVar: string, name: string): string {
 
   const secretsDir = path.join(
     process.env.HOME || '/tmp',
-    '.mitshe',
+    '.citshe',
     'secrets',
   );
   const secretFile = path.join(secretsDir, name);
@@ -30,7 +30,7 @@ function getOrGenerateSecret(envVar: string, name: string): string {
     fs.writeFileSync(secretFile, generated, { mode: 0o600 });
   } catch (err) {
     console.warn(
-      `[mitshe] Could not persist ${name}: ${(err as Error).message}`,
+      `[citshe] Could not persist ${name}: ${(err as Error).message}`,
     );
   }
 

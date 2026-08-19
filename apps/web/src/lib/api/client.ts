@@ -7,6 +7,7 @@ import type {
   CreateProjectDto,
   UpdateProjectDto,
   Task,
+  QueueOverview,
   CreateTaskDto,
   UpdateTaskDto,
   Integration,
@@ -627,6 +628,18 @@ export const api = {
       request<{ imported: number; skills: string[] }>("/skills/import-github", {
         method: "POST",
         body: JSON.stringify(data),
+        token,
+      }),
+  },
+
+  orchestration: {
+    queue: (token: string) =>
+      request<QueueOverview>("/orchestration/queue", { token }),
+
+    setPaused: (paused: boolean, token: string) =>
+      request<{ queuePaused: boolean }>("/orchestration/queue/pause", {
+        method: "POST",
+        body: JSON.stringify({ paused }),
         token,
       }),
   },

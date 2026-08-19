@@ -44,13 +44,13 @@ export class SessionContainerService implements OnModuleInit {
   private readonly logger = new Logger(SessionContainerService.name);
   private docker: Docker;
   private readonly executorImage: string;
-  private readonly containerPrefix = 'mitshe-session';
+  private readonly containerPrefix = 'citshe-session';
 
   constructor(private configService: ConfigService) {
     this.docker = new Docker();
     this.executorImage =
       this.configService.get<string>('EXECUTOR_IMAGE') ||
-      'ghcr.io/mitshe/mitshe-executor:latest';
+      'ghcr.io/citshe/citshe-executor:latest';
   }
 
   async onModuleInit() {
@@ -107,16 +107,16 @@ export class SessionContainerService implements OnModuleInit {
         ],
         WorkingDir: '/workspace',
         Labels: {
-          'mitshe.type': 'session',
-          'mitshe.session-id': config.sessionId,
-          'mitshe.organization-id': config.organizationId,
-          'mitshe.created-at': new Date().toISOString(),
+          'citshe.type': 'session',
+          'citshe.session-id': config.sessionId,
+          'citshe.organization-id': config.organizationId,
+          'citshe.created-at': new Date().toISOString(),
         },
         HostConfig: {
           Binds: [
-            `mitshe-executor-home-${config.organizationId}:/home/executor`,
+            `citshe-executor-home-${config.organizationId}:/home/executor`,
             ...(config.enableDocker
-              ? [`mitshe-dind-${config.sessionId}:/var/lib/docker`]
+              ? [`citshe-dind-${config.sessionId}:/var/lib/docker`]
               : []),
           ],
           PortBindings: {
@@ -214,7 +214,7 @@ export class SessionContainerService implements OnModuleInit {
     // Cleanup DinD volume if exists
     if (sessionId) {
       try {
-        const volume = this.docker.getVolume(`mitshe-dind-${sessionId}`);
+        const volume = this.docker.getVolume(`citshe-dind-${sessionId}`);
         await volume.remove();
       } catch {
         // Volume may not exist (non-DinD session)
@@ -352,14 +352,14 @@ export class SessionContainerService implements OnModuleInit {
 
   /**
    * Commit a container's current state to a Docker image (snapshot).
-   * Returns the image name in format "mitshe-clone:{sessionId}".
+   * Returns the image name in format "citshe-clone:{sessionId}".
    */
   async commitContainer(
     containerId: string,
     imageTag: string,
   ): Promise<string> {
     const container = this.docker.getContainer(containerId);
-    const repo = 'mitshe-clone';
+    const repo = 'citshe-clone';
 
     // Copy bind-mounted local files into container filesystem before commit
     // (docker commit doesn't include bind mount contents)
@@ -430,17 +430,17 @@ export class SessionContainerService implements OnModuleInit {
       ],
       WorkingDir: '/workspace',
       Labels: {
-        'mitshe.type': 'session',
-        'mitshe.session-id': config.sessionId,
-        'mitshe.organization-id': config.organizationId,
-        'mitshe.created-at': new Date().toISOString(),
-        'mitshe.cloned': 'true',
+        'citshe.type': 'session',
+        'citshe.session-id': config.sessionId,
+        'citshe.organization-id': config.organizationId,
+        'citshe.created-at': new Date().toISOString(),
+        'citshe.cloned': 'true',
       },
       HostConfig: {
         Binds: [
-          `mitshe-executor-home-${config.organizationId}:/home/executor`,
+          `citshe-executor-home-${config.organizationId}:/home/executor`,
           ...(config.enableDocker
-            ? [`mitshe-dind-${config.sessionId}:/var/lib/docker`]
+            ? [`citshe-dind-${config.sessionId}:/var/lib/docker`]
             : []),
         ],
         Memory: (config.environment?.memoryMb || 4096) * 1024 * 1024,
@@ -667,21 +667,21 @@ export class SessionContainerService implements OnModuleInit {
     try {
       const containers = await this.docker.listContainers({
         all: true,
-        filters: { label: ['mitshe.type=session'] },
+        filters: { label: ['citshe.type=session'] },
       });
 
       const maxAge = 48 * 60 * 60 * 1000;
       const now = Date.now();
 
       for (const containerInfo of containers) {
-        const createdAt = containerInfo.Labels['mitshe.created-at'];
+        const createdAt = containerInfo.Labels['citshe.created-at'];
         if (createdAt && now - new Date(createdAt).getTime() > maxAge) {
           this.logger.log(
             `Cleaning up stale container: ${containerInfo.Names[0]}`,
           );
           await this.removeContainer(
             containerInfo.Id,
-            containerInfo.Labels['mitshe.session-id'],
+            containerInfo.Labels['citshe.session-id'],
           );
         }
       }

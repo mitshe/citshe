@@ -14,6 +14,9 @@ import {
   KeyRound,
   Terminal,
   MessageCircle,
+  Pause,
+  Play,
+  Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -24,6 +27,8 @@ import {
   useProcessTask,
   useAICredentials,
   useSessions,
+  useQueueOverview,
+  useSetQueuePaused,
 } from "@/lib/api/hooks";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
 import { Button } from "@/components/ui/button";
@@ -35,7 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
-import type { Task, TaskStatus } from "@citshe/types";
+import type { Task, TaskStatus, QueueOverview } from "@citshe/types";
 
 type Mode = "task" | "chat";
 
@@ -47,6 +52,7 @@ export default function HomePage() {
   const { data: tasks = [], isLoading: loadingTasks } = useTasks();
   const { data: sessions = [] } = useSessions();
   const { data: credentials = [] } = useAICredentials();
+  const { data: queue } = useQueueOverview();
   const createTask = useCreateTask();
   const processTask = useProcessTask();
   const quickLaunch = useQuickLaunch();
@@ -176,6 +182,9 @@ export default function HomePage() {
           textareaRef={textareaRef}
         />
       )}
+
+      {/* Orchestrator workers — how many are running vs the limit + pause */}
+      {queue && <WorkersStrip queue={queue} />}
 
       {/* Running threads — jump straight back into a live terminal */}
       {runningThreads.length > 0 && (
@@ -482,15 +491,87 @@ const STATUS_META: Record<
   CANCELLED: { label: "Cancelled", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-muted-foreground" },
 };
 
+function WorkersStrip({ queue }: { queue: QueueOverview }) {
+  const setPaused = useSetQueuePaused();
+  const waiting = queue.pending.length + queue.queued.length;
+  const active = queue.runningWorkers;
+
+  // Nothing happening and not paused → don't clutter the hub.
+  if (active === 0 && waiting === 0 && !queue.queuePaused) return null;
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-2.5">
+      <Cpu
+        className={cn(
+          "h-4 w-4 shrink-0",
+          active > 0 ? "text-emerald-500" : "text-muted-foreground",
+        )}
+      />
+      <div className="flex-1 text-sm">
+        <span className="font-medium">
+          {active}/{queue.maxWorkers}
+        </span>{" "}
+        <span className="text-muted-foreground">
+          worker{active === 1 ? "" : "s"} running
+        </span>
+        {waiting > 0 && (
+          <span className="text-muted-foreground"> · {waiting} waiting</span>
+        )}
+        {queue.queuePaused && (
+          <span className="text-amber-500"> · paused</span>
+        )}
+      </div>
+      <button
+        type="button"
+        disabled={setPaused.isPending}
+        onClick={() => setPaused.mutate(!queue.queuePaused)}
+        className={cn(
+          "flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
+          queue.queuePaused
+            ? "text-emerald-600 hover:bg-emerald-500/10"
+            : "text-muted-foreground hover:bg-muted/60",
+        )}
+      >
+        {queue.queuePaused ? (
+          <>
+            <Play className="h-3.5 w-3.5" />
+            Resume
+          </>
+        ) : (
+          <>
+            <Pause className="h-3.5 w-3.5" />
+            Pause
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
+
 function TaskRow({ task }: { task: Task }) {
   const meta = STATUS_META[task.status];
+  // If a worker is actively running this task, jump straight into its terminal
+  // so you can watch it live — otherwise open the task detail.
+  const liveWorker =
+    !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
+  const href = liveWorker
+    ? `/sessions/${task.sessionId}`
+    : `/tasks/${task.id}`;
   return (
     <Link
-      href={`/tasks/${task.id}`}
+      href={href}
       className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40 transition-colors"
     >
       <span className={cn("shrink-0", meta.className)}>{meta.icon}</span>
       <span className="flex-1 truncate text-sm">{task.title}</span>
+      {liveWorker && (
+        <span className="flex items-center gap-1 shrink-0 text-[11px] font-medium text-emerald-500">
+          <Terminal className="h-3.5 w-3.5" />
+          Watch
+        </span>
+      )}
       <span className={cn("shrink-0 text-[11px] font-medium", meta.className)}>
         {meta.label}
       </span>

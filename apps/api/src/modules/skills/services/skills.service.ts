@@ -131,7 +131,7 @@ export class SkillsService {
     const res = await fetch(url, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'mitshe',
+        'User-Agent': 'citshe',
       },
     });
 
@@ -177,7 +177,7 @@ export class SkillsService {
     const res = await fetch(blobUrl, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'mitshe',
+        'User-Agent': 'citshe',
       },
     });
 

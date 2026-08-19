@@ -16,7 +16,6 @@ import { WebSocketModule } from './infrastructure/websocket/websocket.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { AdaptersModule } from './infrastructure/adapters/adapters.module';
 import { GitModule } from './infrastructure/git/git.module';
-import { DockerModule } from './infrastructure/docker/docker.module';
 import { SentryModule } from './infrastructure/sentry/sentry.module';
 
 // Shared
@@ -143,7 +142,6 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     QueueModule,
     AdaptersModule,
     GitModule,
-    DockerModule,
     SharedModule,
     AuthModule,
     AuditModule,
