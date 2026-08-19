@@ -41,7 +41,6 @@ export class SessionsService {
       data: {
         organizationId,
         name: dto.name,
-        projectId: dto.projectId || null,
         aiCredentialId: dto.aiCredentialId || null,
         agentDefinitionId: dto.agentDefinitionId || null,
         startArguments: dto.startArguments || null,
@@ -69,7 +68,6 @@ export class SessionsService {
             integration: { select: { id: true, type: true, status: true } },
           },
         },
-        project: { select: { id: true, name: true, key: true } },
         aiCredential: { select: { id: true, provider: true } },
         agentDefinition: { select: { id: true, name: true } },
       },
@@ -82,7 +80,6 @@ export class SessionsService {
     organizationId: string,
     filters?: {
       status?: SessionStatus;
-      projectId?: string;
       page?: number;
       limit?: number;
     },
@@ -93,7 +90,6 @@ export class SessionsService {
     const where = {
       organizationId,
       ...(filters?.status && { status: filters.status }),
-      ...(filters?.projectId && { projectId: filters.projectId }),
     };
 
     const [sessions, total] = await Promise.all([
@@ -106,7 +102,6 @@ export class SessionsService {
               integration: { select: { id: true, type: true, status: true } },
             },
           },
-          project: { select: { id: true, name: true, key: true } },
           aiCredential: { select: { id: true, provider: true } },
           agentDefinition: { select: { id: true, name: true } },
           _count: { select: { messages: true } },
@@ -190,7 +185,6 @@ export class SessionsService {
           },
         },
         messages: { orderBy: { createdAt: 'asc' }, take: 100 },
-        project: { select: { id: true, name: true, key: true } },
         aiCredential: { select: { id: true, provider: true } },
         agentDefinition: { select: { id: true, name: true } },
       },
@@ -213,11 +207,6 @@ export class SessionsService {
     const data: Prisma.AgentSessionUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.instructions !== undefined) data.instructions = dto.instructions;
-    if (dto.projectId !== undefined) {
-      data.project = dto.projectId
-        ? { connect: { id: dto.projectId } }
-        : { disconnect: true };
-    }
 
     await this.prisma.agentSession.update({ where: { id }, data });
     return this.findOne(organizationId, id);
@@ -242,11 +231,6 @@ export class SessionsService {
         data.startArguments = dto.startArguments || null;
       if (dto.enableDocker !== undefined) data.enableDocker = dto.enableDocker;
 
-      if (dto.projectId !== undefined) {
-        data.project = dto.projectId
-          ? { connect: { id: dto.projectId } }
-          : { disconnect: true };
-      }
       if (dto.aiCredentialId !== undefined) {
         data.aiCredential = dto.aiCredentialId
           ? { connect: { id: dto.aiCredentialId } }
@@ -311,7 +295,6 @@ export class SessionsService {
       data: {
         organizationId,
         name: `${source.name} (Clone)`,
-        projectId: source.projectId,
         agentDefinitionId: source.agentDefinitionId,
         aiCredentialId: source.aiCredentialId,
         instructions: source.instructions,
@@ -343,7 +326,6 @@ export class SessionsService {
             integration: { select: { id: true, type: true, status: true } },
           },
         },
-        project: { select: { id: true, name: true, key: true } },
         aiCredential: { select: { id: true, provider: true } },
         agentDefinition: { select: { id: true, name: true } },
       },

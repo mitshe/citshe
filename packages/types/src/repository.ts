@@ -4,6 +4,23 @@ import type { IntegrationType } from "./integration";
 
 export type GitProvider = "GITLAB" | "GITHUB" | "BITBUCKET";
 
+/** Detected tech stack of a repo (populated by auto-analysis). */
+export interface RepoStack {
+  language?: string;
+  framework?: string;
+  packageManager?: string;
+  runtime?: string;
+}
+
+/** Detected CI/CD (workflows/pipelines) of a repo. */
+export interface RepoCiSummary {
+  provider?: "github-actions" | "gitlab-ci" | "other" | "none";
+  workflows?: string[];
+  triggers?: string[];
+}
+
+export type RepoAnalysisStatus = "pending" | "analyzing" | "done" | "failed";
+
 export interface Repository {
   id: string;
   organizationId: string;
@@ -17,6 +34,12 @@ export interface Repository {
   cloneUrl: string;
   webUrl: string;
   branchPattern: string | null;
+  // Auto-analysis
+  stack?: RepoStack | null;
+  ciSummary?: RepoCiSummary | null;
+  summary?: string | null;
+  analyzedAt?: string | null;
+  analysisStatus?: RepoAnalysisStatus | null;
   isActive: boolean;
   lastSyncedAt: string | null;
   createdAt: string;
@@ -26,14 +49,25 @@ export interface Repository {
     type: IntegrationType;
     status: string;
   };
-  projects?: {
-    id: string;
-    name: string;
-    key: string;
-  }[];
   _count?: {
-    projects: number;
+    tasks: number;
   };
+}
+
+/** A related repo suggested after analysis (same name prefix, not yet connected). */
+export interface RelatedRepoSuggestion {
+  externalId: string;
+  name: string;
+  fullPath: string;
+  integrationId: string;
+  provider: GitProvider;
+}
+
+export interface RepoAnalysisResult {
+  stack: RepoStack;
+  ciSummary: RepoCiSummary;
+  summary: string;
+  related: RelatedRepoSuggestion[];
 }
 
 export interface UpdateRepositoryDto {

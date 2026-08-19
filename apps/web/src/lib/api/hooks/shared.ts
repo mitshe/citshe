@@ -3,11 +3,6 @@
 import { useAuth } from "@/lib/auth";
 
 export const queryKeys = {
-  projects: {
-    all: ["projects"] as const,
-    list: () => [...queryKeys.projects.all, "list"] as const,
-    detail: (id: string) => [...queryKeys.projects.all, "detail", id] as const,
-  },
   tasks: {
     all: ["tasks"] as const,
     list: (projectId?: string) =>
@@ -44,8 +39,8 @@ export const queryKeys = {
   },
   sessions: {
     all: ["sessions"] as const,
-    list: (status?: string, projectId?: string) =>
-      [...queryKeys.sessions.all, "list", { status, projectId }] as const,
+    list: (status?: string) =>
+      [...queryKeys.sessions.all, "list", { status }] as const,
     detail: (id: string) =>
       [...queryKeys.sessions.all, "detail", id] as const,
     files: (id: string) =>

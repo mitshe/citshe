@@ -12,7 +12,7 @@ interface BreadcrumbItem {
 const pathLabels: Record<string, string> = {
   tasks: "Tasks",
   sessions: "Threads",
-  projects: "Projects",
+  repos: "Repos",
   skills: "Skills",
   settings: "Settings",
   integrations: "Integrations",
@@ -60,8 +60,6 @@ export function BreadcrumbsWrapper() {
         const prevSegment = segments[i - 1];
         if (prevSegment === "tasks") {
           breadcrumbs.push({ label: "Task Details" });
-        } else if (prevSegment === "projects") {
-          breadcrumbs.push({ label: "Project Details" });
         } else {
           breadcrumbs.push({ label: "Details" });
         }

@@ -17,11 +17,6 @@ export class CreateSessionDto {
   @ApiProperty({ description: 'Session name' })
   name: string;
 
-  @IsString()
-  @IsOptional()
-  @ApiPropertyOptional({ description: 'Project ID' })
-  projectId?: string;
-
   @IsArray()
   @IsString({ each: true })
   @ApiProperty({ description: 'Repository IDs to attach' })
@@ -98,13 +93,6 @@ export class UpdateSessionMetadataDto {
 
   @IsString()
   @IsOptional()
-  @ApiPropertyOptional({
-    description: 'Project ID (pass empty string to detach)',
-  })
-  projectId?: string;
-
-  @IsString()
-  @IsOptional()
   @ApiPropertyOptional({ description: 'System instructions' })
   instructions?: string;
 }
@@ -115,11 +103,6 @@ export class RecreateSessionDto {
   @IsOptional()
   @ApiPropertyOptional({ description: 'Session name' })
   name?: string;
-
-  @IsString()
-  @IsOptional()
-  @ApiPropertyOptional({ description: 'Project ID' })
-  projectId?: string;
 
   @IsArray()
   @IsString({ each: true })
@@ -167,7 +150,6 @@ export class RecreateSessionDto {
 export class SessionResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() organizationId: string;
-  @ApiPropertyOptional() projectId: string | null;
   @ApiProperty() name: string;
   @ApiProperty() instructions: string;
   @ApiProperty({ enum: SessionStatus }) status: SessionStatus;

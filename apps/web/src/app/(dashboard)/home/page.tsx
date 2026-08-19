@@ -94,8 +94,14 @@ export default function HomePage() {
         title: firstLine.slice(0, 200),
         description: rest.join("\n").trim() || undefined,
       });
-      await processTask.mutateAsync(task.id);
-      toast.success("Task delegated — AI is on it");
+      // Only kick off a worker if AI is connected — otherwise it would just get
+      // stuck. Without a key the task waits as Open until you run it.
+      if (hasCredentials) {
+        await processTask.mutateAsync(task.id);
+        toast.success("Task delegated — AI is on it");
+      } else {
+        toast.success("Task created — add an AI key to run it");
+      }
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     } catch (err) {

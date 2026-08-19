@@ -1,7 +1,5 @@
 // Task types
 
-import type { Project } from "./project";
-
 export type TaskStatus =
   | "PENDING"
   | "QUEUED"
@@ -21,7 +19,7 @@ export interface Task {
   status: TaskStatus;
   priority?: TaskPriority;
   labels?: string[];
-  projectId: string | null;
+  repositoryId: string | null;
   sessionId?: string | null;
   assigneeId?: string | null;
   dueDate?: string | null;
@@ -29,7 +27,7 @@ export interface Task {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
-  project?: Project;
+  repository?: { id: string; name: string };
   externalSource?: string | null;
   externalIssueId?: string | null;
   externalIssueUrl?: string | null;
@@ -46,7 +44,7 @@ export interface QueueTask {
   status: TaskStatus;
   priority: TaskPriority | null;
   sessionId: string | null;
-  projectId: string | null;
+  repositoryId: string | null;
 }
 
 /** Live snapshot of the orchestrator queue and its workers. */
@@ -74,7 +72,7 @@ export interface CreateTaskDto {
   status?: TaskStatus;
   priority?: TaskPriority;
   labels?: string[];
-  projectId?: string;
+  repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
 }
@@ -85,7 +83,7 @@ export interface UpdateTaskDto {
   status?: TaskStatus;
   priority?: TaskPriority;
   labels?: string[];
-  projectId?: string;
+  repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
 }

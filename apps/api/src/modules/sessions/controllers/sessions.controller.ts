@@ -192,13 +192,11 @@ export class SessionsController {
   @ApiOperation({ summary: 'List agent sessions' })
   @ApiResponse({ status: 200, type: SessionListResponseDto })
   @ApiQuery({ name: 'status', required: false, enum: SessionStatus })
-  @ApiQuery({ name: 'projectId', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async findAll(
     @OrganizationId() organizationId: string,
     @Query('status') status?: SessionStatus,
-    @Query('projectId') projectId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -210,7 +208,6 @@ export class SessionsController {
 
     const result = await this.sessionsService.findAll(organizationId, {
       status,
-      projectId,
       page: pageNum,
       limit: limitNum,
     });
@@ -266,7 +263,7 @@ export class SessionsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update session metadata (name, projectId, instructions)',
+    summary: 'Update session metadata (name, instructions)',
   })
   @ApiResponse({ status: 200, type: SessionDetailResponseDto })
   async updateMetadata(

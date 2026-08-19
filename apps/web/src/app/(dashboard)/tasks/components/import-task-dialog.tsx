@@ -12,13 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,19 +22,17 @@ import {
   useImportAssigned,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
-import type { Project, JiraImportPreview } from "@/lib/api/types";
+import type { JiraImportPreview } from "@/lib/api/types";
 
 interface ImportTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  projects: Project[];
   children?: React.ReactNode;
 }
 
 export function ImportTaskDialog({
   open,
   onOpenChange,
-  projects,
   children,
 }: ImportTaskDialogProps) {
   const importPreview = useImportPreview();
@@ -52,14 +43,12 @@ export function ImportTaskDialog({
     null,
   );
   const [importUrl, setImportUrl] = useState("");
-  const [importProjectId, setImportProjectId] = useState("");
   const [preview, setPreview] = useState<JiraImportPreview | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   const resetImportDialog = () => {
     setImportSource(null);
     setImportUrl("");
-    setImportProjectId("");
     setPreview(null);
     setImportError(null);
   };
@@ -88,7 +77,6 @@ export function ImportTaskDialog({
     try {
       await importConfirm.mutateAsync({
         url: importUrl,
-        projectId: importProjectId || undefined,
       });
       onOpenChange(false);
       resetImportDialog();
@@ -320,27 +308,6 @@ export function ImportTaskDialog({
                     ))}
                   </div>
                 )}
-              </div>
-
-              <div className="pt-2 border-t">
-                <Label htmlFor="import-project">
-                  Assign to Project (optional)
-                </Label>
-                <Select
-                  value={importProjectId}
-                  onValueChange={setImportProjectId}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           )}

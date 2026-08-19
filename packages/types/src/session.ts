@@ -10,7 +10,6 @@ export type SessionStatus =
 export interface AgentSession {
   id: string;
   organizationId: string;
-  projectId: string | null;
   agentDefinitionId: string | null;
   environmentId: string | null;
   name: string;
@@ -29,11 +28,6 @@ export interface AgentSession {
   lastActiveAt: string;
   repositories?: SessionRepositoryInfo[];
   integrations?: SessionIntegrationInfo[];
-  project?: {
-    id: string;
-    name: string;
-    key: string;
-  };
   aiCredential?: {
     id: string;
     provider: string;
@@ -69,7 +63,6 @@ export interface SessionIntegrationInfo {
 
 export interface CreateSessionDto {
   name: string;
-  projectId?: string;
   repositoryIds: string[];
   integrationIds?: string[];
   aiCredentialId?: string;
@@ -87,13 +80,11 @@ export interface CreateSessionDto {
 
 export interface UpdateSessionMetadataDto {
   name?: string;
-  projectId?: string;
   instructions?: string;
 }
 
 export interface RecreateSessionDto {
   name?: string;
-  projectId?: string;
   repositoryIds?: string[];
   integrationIds?: string[];
   aiCredentialId?: string;

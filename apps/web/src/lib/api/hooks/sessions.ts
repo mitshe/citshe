@@ -9,14 +9,14 @@ import type {
 } from "../types";
 import { queryKeys, useAuthToken } from "./shared";
 
-export function useSessions(status?: string, projectId?: string) {
+export function useSessions(status?: string) {
   const getToken = useAuthToken();
 
   return useQuery({
-    queryKey: queryKeys.sessions.list(status, projectId),
+    queryKey: queryKeys.sessions.list(status),
     queryFn: async () => {
       const token = await getToken();
-      const { sessions } = await api.sessions.list(token, status, projectId);
+      const { sessions } = await api.sessions.list(token, status);
       return sessions;
     },
   });

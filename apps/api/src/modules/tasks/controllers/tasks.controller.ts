@@ -92,9 +92,9 @@ export class TasksController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiQuery({
-    name: 'projectId',
+    name: 'repositoryId',
     required: false,
-    description: 'Filter by project ID',
+    description: 'Filter by repository ID',
   })
   @ApiQuery({
     name: 'status',

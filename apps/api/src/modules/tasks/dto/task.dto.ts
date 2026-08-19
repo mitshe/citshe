@@ -42,7 +42,7 @@ export class CreateTaskDto {
   @IsString()
   @IsOptional()
   @MaxLength(100)
-  projectId?: string;
+  repositoryId?: string;
 
   @IsString()
   @IsOptional()
@@ -87,7 +87,7 @@ export class UpdateTaskDto {
   @IsString()
   @IsOptional()
   @MaxLength(100)
-  projectId?: string;
+  repositoryId?: string;
 
   @IsString()
   @IsOptional()
@@ -111,7 +111,7 @@ export class TaskFilterDto {
 
   @IsString()
   @IsOptional()
-  projectId?: string;
+  repositoryId?: string;
 
   @IsString()
   @IsOptional()
@@ -138,8 +138,8 @@ export class TaskResponseDto {
   @ApiProperty({ description: 'Organization ID' })
   organizationId: string;
 
-  @ApiProperty({ description: 'Project ID' })
-  projectId: string;
+  @ApiPropertyOptional({ description: 'Repository ID', nullable: true })
+  repositoryId: string | null;
 
   @ApiProperty({ description: 'Task title' })
   title: string;

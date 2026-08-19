@@ -222,8 +222,7 @@ export default function TaskDetailPage() {
     try {
       const session = await createSession.mutateAsync({
         name,
-        projectId: task?.projectId || undefined,
-        repositoryIds: [],
+        repositoryIds: task?.repositoryId ? [task.repositoryId] : [],
         instructions,
       });
       toast.success("Thread created");
@@ -451,13 +450,13 @@ export default function TaskDetailPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-b pb-4">
-        {task.project && (
+        {task.repository && (
           <Link
-            href={`/projects/${task.project.id}`}
+            href="/repos"
             className="flex items-center gap-1.5 hover:text-foreground"
           >
             <FolderOpen className="w-4 h-4" />
-            {task.project.name}
+            {task.repository.name}
           </Link>
         )}
         {task.assigneeId && (

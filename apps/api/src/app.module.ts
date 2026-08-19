@@ -27,7 +27,6 @@ import { AuditModule } from './shared/audit';
 import { ApplicationModule } from './application/application.module';
 
 // Feature Modules
-import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { RepositoriesModule } from './modules/repositories/repositories.module';
 import { AICredentialsModule } from './modules/ai-credentials/ai-credentials.module';
@@ -149,7 +148,6 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     ApplicationModule,
 
     // Feature Modules
-    ProjectsModule,
     TasksModule,
     RepositoriesModule,
     AICredentialsModule,

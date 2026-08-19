@@ -1,7 +1,6 @@
 "use client";
 
 export { queryKeys, useAuthToken } from "./shared";
-export * from "./projects";
 export * from "./tasks";
 export * from "./integrations";
 export * from "./api-keys";

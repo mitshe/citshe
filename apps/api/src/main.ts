@@ -60,7 +60,6 @@ async function bootstrap() {
       },
       'bearer',
     )
-    .addTag('projects', 'Project management')
     .addTag('tasks', 'Task operations')
     .addTag('workflows', 'Workflow builder')
     .addTag('integrations', 'External integrations')

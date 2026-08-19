@@ -28,7 +28,7 @@ export class Task {
   constructor(
     public readonly id: string,
     public readonly organizationId: string,
-    public readonly projectId: string,
+    public readonly repositoryId: string,
     public title: string,
     public description: string | null,
     public status: TaskStatus,
@@ -44,7 +44,7 @@ export class Task {
   static create(params: {
     id: string;
     organizationId: string;
-    projectId: string;
+    repositoryId: string;
     title: string;
     description?: string;
     externalIssueId?: string;
@@ -54,7 +54,7 @@ export class Task {
     return new Task(
       params.id,
       params.organizationId,
-      params.projectId,
+      params.repositoryId,
       params.title,
       params.description ?? null,
       TaskStatus.PENDING,

@@ -23,7 +23,6 @@ import { isDesktopApp, selectLocalFolder } from "@/lib/desktop";
 
 export interface ThreadFormData {
   name: string;
-  projectId: string;
   repositoryIds: string[];
   branch: string;
   integrationIds: string[];
@@ -42,7 +41,6 @@ interface ThreadFormFieldsProps {
   configLocked: boolean;
   sessionProviders: Array<{ id: string; provider: string }>;
   readySnapshots: Array<{ id: string; name: string; description?: string | null; enableDocker?: boolean }>;
-  projects: Array<{ id: string; name: string }>;
   activeRepos: Array<{ id: string; fullPath: string }>;
   repoSearch: string;
   setRepoSearch: (v: string) => void;
@@ -57,7 +55,6 @@ export function ThreadFormFields({
   configLocked,
   sessionProviders,
   readySnapshots,
-  projects,
   activeRepos,
   repoSearch,
   setRepoSearch,
@@ -165,25 +162,6 @@ export function ThreadFormFields({
           Advanced options
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 pt-3">
-          <div className="space-y-2">
-            <Label>Project</Label>
-            <Select
-              value={form.projectId}
-              onValueChange={(v) => setForm({ ...form, projectId: v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {isDesktopApp() && (
             <div className="space-y-2">
               <Label>Local Project</Label>

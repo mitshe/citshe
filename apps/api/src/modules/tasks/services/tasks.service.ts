@@ -38,21 +38,21 @@ export class TasksService {
   ) {}
 
   async create(organizationId: string, userId: string, dto: CreateTaskDto) {
-    // Verify project belongs to organization (if provided)
-    if (dto.projectId) {
-      const project = await this.prisma.project.findFirst({
-        where: { id: dto.projectId, organizationId },
+    // Verify repository belongs to organization (if provided)
+    if (dto.repositoryId) {
+      const repository = await this.prisma.repository.findFirst({
+        where: { id: dto.repositoryId, organizationId },
       });
 
-      if (!project) {
-        throw new NotFoundException(`Project ${dto.projectId} not found`);
+      if (!repository) {
+        throw new NotFoundException(`Repository ${dto.repositoryId} not found`);
       }
     }
 
     const task = await this.prisma.task.create({
       data: {
         organizationId,
-        projectId: dto.projectId || null,
+        repositoryId: dto.repositoryId || null,
         title: dto.title,
         description: dto.description,
         priority: dto.priority,
@@ -69,7 +69,7 @@ export class TasksService {
       new TaskCreatedEvent(
         task.id,
         organizationId,
-        task.projectId,
+        task.repositoryId,
         task.title,
         task.externalIssueId,
       ),
@@ -89,8 +89,8 @@ export class TasksService {
     if (filter?.status) {
       where.status = filter.status;
     }
-    if (filter?.projectId) {
-      where.projectId = filter.projectId;
+    if (filter?.repositoryId) {
+      where.repositoryId = filter.repositoryId;
     }
     if (filter?.externalIssueId) {
       where.externalIssueId = filter.externalIssueId;
@@ -105,7 +105,7 @@ export class TasksService {
         skip: calculatePaginationOffset(page, limit),
         take: limit,
         include: {
-          project: {
+          repository: {
             select: { id: true, name: true },
           },
         },
@@ -119,7 +119,7 @@ export class TasksService {
     const task = await this.prisma.task.findFirst({
       where: { id, organizationId },
       include: {
-        project: true,
+        repository: true,
       },
     });
 
@@ -142,7 +142,7 @@ export class TasksService {
         status: dto.status,
         priority: dto.priority,
         labels: dto.labels,
-        projectId: dto.projectId,
+        repositoryId: dto.repositoryId,
         assigneeId: dto.assigneeId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         result: dto.result as Prisma.InputJsonValue,
@@ -178,7 +178,7 @@ export class TasksService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.findFirst({
         where: { id, organizationId },
-        include: { project: true },
+        include: { repository: true },
       });
 
       if (!task) {

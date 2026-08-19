@@ -21,7 +21,7 @@ export class TaskCreatedEvent extends TaskEvent {
   constructor(
     taskId: string,
     organizationId: string,
-    public readonly projectId: string | null,
+    public readonly repositoryId: string | null,
     public readonly title: string,
     public readonly externalIssueId: string | null,
   ) {

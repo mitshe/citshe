@@ -21,8 +21,8 @@ import {
   Terminal,
   MessageSquare,
 } from "lucide-react";
-import { useTasks, useProjects } from "@/lib/api/hooks";
-import type { Task, Project } from "@/lib/api/types";
+import { useTasks, useRepositories } from "@/lib/api/hooks";
+import type { Task, Repository } from "@/lib/api/types";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -33,7 +33,7 @@ const navigationItems = [
   { label: "Home", path: "/home", icon: MessageSquare },
   { label: "Threads", path: "/sessions", icon: Terminal },
   { label: "Tasks", path: "/tasks", icon: ListTodo },
-  { label: "Projects", path: "/projects", icon: FolderOpen },
+  { label: "Repos", path: "/repos", icon: FolderOpen },
   { label: "Settings", path: "/settings", icon: Settings },
   { label: "Integrations", path: "/settings/integrations", icon: Settings },
   { label: "AI Providers", path: "/settings/ai", icon: Settings },
@@ -45,9 +45,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
 
   const { data: tasks = [], isLoading: tasksLoading } = useTasks();
-  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const { data: repos = [], isLoading: reposLoading } = useRepositories();
 
-  const isLoading = tasksLoading || projectsLoading;
+  const isLoading = tasksLoading || reposLoading;
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -81,17 +81,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       .slice(0, 8);
   }, [tasks, query]);
 
-  const filteredProjects = useMemo(() => {
-    if (!query) return projects.slice(0, 3);
+  const filteredRepos = useMemo(() => {
+    if (!query) return repos.slice(0, 3);
     const lowerQuery = query.toLowerCase();
-    return projects
+    return repos
       .filter(
-        (project: Project) =>
-          project.name.toLowerCase().includes(lowerQuery) ||
-          project.description?.toLowerCase().includes(lowerQuery),
+        (repo: Repository) =>
+          repo.name.toLowerCase().includes(lowerQuery) ||
+          repo.fullPath.toLowerCase().includes(lowerQuery),
       )
       .slice(0, 5);
-  }, [projects, query]);
+  }, [repos, query]);
 
   const quickActions = [
     {
@@ -198,23 +198,21 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               </CommandGroup>
             )}
 
-            {filteredProjects.length > 0 && (
-              <CommandGroup heading="Projects">
-                {filteredProjects.map((project: Project) => (
+            {filteredRepos.length > 0 && (
+              <CommandGroup heading="Repos">
+                {filteredRepos.map((repo: Repository) => (
                   <CommandItem
-                    key={project.id}
-                    value={`project-${project.id}-${project.name}`}
-                    onSelect={() => handleSelect(`/projects/${project.id}`)}
+                    key={repo.id}
+                    value={`repo-${repo.id}-${repo.name}`}
+                    onSelect={() => handleSelect(`/repos`)}
                     className="cursor-pointer"
                   >
                     <FolderOpen className="mr-2 w-4 h-4 text-muted-foreground" />
                     <div className="flex flex-col">
-                      <span>{project.name}</span>
-                      {project.description && (
-                        <span className="text-xs text-muted-foreground line-clamp-1">
-                          {project.description}
-                        </span>
-                      )}
+                      <span>{repo.name}</span>
+                      <span className="text-xs text-muted-foreground line-clamp-1">
+                        {repo.fullPath}
+                      </span>
                     </div>
                   </CommandItem>
                 ))}

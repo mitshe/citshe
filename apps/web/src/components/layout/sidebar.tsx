@@ -30,13 +30,13 @@ interface NavItem {
 /** Primary, always-visible actions — the simple flow. */
 const primaryNav: NavItem[] = [
   { title: "Home", href: "/home", icon: Home, tourId: "nav-home" },
+  { title: "Repos", href: "/repos", icon: FolderKanban, tourId: "nav-repos" },
   { title: "Tasks", href: "/tasks", icon: ListTodo, tourId: "nav-tasks" },
 ];
 
 /** Power-user sections, tucked under a collapsible "Advanced" group. */
 const advancedNav: NavItem[] = [
   { title: "Threads", href: "/sessions", icon: MessageSquareCode, tourId: "nav-sessions" },
-  { title: "Projects", href: "/projects", icon: FolderKanban, tourId: "nav-projects" },
   { title: "Skills", href: "/skills", icon: Zap, tourId: "nav-skills" },
 ];
 

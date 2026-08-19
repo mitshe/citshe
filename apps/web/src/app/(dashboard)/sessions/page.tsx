@@ -67,7 +67,6 @@ import {
   useRecreateSession,
   useDeleteSession,
   useStopSession,
-  useProjects,
   useRepositories,
   useRepoBranches,
   useAICredentials,
@@ -126,7 +125,6 @@ const statusConfig: Record<
 export default function SessionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlProjectId = searchParams.get("projectId") || "";
   const urlSnapshotId = searchParams.get("snapshot") || "";
   const urlNewSession = searchParams.get("newSession") === "1";
   const urlTaskName = searchParams.get("taskName") || "";
@@ -146,9 +144,6 @@ export default function SessionsPage() {
 
   const filteredSessions = useMemo(() => {
     let result = sessions;
-    if (urlProjectId) {
-      result = result.filter((s) => s.projectId === urlProjectId);
-    }
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((s) => s.name.toLowerCase().includes(q));
@@ -157,8 +152,7 @@ export default function SessionsPage() {
       result = result.filter((s) => s.status === filterStatus);
     }
     return result;
-  }, [sessions, urlProjectId, search, filterStatus]);
-  const { data: projects = [] } = useProjects();
+  }, [sessions, search, filterStatus]);
   const { data: repositories = [] } = useRepositories();
   const { data: aiCredentials = [] } = useAICredentials();
   const snapshotsList = EMPTY_SNAPSHOTS;
@@ -199,7 +193,6 @@ export default function SessionsPage() {
 
   const emptyForm = {
     name: "",
-    projectId: "",
     repositoryIds: [] as string[],
     branch: "",
     integrationIds: [] as string[],
@@ -269,13 +262,12 @@ export default function SessionsPage() {
       ...prev,
       name: urlTaskName || prev.name,
       instructions: urlTaskInstructions || prev.instructions,
-      projectId: urlProjectId || prev.projectId,
       baseImageId: autoSnapshot || prev.baseImageId,
       integrationIds: allIntegrationIds.length > 0 ? allIntegrationIds : prev.integrationIds,
     }));
     setIsDialogOpen(true);
     setTaskHandled(true);
-  }, [urlNewSession, urlTaskName, urlTaskInstructions, urlProjectId, allIntegrationIds, taskHandled, readySnapshots]);
+  }, [urlNewSession, urlTaskName, urlTaskInstructions, allIntegrationIds, taskHandled, readySnapshots]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -291,7 +283,6 @@ export default function SessionsPage() {
   const openEdit = (session: AgentSession) => {
     const initial = {
       name: session.name,
-      projectId: session.projectId || "",
       repositoryIds:
         session.repositories?.map((r) => r.repositoryId) || [],
       branch: "",
@@ -318,7 +309,7 @@ export default function SessionsPage() {
     return b.every((x) => sa.has(x));
   };
 
-  const metadataFields = ["name", "projectId", "instructions"] as const;
+  const metadataFields = ["name", "instructions"] as const;
   const configFields = [
     "aiCredentialId",
     "startArguments",
@@ -365,7 +356,6 @@ export default function SessionsPage() {
       try {
         const session = await createSession.mutateAsync({
           name: form.name,
-          projectId: form.projectId || undefined,
           repositoryIds: form.repositoryIds,
           integrationIds:
             form.integrationIds.length > 0 ? form.integrationIds : undefined,
@@ -412,7 +402,6 @@ export default function SessionsPage() {
           id: editingId,
           data: {
             name: form.name,
-            projectId: form.projectId,
             repositoryIds: form.repositoryIds,
             integrationIds: form.integrationIds,
             aiCredentialId: form.aiCredentialId,
@@ -427,7 +416,6 @@ export default function SessionsPage() {
           id: editingId,
           data: {
             name: form.name,
-            projectId: form.projectId,
             instructions: form.instructions,
           },
         });
@@ -602,7 +590,6 @@ export default function SessionsPage() {
                 configLocked={configLocked}
                 sessionProviders={sessionProviders}
                 readySnapshots={readySnapshots}
-                projects={projects}
                 activeRepos={activeRepos}
                 repoSearch={repoSearch}
                 setRepoSearch={setRepoSearch}
@@ -740,7 +727,6 @@ export default function SessionsPage() {
                         </p>
                       )}
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                        {session.project && <span>{session.project.name}</span>}
                         {session.aiCredential && <span>{providerLabels[session.aiCredential.provider] || session.aiCredential.provider}</span>}
                         {session.branch && (
                           <span className="flex items-center gap-1 font-mono">

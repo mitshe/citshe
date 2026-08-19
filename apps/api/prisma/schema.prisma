@@ -93,7 +93,6 @@ model Organization {
   // Relations
   owner         User?    @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members       OrganizationMember[]
-  projects      Project[]
   tasks         Task[]
   integrations  Integration[]
   repositories  Repository[]
@@ -131,46 +130,6 @@ model OrganizationMember {
 // PROJECTS
 // ============================================================================
 
-model Project {
-  id             String  @id @default(cuid())
-  organizationId String  @map("organization_id")
-  name           String
-  key            String  // Short identifier like "PROJ", "API"
-  description    String?
-
-  // Repository mapping (new - linked to Repository model)
-  repositoryId String? @map("repository_id")
-
-  // Legacy repository mapping (deprecated - use repositoryId)
-  repoUrl         String? @map("repo_url")
-  repoBranch      String  @default("main") @map("repo_branch")
-  gitProviderType String? @map("git_provider_type") // 'gitlab' | 'github'
-  gitProviderId   String? @map("git_provider_id")
-
-  // Issue tracker mapping
-  issueTrackerType    String? @map("issue_tracker_type") // 'jira' | 'youtrack' | 'linear' | 'trello'
-  issueTrackerProject String? @map("issue_tracker_project")
-  issueTrackerConfig  Json?   @map("issue_tracker_config")
-
-  // AI label trigger
-  aiTriggerLabel String @default("AI") @map("ai_trigger_label")
-
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  repository   Repository?  @relation("ProjectRepository", fields: [repositoryId], references: [id], onDelete: SetNull)
-  tasks            Task[]
-  agentDefinitions AgentDefinition[]
-  agentSessions    AgentSession[]
-
-  @@unique([organizationId, key])
-  @@index([repositoryId])
-  @@map("projects")
-}
-
 // ============================================================================
 // TASKS
 // ============================================================================
@@ -189,7 +148,7 @@ enum TaskStatus {
 model Task {
   id             String     @id @default(cuid())
   organizationId String     @map("organization_id")
-  projectId      String?    @map("project_id")
+  repositoryId   String?    @map("repository_id")
   title          String
   description    String?
   status         TaskStatus @default(PENDING)
@@ -219,11 +178,11 @@ model Task {
 
   // Relations
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repository   Repository?   @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
   session      AgentSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
-  @@index([projectId])
+  @@index([repositoryId])
   @@index([status])
   @@index([sessionId])
   @@index([externalIssueId])
@@ -298,6 +257,13 @@ model Repository {
   // Branch naming convention for this repo
   branchPattern String? @map("branch_pattern") // e.g., "feature/{{task.key}}-{{task.title|slug}}"
 
+  // Auto-analysis (populated after connecting the repo, via the git provider API)
+  stack          Json?     // detected framework/language/package manager
+  ciSummary      Json?     @map("ci_summary") // detected CI workflows/pipelines
+  summary        String?   // short AI summary of what this repo is
+  analyzedAt     DateTime? @map("analyzed_at")
+  analysisStatus String?   @map("analysis_status") // pending | analyzing | done | failed
+
   // Sync state
   isActive     Boolean   @default(true) @map("is_active")
   lastSyncedAt DateTime? @map("last_synced_at")
@@ -308,7 +274,7 @@ model Repository {
   // Relations
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   integration        Integration         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  projects                    Project[]                    @relation("ProjectRepository")
+  tasks                       Task[]
   sessionRepositories         SessionRepository[]
   agentDefinitionRepositories AgentDefinitionRepository[]
 
@@ -538,7 +504,6 @@ model AgentDefinition {
   startArguments       String?  @map("start_arguments")
   instructions         String   @default("")
   maxSessionDurationMs Int?     @map("max_session_duration_ms")
-  defaultProjectId     String?  @map("default_project_id")
   environmentId        String?  @map("environment_id")
   createdBy            String   @map("created_by")
 
@@ -548,7 +513,6 @@ model AgentDefinition {
   // Relations
   organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   aiCredential        AICredential? @relation(fields: [aiCredentialId], references: [id], onDelete: SetNull)
-  defaultProject      Project?      @relation(fields: [defaultProjectId], references: [id], onDelete: SetNull)
   environment         Environment?  @relation(fields: [environmentId], references: [id], onDelete: SetNull)
   defaultRepositories AgentDefinitionRepository[]
   sessions            AgentSession[]
@@ -583,7 +547,6 @@ enum SessionStatus {
 model AgentSession {
   id                String        @id @default(cuid())
   organizationId    String        @map("organization_id")
-  projectId         String?       @map("project_id")
   agentDefinitionId String?       @map("agent_definition_id")
   name              String
   instructions      String        @default("")
@@ -603,7 +566,6 @@ model AgentSession {
 
   // Relations
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project         Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
   aiCredential    AICredential?     @relation(fields: [aiCredentialId], references: [id], onDelete: SetNull)
   agentDefinition AgentDefinition?  @relation(fields: [agentDefinitionId], references: [id], onDelete: SetNull)
   environment     Environment?      @relation(fields: [environmentId], references: [id], onDelete: SetNull)

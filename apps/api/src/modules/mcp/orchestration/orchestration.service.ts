@@ -56,7 +56,7 @@ export class OrchestrationService {
           status: true,
           priority: true,
           sessionId: true,
-          projectId: true,
+          repositoryId: true,
         },
       }),
       this.prisma.agentSession.count({
@@ -138,16 +138,18 @@ export class OrchestrationService {
       };
     }
 
-    // Resolve repositories: explicit, else the project's/org's active repos.
+    // Resolve repositories: explicit override, else the task's own repo, else
+    // the org's active repos (when there's exactly one).
     const repositoryIds =
       opts?.repositoryIds && opts.repositoryIds.length > 0
         ? opts.repositoryIds
-        : await this.defaultRepositoryIds(organizationId);
+        : task.repositoryId
+          ? [task.repositoryId]
+          : await this.defaultRepositoryIds(organizationId);
 
     // Create the worker thread.
     const session = await this.sessionsService.create(organizationId, userId, {
       name: `worker: ${task.title}`.slice(0, 80),
-      projectId: task.projectId || undefined,
       repositoryIds,
       instructions: this.buildWorkerInstructions(task.title, task.description),
     });

@@ -21,6 +21,22 @@ export function useRepositories(active?: boolean) {
   });
 }
 
+/** Analyze a connected repo (stack, CI, AI summary). Refreshes repo lists. */
+export function useAnalyzeRepo() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (repoId: string) => {
+      const token = await getToken();
+      return api.repositories.analyze(repoId, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all });
+    },
+  });
+}
+
 export function useRepoBranches(repoId: string | undefined) {
   const getToken = useAuthToken();
 

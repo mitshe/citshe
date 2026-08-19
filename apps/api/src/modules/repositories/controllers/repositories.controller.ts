@@ -18,6 +18,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { RepositoriesService } from '../services/repositories.service';
+import { RepoAnalysisService } from '../services/repo-analysis.service';
 import { AuthGuard } from '@/shared/auth';
 import { OrganizationId } from '../../../shared/decorators/organization.decorator';
 import {
@@ -40,7 +41,21 @@ import { ApiRateLimit } from '../../../shared/decorators/throttle.decorator';
 @UseGuards(AuthGuard)
 @ApiRateLimit()
 export class RepositoriesController {
-  constructor(private readonly repositoriesService: RepositoriesService) {}
+  constructor(
+    private readonly repositoriesService: RepositoriesService,
+    private readonly analysisService: RepoAnalysisService,
+  ) {}
+
+  @Post(':id/analyze')
+  @ApiOperation({ summary: 'Analyze a connected repo (stack, CI, AI summary)' })
+  @ApiResponse({ status: 200, description: 'Analysis result' })
+  @HttpCode(HttpStatus.OK)
+  async analyze(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.analysisService.analyze(organizationId, id);
+  }
 
   @Get()
   @ApiOperation({ summary: 'List all repositories' })
@@ -117,6 +132,8 @@ export class RepositoriesController {
       dto.integrationId,
       dto.externalIds,
     );
+    // Kick off analysis of the freshly-connected repos in the background.
+    void this.analysisService.analyzePending(organizationId).catch(() => {});
     return { result };
   }
 

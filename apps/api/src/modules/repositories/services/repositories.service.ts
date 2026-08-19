@@ -43,7 +43,7 @@ export class RepositoriesService {
           },
         },
         _count: {
-          select: { projects: true },
+          select: { tasks: true },
         },
       },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
@@ -62,13 +62,6 @@ export class RepositoriesService {
             id: true,
             type: true,
             status: true,
-          },
-        },
-        projects: {
-          select: {
-            id: true,
-            name: true,
-            key: true,
           },
         },
       },
@@ -312,7 +305,8 @@ export class RepositoriesService {
             defaultBranch: remote.defaultBranch,
             cloneUrl: remote.cloneUrl,
             webUrl: remote.webUrl,
-            isActive: false, // Disabled by default - user must enable
+            isActive: true, // Connected repos are active in the portal
+            analysisStatus: 'pending',
             lastSyncedAt: new Date(),
           },
         });

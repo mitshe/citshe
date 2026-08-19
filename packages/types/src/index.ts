@@ -4,7 +4,6 @@
 export * from "./common";
 
 // Domain types
-export * from "./project";
 export * from "./task";
 export * from "./integration";
 export * from "./repository";

@@ -3,9 +3,6 @@
  */
 
 import type {
-  Project,
-  CreateProjectDto,
-  UpdateProjectDto,
   Task,
   QueueOverview,
   RefinedTask,
@@ -24,6 +21,7 @@ import type {
   CreateAICredentialDto,
   UpdateAICredentialDto,
   Repository,
+  RepoAnalysisResult,
   UpdateRepositoryDto,
   BulkUpdateRepositoriesDto,
   RemoteRepository,
@@ -95,37 +93,9 @@ async function request<T>(
 }
 
 export const api = {
-  projects: {
-    list: (token: string) =>
-      request<{ projects: Project[] }>("/projects", { token }),
-
-    get: (id: string, token: string) =>
-      request<{ project: Project }>(`/projects/${id}`, { token }),
-
-    create: (data: CreateProjectDto, token: string) =>
-      request<{ project: Project }>("/projects", {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    update: (id: string, data: UpdateProjectDto, token: string) =>
-      request<{ project: Project }>(`/projects/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    delete: (id: string, token: string) =>
-      request<void>(`/projects/${id}`, {
-        method: "DELETE",
-        token,
-      }),
-  },
-
   tasks: {
-    list: (token: string, projectId?: string) => {
-      const params = projectId ? `?projectId=${projectId}` : "";
+    list: (token: string, repositoryId?: string) => {
+      const params = repositoryId ? `?repositoryId=${repositoryId}` : "";
       return request<{
         data: Task[];
         meta: {
@@ -423,13 +393,18 @@ export const api = {
         `/repositories/${id}/branches${search ? `?search=${encodeURIComponent(search)}` : ""}`,
         { token },
       ),
+
+    analyze: (id: string, token: string) =>
+      request<RepoAnalysisResult>(`/repositories/${id}/analyze`, {
+        method: "POST",
+        token,
+      }),
   },
 
   sessions: {
-    list: (token: string, status?: string, projectId?: string) => {
+    list: (token: string, status?: string) => {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
-      if (projectId) params.set("projectId", projectId);
       const qs = params.toString();
       return request<{ sessions: AgentSession[] }>(
         `/sessions${qs ? `?${qs}` : ""}`,
