@@ -527,12 +527,15 @@ function NewTaskDialog({
 
           {/* Repo */}
           {repos.length > 0 && (
-            <Select value={repositoryId} onValueChange={setRepositoryId}>
+            <Select
+              value={repositoryId || "none"}
+              onValueChange={(v) => setRepositoryId(v === "none" ? "" : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="No repository" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No repository</SelectItem>
+                <SelectItem value="none">No repository</SelectItem>
                 {repos.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.name}
