@@ -1,17 +1,6 @@
 // Integration types
 
-export type IntegrationType =
-  | "JIRA"
-  | "YOUTRACK"
-  | "LINEAR"
-  | "TRELLO"
-  | "GITLAB"
-  | "GITHUB"
-  | "SLACK"
-  | "DISCORD"
-  | "TELEGRAM"
-  | "TEAMS"
-  | "OBSIDIAN";
+export type IntegrationType = "GITHUB";
 
 export interface Integration {
   id: string;

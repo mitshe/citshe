@@ -230,6 +230,9 @@ export const api = {
         body: JSON.stringify(data),
         token,
       }),
+
+    githubAppStart: (token: string) =>
+      request<{ url: string }>("/integrations/github/app/start", { token }),
   },
 
   apiKeys: {

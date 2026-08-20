@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import {
   useSyncSelectiveRepositories,
   useAnalyzeRepo,
   useIntegrations,
+  useGithubAppStart,
 } from "@/lib/api/hooks";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import { cn } from "@/lib/utils";
@@ -36,13 +38,38 @@ import { toast } from "sonner";
 import type { Repository } from "@/lib/api/types";
 
 export default function ReposPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: repos = [], isLoading } = useRepositories();
   const { data: integrations = [] } = useIntegrations();
+  const githubAppStart = useGithubAppStart();
   const [connectOpen, setConnectOpen] = useState(false);
 
   const hasGitIntegration = integrations.some(
     (i) => i.type === "GITHUB" && i.status === "CONNECTED",
   );
+
+  // Handle the return from the GitHub App install redirect.
+  const connected = searchParams.get("connected");
+  useEffect(() => {
+    if (connected === "github") {
+      toast.success("GitHub connected");
+      router.replace("/repos");
+    } else if (connected === "error") {
+      toast.error("GitHub connection failed — try again");
+      router.replace("/repos");
+    }
+  }, [connected, router]);
+
+  const startGithubSso = async () => {
+    try {
+      const { url } = await githubAppStart.mutateAsync();
+      window.location.href = url;
+    } catch {
+      // App not configured → send them to Settings for the token fallback.
+      router.push("/settings/integrations");
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8 space-y-5">
@@ -53,30 +80,37 @@ export default function ReposPage() {
             The repositories in this portal. Connect one and AI analyzes it.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setConnectOpen(true)}
-          disabled={!hasGitIntegration}
-          title={
-            hasGitIntegration
-              ? "Connect a repository"
-              : "Connect GitHub in Settings → Integrations first"
-          }
-        >
-          <Plus className="mr-1.5 h-4 w-4" />
-          Connect repo
-        </Button>
+        {hasGitIntegration ? (
+          <Button size="sm" onClick={() => setConnectOpen(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Connect repo
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={startGithubSso}
+            disabled={githubAppStart.isPending}
+          >
+            {githubAppStart.isPending ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Github className="mr-1.5 h-4 w-4" />
+            )}
+            Connect GitHub
+          </Button>
+        )}
       </div>
 
       {!hasGitIntegration && (
         <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm">
           <p className="text-muted-foreground">
-            Connect GitHub first to pull in your repositories.{" "}
+            Connect GitHub to pull in your repositories — authorize once, then
+            pick repos.{" "}
             <Link
               href="/settings/integrations"
               className="font-medium text-foreground underline"
             >
-              Go to Integrations
+              Use a token instead
             </Link>
           </p>
         </div>

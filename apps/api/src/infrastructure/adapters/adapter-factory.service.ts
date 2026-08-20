@@ -4,6 +4,7 @@ import { PrismaService } from '../persistence/prisma/prisma.service';
 import { EncryptionService } from '../../shared/encryption/encryption.service';
 import { GitProviderPort } from '../../ports/git-provider.port';
 import { AIProviderPort } from '../../ports/ai-provider.port';
+import { GithubAppService } from './git-provider/github-app.service';
 
 // Import registrations to ensure adapters are registered
 import './registrations';
@@ -24,7 +25,23 @@ export class AdapterFactoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryptionService: EncryptionService,
+    private readonly githubApp: GithubAppService,
   ) {}
+
+  /**
+   * Resolve a config to a usable adapter config. For GitHub App integrations
+   * (mode:'app') this mints a fresh installation access token and hands it to
+   * the adapter as accessToken — so the rest of the code is App-agnostic.
+   */
+  private async resolveGitConfig(config: AdapterConfig): Promise<AdapterConfig> {
+    if (config.mode === 'app' && config.installationId) {
+      const accessToken = await this.githubApp.getInstallationToken(
+        String(config.installationId),
+      );
+      return { ...config, accessToken };
+    }
+    return config;
+  }
 
   /**
    * Test connection for an integration
@@ -75,7 +92,8 @@ export class AdapterFactoryService {
       Buffer.from(integration.configIv),
     );
 
-    return this.createGitProvider(integration.type, decryptedConfig);
+    const config = await this.resolveGitConfig(decryptedConfig);
+    return this.createGitProvider(integration.type, config);
   }
 
   /**

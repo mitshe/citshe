@@ -14,6 +14,9 @@ export interface AdapterConfig {
   apiToken?: string;
   apiKey?: string;
   accessToken?: string;
+  // GitHub connection mode: 'pat' (token in accessToken) or 'app' (installation).
+  mode?: 'pat' | 'app';
+  installationId?: string;
   tokenType?: string;
   botToken?: string;
   webhookUrl?: string;

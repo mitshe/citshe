@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
+import { EncryptionService } from '../../../shared/encryption/encryption.service';
+import { GithubAppService } from '../../../infrastructure/adapters/git-provider/github-app.service';
 import {
   IntegrationType,
   GitProvider,
@@ -23,7 +25,25 @@ export class RepositoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly adapterFactory: AdapterFactoryService,
+    private readonly encryption: EncryptionService,
+    private readonly githubApp: GithubAppService,
   ) {}
+
+  /** Read an integration's mode + installationId (GitHub App), if any. */
+  private appInstallation(integration: {
+    config: Uint8Array;
+    configIv: Uint8Array;
+  }): string | null {
+    try {
+      const config = this.encryption.decryptJson<Record<string, string>>(
+        Buffer.from(integration.config),
+        Buffer.from(integration.configIv),
+      );
+      return config.mode === 'app' ? config.installationId : null;
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * Get all repositories for an organization
@@ -193,13 +213,37 @@ export class RepositoriesService {
 
     for (const integration of integrations) {
       try {
+        const provider = this.mapIntegrationToGitProvider(integration.type);
+        const installationId = this.appInstallation(integration);
+
+        if (installationId) {
+          // GitHub App: list exactly the repos granted to the installation.
+          const repos =
+            await this.githubApp.listInstallationRepos(installationId);
+          for (const remote of repos) {
+            results.push({
+              externalId: remote.full_name,
+              name: remote.name,
+              fullPath: remote.full_name,
+              description: remote.description ?? null,
+              defaultBranch: remote.default_branch,
+              webUrl: remote.html_url,
+              provider,
+              integrationId: integration.id,
+              alreadyImported: existingSet.has(
+                `${provider}:${remote.full_name}`,
+              ),
+            });
+          }
+          continue;
+        }
+
         const adapter =
           await this.adapterFactory.createGitProviderFromIntegration(
             organizationId,
             integration.id,
           );
         const remoteRepos = await adapter.listRepositories({ limit: 100 });
-        const provider = this.mapIntegrationToGitProvider(integration.type);
 
         for (const remote of remoteRepos) {
           results.push({
@@ -248,15 +292,47 @@ export class RepositoriesService {
       );
     }
 
-    // Create adapter
-    const adapter = await this.adapterFactory.createGitProviderFromIntegration(
-      organizationId,
-      integrationId,
-    );
-
-    // Fetch remote repositories
+    // Fetch remote repositories (GitHub App installation or PAT), normalized.
     this.logger.log(`Syncing repositories from ${integration.type}...`);
-    const allRemoteRepos = await adapter.listRepositories({ limit: 100 });
+    const installationId = this.appInstallation(integration);
+    let allRemoteRepos: Array<{
+      id: string;
+      name: string;
+      fullName: string;
+      description: string | null;
+      defaultBranch: string;
+      cloneUrl: string;
+      webUrl: string;
+    }>;
+
+    if (installationId) {
+      const repos = await this.githubApp.listInstallationRepos(installationId);
+      allRemoteRepos = repos.map((r) => ({
+        id: r.full_name,
+        name: r.name,
+        fullName: r.full_name,
+        description: r.description ?? null,
+        defaultBranch: r.default_branch,
+        cloneUrl: r.clone_url,
+        webUrl: r.html_url,
+      }));
+    } else {
+      const adapter =
+        await this.adapterFactory.createGitProviderFromIntegration(
+          organizationId,
+          integrationId,
+        );
+      const remote = await adapter.listRepositories({ limit: 100 });
+      allRemoteRepos = remote.map((r) => ({
+        id: r.id,
+        name: r.name,
+        fullName: r.fullName,
+        description: r.description ?? null,
+        defaultBranch: r.defaultBranch,
+        cloneUrl: r.cloneUrl,
+        webUrl: r.webUrl,
+      }));
+    }
 
     // Filter by external IDs if provided
     const remoteRepos = externalIds

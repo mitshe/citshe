@@ -96,3 +96,15 @@ export function useTestIntegrationBeforeConnect() {
     },
   });
 }
+
+/** Begin the GitHub App (SSO) install — returns the URL to redirect to. */
+export function useGithubAppStart() {
+  const getToken = useAuthToken();
+
+  return useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      return api.integrations.githubAppStart(token);
+    },
+  });
+}

@@ -110,9 +110,7 @@ export default function RepositoriesPage() {
     currentPage * ITEMS_PER_PAGE,
   );
 
-  const gitIntegrations = integrations.filter(
-    (i) => i.type === "GITLAB" || i.type === "GITHUB",
-  );
+  const gitIntegrations = integrations.filter((i) => i.type === "GITHUB");
   const hasGitIntegration = gitIntegrations.length > 0;
   const connectedIntegrations = gitIntegrations.filter(
     (i) => i.status === "CONNECTED",

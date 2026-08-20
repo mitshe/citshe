@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
+import { GithubAppService } from '../../../infrastructure/adapters/git-provider/github-app.service';
 import { SessionStatus, Prisma } from '@prisma/client';
 import {
   CreateSessionDto,
@@ -34,6 +35,7 @@ export class SessionsService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly containerService: SessionContainerService,
+    private readonly githubApp: GithubAppService,
   ) {}
 
   async create(organizationId: string, userId: string, dto: CreateSessionDto) {
@@ -377,10 +379,20 @@ export class SessionsService {
             Buffer.from(integration.config),
             Buffer.from(integration.configIv),
           );
+          // GitHub App: mint a fresh short-lived installation token per clone.
+          if (config.mode === 'app' && config.installationId) {
+            const token = await this.githubApp.getInstallationToken(
+              config.installationId,
+            );
+            tokenMap.set(integration.id, token);
+            continue;
+          }
           const token = config.accessToken || config.apiToken || config.token;
           if (token) tokenMap.set(integration.id, token);
-        } catch {
-          this.logger.warn(`Failed to decrypt integration ${integration.id}`);
+        } catch (err) {
+          this.logger.warn(
+            `Failed to resolve token for integration ${integration.id}: ${(err as Error).message}`,
+          );
         }
       }
     }

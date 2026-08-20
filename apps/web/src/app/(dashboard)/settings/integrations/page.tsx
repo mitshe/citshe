@@ -35,6 +35,7 @@ import {
   useDeleteIntegration,
   useTestIntegration,
   useTestIntegrationBeforeConnect,
+  useGithubAppStart,
 } from "@/lib/api/hooks";
 import type { IntegrationType } from "@/lib/api/types";
 import { toast } from "sonner";
@@ -90,6 +91,20 @@ export default function IntegrationsPage() {
   const deleteIntegration = useDeleteIntegration();
   const testIntegration = useTestIntegration();
   const testBeforeConnect = useTestIntegrationBeforeConnect();
+  const githubAppStart = useGithubAppStart();
+
+  const startGithubSso = async () => {
+    try {
+      const { url } = await githubAppStart.mutateAsync();
+      window.location.href = url;
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "GitHub App isn't configured — use a token below.",
+      );
+    }
+  };
 
   const [configureDialog, setConfigureDialog] = useState<IntegrationDef | null>(
     null,
@@ -267,6 +282,30 @@ export default function IntegrationsPage() {
           </DialogHeader>
 
           <DialogBody className="space-y-4">
+            {configureDialog?.id === "GITHUB" && (
+              <>
+                <Button
+                  className="w-full"
+                  onClick={startGithubSso}
+                  disabled={githubAppStart.isPending}
+                >
+                  {githubAppStart.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <GitHubIcon className="w-4 h-4 mr-2" />
+                  )}
+                  Continue with GitHub
+                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    or use a token
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              </>
+            )}
+
             {configureDialog?.docsUrl && (
               <a
                 href={configureDialog.docsUrl}

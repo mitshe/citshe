@@ -29,6 +29,7 @@ import { ApplicationModule } from './application/application.module';
 // Feature Modules
 import { TasksModule } from './modules/tasks/tasks.module';
 import { RepositoriesModule } from './modules/repositories/repositories.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { AICredentialsModule } from './modules/ai-credentials/ai-credentials.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AuditApiModule } from './modules/audit/audit.module';
@@ -150,6 +151,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     // Feature Modules
     TasksModule,
     RepositoriesModule,
+    IntegrationsModule,
     AICredentialsModule,
     ApiKeysModule,
     AuditApiModule,
