@@ -3,10 +3,48 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Read a var straight from the `.env` file. Secrets are resolved at module-load
+ * time — BEFORE Nest's ConfigModule loads `.env` into process.env — so without
+ * this the generated fallback would always win even when `.env` sets the key.
+ * Making `.env` authoritative here avoids the footgun where changing `.env`
+ * silently orphans data encrypted with a previously-generated key.
+ */
+function readFromEnvFile(envVar: string): string | undefined {
+  for (const file of ['.env', '../../.env']) {
+    try {
+      const content = fs.readFileSync(path.resolve(process.cwd(), file), 'utf-8');
+      const match = content.match(
+        new RegExp(`^${envVar}=(.*)$`, 'm'),
+      );
+      if (match) {
+        // strip surrounding quotes + inline comments
+        const val = match[1]
+          .replace(/\s+#.*$/, '')
+          .trim()
+          .replace(/^["']|["']$/g, '');
+        if (val) return val;
+      }
+    } catch {
+      // file not here — try the next candidate
+    }
+  }
+  return undefined;
+}
+
 function getOrGenerateSecret(envVar: string, name: string): string {
+  // 1. Explicit env var wins.
   const fromEnv = process.env[envVar];
   if (fromEnv && fromEnv.length >= 32) return fromEnv;
 
+  // 2. The .env file is authoritative (loaded before ConfigModule runs).
+  const fromFile = readFromEnvFile(envVar);
+  if (fromFile && fromFile.length >= 32) {
+    process.env[envVar] = fromFile;
+    return fromFile;
+  }
+
+  // 3. Fall back to a persisted generated secret.
   const secretsDir = path.join(
     process.env.HOME || '/tmp',
     '.citshe',
@@ -38,12 +76,10 @@ function getOrGenerateSecret(envVar: string, name: string): string {
   return generated;
 }
 
-if (!process.env.JWT_SECRET) {
-  getOrGenerateSecret('JWT_SECRET', 'jwt-secret');
-}
-if (!process.env.ENCRYPTION_KEY) {
-  getOrGenerateSecret('ENCRYPTION_KEY', 'encryption-key');
-}
+// Always resolve through getOrGenerateSecret so the .env file is authoritative
+// even when process.env isn't populated yet.
+getOrGenerateSecret('JWT_SECRET', 'jwt-secret');
+getOrGenerateSecret('ENCRYPTION_KEY', 'encryption-key');
 
 export const configValidationSchema = Joi.object({
   DATABASE_URL: Joi.string()
