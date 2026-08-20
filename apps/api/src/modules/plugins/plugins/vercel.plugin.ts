@@ -5,6 +5,8 @@ import {
   StackPlugin,
   PluginMetric,
   PluginItem,
+  PluginAction,
+  PluginActionResult,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
@@ -90,6 +92,7 @@ class VercelPlugin implements StackPlugin {
     const c = this.cfg(config);
     const metrics: PluginMetric[] = [];
     const items: PluginItem[] = [];
+    const actions: PluginAction[] = [];
     let headline: { label: string; state: HealthState } = {
       label: 'Connected',
       state: 'ok',
@@ -110,6 +113,7 @@ class VercelPlugin implements StackPlugin {
             name: p.name as string,
             when: (dep?.createdAt as number) || 0,
             state: dep?.readyState as string | undefined,
+            deploymentId: dep?.uid as string | undefined,
           };
         })
         .filter((p) => p.when)
@@ -125,6 +129,14 @@ class VercelPlugin implements StackPlugin {
           hint: latest.name,
           state: h.state,
         });
+        if (latest.deploymentId) {
+          actions.push({
+            id: `redeploy:${latest.name}:${latest.deploymentId}`,
+            label: 'Redeploy',
+            target: latest.name,
+            confirm: true,
+          });
+        }
       }
 
       for (const p of withDeploy.slice(0, 5)) {
@@ -145,8 +157,45 @@ class VercelPlugin implements StackPlugin {
       headline,
       metrics,
       items: items.length ? items : undefined,
+      actions: actions.length ? actions : undefined,
       links: [{ label: 'Open in Vercel', url: 'https://vercel.com/dashboard' }],
     };
+  }
+
+  /** Write-actions: redeploy a project's latest deployment. */
+  async runAction(
+    config: PluginConfig,
+    actionId: string,
+  ): Promise<PluginActionResult> {
+    const c = this.cfg(config);
+    if (actionId.startsWith('redeploy:')) {
+      const [, name, deploymentId] = actionId.split(':');
+      if (!name || !deploymentId) {
+        return { ok: false, message: 'Nothing to redeploy.' };
+      }
+      try {
+        const res = await fetch(`${API}${this.q(c, '/v13/deployments')}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${c.apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name,
+            deploymentId,
+            target: 'production',
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          return { ok: false, message: `Vercel ${res.status}: ${body.slice(0, 120)}` };
+        }
+        return { ok: true, message: `Redeploying ${name}…` };
+      } catch (err) {
+        return { ok: false, message: (err as Error).message };
+      }
+    }
+    return { ok: false, message: `Unknown action: ${actionId}` };
   }
 }
 

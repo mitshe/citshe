@@ -9,6 +9,7 @@ import type {
   Plugin,
   PluginStatus,
   PluginTestResult,
+  PluginActionResult,
   ConnectPluginDto,
   CreateTaskDto,
   UpdateTaskDto,
@@ -623,6 +624,17 @@ export const api = {
 
     status: (type: string, token: string) =>
       request<{ status: PluginStatus | null }>(`/plugins/${type}/status`, {
+        token,
+      }),
+
+    action: (
+      type: string,
+      data: { actionId: string; input?: Record<string, unknown> },
+      token: string,
+    ) =>
+      request<PluginActionResult>(`/plugins/${type}/action`, {
+        method: "POST",
+        body: JSON.stringify(data),
         token,
       }),
 

@@ -42,6 +42,16 @@ export interface PluginItem {
   state?: HealthState;
 }
 
+/** A write-action a plugin exposes (rendered as a button on the card). */
+export interface PluginAction {
+  id: string;
+  label: string;
+  confirm?: boolean;
+  target?: string;
+  /** If set, prompt the user for a value first; sent as input.value. */
+  prompt?: string;
+}
+
 /** Normalized status every plugin returns — the shape the UI renders. */
 export interface PluginStatus {
   type: PluginType;
@@ -50,6 +60,7 @@ export interface PluginStatus {
   metrics: PluginMetric[];
   items?: PluginItem[];
   links?: PluginLink[];
+  actions?: PluginAction[];
   error?: string;
 }
 
@@ -60,5 +71,10 @@ export interface ConnectPluginDto {
 
 export interface PluginTestResult {
   success: boolean;
+  message: string;
+}
+
+export interface PluginActionResult {
+  ok: boolean;
   message: string;
 }

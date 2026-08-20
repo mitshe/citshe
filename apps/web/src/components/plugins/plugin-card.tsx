@@ -1,10 +1,11 @@
 "use client";
 
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePluginStatus } from "@/lib/api/hooks";
+import { usePluginStatus, useRunPluginAction } from "@/lib/api/hooks";
 import { getPluginDef } from "@/lib/plugin-catalog";
-import type { HealthState, PluginType } from "@/lib/api/types";
+import { toast } from "sonner";
+import type { HealthState, PluginType, PluginAction } from "@/lib/api/types";
 
 const dotColor: Record<HealthState, string> = {
   ok: "bg-emerald-500",
@@ -113,6 +114,60 @@ export function PluginCard({ type }: { type: PluginType }) {
           ))}
         </div>
       )}
+
+      {status?.actions && status.actions.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-border/60 pt-2.5">
+          {status.actions.map((a) => (
+            <ActionButton key={a.id} type={type} action={a} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function ActionButton({
+  type,
+  action,
+}: {
+  type: PluginType;
+  action: PluginAction;
+}) {
+  const run = useRunPluginAction(type);
+
+  const onClick = async () => {
+    let input: Record<string, unknown> | undefined;
+    if (action.prompt) {
+      const value = window.prompt(action.prompt);
+      if (value === null || !value.trim()) return;
+      input = { value: value.trim() };
+    } else if (
+      action.confirm &&
+      !window.confirm(`${action.label}${action.target ? ` — ${action.target}` : ""}?`)
+    ) {
+      return;
+    }
+    try {
+      const res = await run.mutateAsync({ actionId: action.id, input });
+      if (res.ok) toast.success(res.message);
+      else toast.error(res.message);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action failed");
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={run.isPending}
+      className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+    >
+      {run.isPending ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <Zap className="h-3 w-3" />
+      )}
+      {action.label}
+    </button>
   );
 }

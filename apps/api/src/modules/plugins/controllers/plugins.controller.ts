@@ -76,6 +76,22 @@ export class PluginsController {
     return { status };
   }
 
+  @Post(':type/action')
+  @ApiOperation({ summary: 'Run a plugin write-action (redeploy, add subdomain…)' })
+  @HttpCode(HttpStatus.OK)
+  async action(
+    @OrganizationId() organizationId: string,
+    @Param('type') type: string,
+    @Body() body: { actionId: string; input?: Record<string, unknown> },
+  ) {
+    return this.plugins.runAction(
+      organizationId,
+      type.toUpperCase() as PluginType,
+      body.actionId,
+      body.input,
+    );
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Disconnect a plugin' })
   @HttpCode(HttpStatus.NO_CONTENT)

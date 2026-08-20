@@ -162,6 +162,31 @@ export class PluginsService {
     }
   }
 
+  /** Run a plugin write-action (redeploy, add subdomain, …). */
+  async runAction(
+    organizationId: string,
+    type: PluginType,
+    actionId: string,
+    input?: Record<string, unknown>,
+  ) {
+    const plugin = await this.prisma.plugin.findFirst({
+      where: { organizationId, type },
+    });
+    if (!plugin) throw new NotFoundException(`${type} is not connected.`);
+
+    const impl = pluginRegistry.get(type);
+    if (!impl.runAction) {
+      throw new BadRequestException(`${type} has no actions.`);
+    }
+
+    const config = this.decrypt(plugin);
+    const result = await impl.runAction(config, actionId, input);
+    // The action likely changed things — drop the cached status so the next
+    // read is fresh.
+    this.statusCache.delete(plugin.id);
+    return result;
+  }
+
   private asType(type: string): PluginType {
     if (
       !['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'].includes(type)

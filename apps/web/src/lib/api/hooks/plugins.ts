@@ -77,3 +77,24 @@ export function useDeletePlugin() {
     },
   });
 }
+
+/** Run a plugin write-action (redeploy, add subdomain…). Refreshes status. */
+export function useRunPluginAction(type: string) {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      actionId: string;
+      input?: Record<string, unknown>;
+    }) => {
+      const token = await getToken();
+      return api.plugins.action(type, data, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.plugins.status(type),
+      });
+    },
+  });
+}

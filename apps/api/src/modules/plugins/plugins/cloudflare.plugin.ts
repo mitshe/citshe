@@ -5,6 +5,8 @@ import {
   StackPlugin,
   PluginMetric,
   PluginItem,
+  PluginAction,
+  PluginActionResult,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
@@ -81,6 +83,8 @@ class CloudflarePlugin implements StackPlugin {
 
     const metrics: PluginMetric[] = [];
     const items: PluginItem[] = [];
+    const actions: PluginAction[] = [];
+    let latestProject: string | undefined;
     let headline: { label: string; state: HealthState } = {
       label: 'Connected',
       state: 'ok',
@@ -111,6 +115,7 @@ class CloudflarePlugin implements StackPlugin {
 
       const latest = withDeploy[0];
       if (latest) {
+        latestProject = latest.name;
         const ok = latest.stage === 'success' || latest.stage === 'active';
         const building = latest.stage === 'building' || latest.stage === 'queued';
         headline = {
@@ -123,6 +128,41 @@ class CloudflarePlugin implements StackPlugin {
           hint: latest.name,
           state: ok ? 'ok' : building ? 'warn' : 'down',
         });
+        // Offer a one-click redeploy of the freshest project.
+        actions.push({
+          id: `redeploy:${latest.name}`,
+          label: 'Redeploy',
+          target: latest.name,
+          confirm: true,
+        });
+        // And attach a custom subdomain to that project.
+        actions.push({
+          id: `add-domain:${latest.name}`,
+          label: 'Add subdomain',
+          target: latest.name,
+          prompt: `Custom domain to attach to ${latest.name} (e.g. app.example.com)`,
+        });
+      }
+
+      // Surface the custom domains already on the freshest project.
+      if (latestProject) {
+        try {
+          const dj = await this.get(
+            apiToken,
+            `/accounts/${accountId}/pages/projects/${latestProject}/domains`,
+          );
+          const domains: Array<Record<string, unknown>> = dj?.result ?? [];
+          for (const d of domains.slice(0, 5)) {
+            const st = (d.status as string) || '';
+            items.push({
+              label: (d.name as string) || 'domain',
+              value: st || 'domain',
+              state: st === 'active' ? 'ok' : 'warn',
+            });
+          }
+        } catch {
+          // domains listing optional
+        }
       }
 
       for (const p of withDeploy.slice(0, 5)) {
@@ -168,12 +208,15 @@ class CloudflarePlugin implements StackPlugin {
       metrics.push({ label: 'Cloudflare', value: 'connected' });
     }
 
+    void latestProject; // captured for potential future defaulting
+
     return {
       type: this.type,
       connected: true,
       headline,
       metrics,
       items: items.length ? items : undefined,
+      actions: actions.length ? actions : undefined,
       links: [
         {
           label: 'Open in Cloudflare',
@@ -181,6 +224,72 @@ class CloudflarePlugin implements StackPlugin {
         },
       ],
     };
+  }
+
+  /** Write-actions: redeploy a Pages project, or attach a custom subdomain. */
+  async runAction(
+    config: PluginConfig,
+    actionId: string,
+    input?: Record<string, unknown>,
+  ): Promise<PluginActionResult> {
+    const { apiToken } = this.cfg(config);
+    const accountId = await this.resolveAccount(this.cfg(config));
+
+    if (actionId.startsWith('add-domain:')) {
+      const project = actionId.slice('add-domain:'.length);
+      const domain = String(input?.value || '').trim();
+      if (!domain) return { ok: false, message: 'No domain provided.' };
+      try {
+        const res = await fetch(
+          `${API}/accounts/${accountId}/pages/projects/${project}/domains`,
+          {
+            method: 'POST',
+            headers: cfHeaders(apiToken),
+            body: JSON.stringify({ name: domain }),
+          },
+        );
+        if (!res.ok) {
+          const body = await res.text();
+          return {
+            ok: false,
+            message: `Cloudflare ${res.status}: ${body.slice(0, 140)}`,
+          };
+        }
+        return {
+          ok: true,
+          message: `Added ${domain} to ${project}. Point its DNS (CNAME → ${project}.pages.dev) to finish.`,
+        };
+      } catch (err) {
+        return { ok: false, message: (err as Error).message };
+      }
+    }
+
+    if (actionId.startsWith('redeploy:')) {
+      const project = actionId.slice('redeploy:'.length);
+      try {
+        // Re-run the most recent deployment for the project.
+        const list = await this.get(
+          apiToken,
+          `/accounts/${accountId}/pages/projects/${project}/deployments?per_page=1`,
+        );
+        const dep = list?.result?.[0];
+        if (!dep?.id) {
+          return { ok: false, message: `No deployment to redeploy for ${project}.` };
+        }
+        const res = await fetch(
+          `${API}/accounts/${accountId}/pages/projects/${project}/deployments/${dep.id}/retry`,
+          { method: 'POST', headers: cfHeaders(apiToken) },
+        );
+        if (!res.ok) {
+          return { ok: false, message: `Cloudflare returned ${res.status}` };
+        }
+        return { ok: true, message: `Redeploying ${project}…` };
+      } catch (err) {
+        return { ok: false, message: (err as Error).message };
+      }
+    }
+
+    return { ok: false, message: `Unknown action: ${actionId}` };
   }
 }
 
