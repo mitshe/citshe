@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import {
   FolderKanban,
   ListTodo,
@@ -13,7 +12,6 @@ import {
   Zap,
   Home,
   Blocks,
-  ChevronDown,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,21 +26,15 @@ interface NavItem {
   tourId?: string;
 }
 
-/** Primary, always-visible actions — the simple flow. */
+/** Flat navigation — everything one tap away. */
 const primaryNav: NavItem[] = [
   { title: "Home", href: "/home", icon: Home, tourId: "nav-home" },
   { title: "Repos", href: "/repos", icon: FolderKanban, tourId: "nav-repos" },
   { title: "Tasks", href: "/tasks", icon: ListTodo, tourId: "nav-tasks" },
   { title: "Plugins", href: "/plugins", icon: Blocks, tourId: "nav-plugins" },
-];
-
-/** Power-user sections, tucked under a collapsible "Advanced" group. */
-const advancedNav: NavItem[] = [
-  { title: "Threads", href: "/sessions", icon: MessageSquareCode, tourId: "nav-sessions" },
+  { title: "Terminals", href: "/sessions", icon: MessageSquareCode, tourId: "nav-sessions" },
   { title: "Skills", href: "/skills", icon: Zap, tourId: "nav-skills" },
 ];
-
-const ADVANCED_PATHS = advancedNav.map((i) => i.href);
 
 interface SidebarContentProps {
   onNavigate?: () => void;
@@ -53,9 +45,6 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
-
-  const onAdvancedPath = ADVANCED_PATHS.some((p) => isActive(p));
-  const [advancedOpen, setAdvancedOpen] = useState(onAdvancedPath);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -72,33 +61,6 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
             onNavigate={onNavigate}
           />
         ))}
-      </div>
-
-      <div className="mt-4">
-        <button
-          onClick={() => setAdvancedOpen((v) => !v)}
-          className="flex w-full items-center justify-between px-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-        >
-          <span>Advanced</span>
-          <ChevronDown
-            className={cn(
-              "h-3 w-3 transition-transform",
-              advancedOpen && "rotate-180",
-            )}
-          />
-        </button>
-        {advancedOpen && (
-          <div className="space-y-0.5">
-            {advancedNav.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={isActive(item.href)}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       <RecentSessions onNavigate={onNavigate} />
