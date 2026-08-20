@@ -239,6 +239,7 @@ enum PluginType {
   VERCEL
   NEON
   GOOGLE_ADS
+  VPS
 }
 
 model Plugin {

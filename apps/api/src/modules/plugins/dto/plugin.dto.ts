@@ -4,7 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class ConnectPluginDto {
   @IsString()
-  @ApiProperty({ enum: ['CLOUDFLARE', 'NEON', 'GOOGLE_ADS'] })
+  @ApiProperty({ enum: ['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'] })
   type: PluginType;
 
   @IsObject()

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -243,19 +244,32 @@ function ConnectDialog({
                 {field.required && <span className="text-destructive"> *</span>}
               </Label>
               <div className="relative">
-                <Input
-                  id={field.key}
-                  type={
-                    field.type === "password" && !show[field.key]
-                      ? "password"
-                      : "text"
-                  }
-                  placeholder={field.placeholder}
-                  value={form[field.key] || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, [field.key]: e.target.value })
-                  }
-                />
+                {field.type === "textarea" ? (
+                  <Textarea
+                    id={field.key}
+                    rows={5}
+                    placeholder={field.placeholder}
+                    value={form[field.key] || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, [field.key]: e.target.value })
+                    }
+                    className="font-mono text-xs"
+                  />
+                ) : (
+                  <Input
+                    id={field.key}
+                    type={
+                      field.type === "password" && !show[field.key]
+                        ? "password"
+                        : "text"
+                    }
+                    placeholder={field.placeholder}
+                    value={form[field.key] || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, [field.key]: e.target.value })
+                    }
+                  />
+                )}
                 {field.type === "password" && (
                   <button
                     type="button"

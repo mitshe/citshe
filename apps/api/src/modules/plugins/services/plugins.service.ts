@@ -16,6 +16,7 @@ import '../plugins/cloudflare.plugin';
 import '../plugins/vercel.plugin';
 import '../plugins/neon.plugin';
 import '../plugins/google-ads.plugin';
+import '../plugins/vps.plugin';
 
 interface CachedStatus {
   status: PluginStatus;
@@ -162,7 +163,9 @@ export class PluginsService {
   }
 
   private asType(type: string): PluginType {
-    if (!['CLOUDFLARE', 'NEON', 'GOOGLE_ADS'].includes(type)) {
+    if (
+      !['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'].includes(type)
+    ) {
       throw new BadRequestException(`Unknown plugin type: ${type}`);
     }
     return type as PluginType;

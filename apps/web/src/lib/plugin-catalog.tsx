@@ -1,11 +1,11 @@
-import { Cloud, Database, Megaphone, Triangle } from "lucide-react";
+import { Cloud, Database, Megaphone, Triangle, Server } from "lucide-react";
 import type { PluginType } from "@/lib/api/types";
 
 export interface PluginField {
   key: string;
   label: string;
   placeholder?: string;
-  type?: "text" | "password";
+  type?: "text" | "password" | "textarea";
   required?: boolean;
   helpText?: string;
 }
@@ -123,6 +123,40 @@ export const pluginCatalog: PluginDef[] = [
         key: "loginCustomerId",
         label: "Login Customer ID",
         placeholder: "manager account (optional)",
+      },
+    ],
+  },
+  {
+    type: "VPS",
+    name: "VPS",
+    tagline: "Server health — up, load, disk, RAM",
+    icon: <Server className="h-5 w-5" />,
+    accent: "text-sky-500",
+    docsUrl:
+      "https://www.digitalocean.com/community/tutorials/how-to-set-up-ssh-keys-2",
+    fields: [
+      {
+        key: "host",
+        label: "Host",
+        placeholder: "IP or hostname, e.g. 5.75.x.x",
+        required: true,
+      },
+      { key: "username", label: "User", placeholder: "e.g. root", required: true },
+      { key: "port", label: "Port", placeholder: "22 (optional)" },
+      {
+        key: "privateKey",
+        label: "Private key",
+        placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----\n…",
+        type: "textarea",
+        required: true,
+        helpText:
+          "A read-only SSH key. citshe only runs status commands (uptime, df, free) — never writes.",
+      },
+      {
+        key: "passphrase",
+        label: "Key passphrase",
+        type: "password",
+        placeholder: "if the key is encrypted (optional)",
       },
     ],
   },
