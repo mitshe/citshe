@@ -6,6 +6,10 @@ import type {
   Task,
   QueueOverview,
   RefinedTask,
+  Plugin,
+  PluginStatus,
+  PluginTestResult,
+  ConnectPluginDto,
   CreateTaskDto,
   UpdateTaskDto,
   Integration,
@@ -594,5 +598,32 @@ export const api = {
         body: JSON.stringify({ paused }),
         token,
       }),
+  },
+
+  plugins: {
+    list: (token: string) =>
+      request<{ plugins: Plugin[] }>("/plugins", { token }),
+
+    connect: (data: ConnectPluginDto, token: string) =>
+      request<{ plugin: Plugin }>("/plugins", {
+        method: "POST",
+        body: JSON.stringify(data),
+        token,
+      }),
+
+    test: (data: ConnectPluginDto, token: string) =>
+      request<PluginTestResult>("/plugins/test", {
+        method: "POST",
+        body: JSON.stringify(data),
+        token,
+      }),
+
+    status: (type: string, token: string) =>
+      request<{ status: PluginStatus | null }>(`/plugins/${type}/status`, {
+        token,
+      }),
+
+    delete: (id: string, token: string) =>
+      request<void>(`/plugins/${id}`, { method: "DELETE", token }),
   },
 };

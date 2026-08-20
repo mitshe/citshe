@@ -13,6 +13,7 @@ const pathLabels: Record<string, string> = {
   tasks: "Tasks",
   sessions: "Threads",
   repos: "Repos",
+  plugins: "Plugins",
   skills: "Skills",
   settings: "Settings",
   integrations: "Integrations",

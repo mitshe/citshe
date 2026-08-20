@@ -9,3 +9,4 @@ export * from "./repositories";
 export * from "./sessions";
 export * from "./skills";
 export * from "./orchestration";
+export * from "./plugins";

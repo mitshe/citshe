@@ -97,6 +97,7 @@ model Organization {
   integrations  Integration[]
   repositories  Repository[]
   aiCredentials AICredential[]
+  plugins       Plugin[]
   apiKeys          ApiKey[]
   agentDefinitions  AgentDefinition[]
   environments      Environment[]
@@ -227,6 +228,38 @@ model Integration {
 
   @@unique([organizationId, type])
   @@map("integrations")
+}
+
+// ============================================================================
+// PLUGINS (stack tools: Cloudflare / Neon / Google Ads — per portal)
+// ============================================================================
+
+enum PluginType {
+  CLOUDFLARE
+  NEON
+  GOOGLE_ADS
+}
+
+model Plugin {
+  id             String            @id @default(cuid())
+  organizationId String            @map("organization_id")
+  type           PluginType
+  status         IntegrationStatus @default(DISCONNECTED)
+  label          String?
+
+  // Encrypted config (token + ids for the provider)
+  config   Bytes @map("config_encrypted")
+  configIv Bytes @map("config_iv")
+
+  lastCheckedAt DateTime? @map("last_checked_at")
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type])
+  @@map("plugins")
 }
 
 // ============================================================================

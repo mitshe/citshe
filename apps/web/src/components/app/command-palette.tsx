@@ -34,6 +34,7 @@ const navigationItems = [
   { label: "Threads", path: "/sessions", icon: Terminal },
   { label: "Tasks", path: "/tasks", icon: ListTodo },
   { label: "Repos", path: "/repos", icon: FolderOpen },
+  { label: "Plugins", path: "/plugins", icon: FolderOpen },
   { label: "Settings", path: "/settings", icon: Settings },
   { label: "Integrations", path: "/settings/integrations", icon: Settings },
   { label: "AI Providers", path: "/settings/ai", icon: Settings },

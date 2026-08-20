@@ -12,6 +12,7 @@ import {
   PanelLeftOpen,
   Zap,
   Home,
+  Blocks,
   ChevronDown,
   Loader2,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const primaryNav: NavItem[] = [
   { title: "Home", href: "/home", icon: Home, tourId: "nav-home" },
   { title: "Repos", href: "/repos", icon: FolderKanban, tourId: "nav-repos" },
   { title: "Tasks", href: "/tasks", icon: ListTodo, tourId: "nav-tasks" },
+  { title: "Plugins", href: "/plugins", icon: Blocks, tourId: "nav-plugins" },
 ];
 
 /** Power-user sections, tucked under a collapsible "Advanced" group. */

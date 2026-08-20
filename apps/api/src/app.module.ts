@@ -30,6 +30,7 @@ import { ApplicationModule } from './application/application.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { RepositoriesModule } from './modules/repositories/repositories.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { PluginsModule } from './modules/plugins/plugins.module';
 import { AICredentialsModule } from './modules/ai-credentials/ai-credentials.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AuditApiModule } from './modules/audit/audit.module';
@@ -152,6 +153,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     TasksModule,
     RepositoriesModule,
     IntegrationsModule,
+    PluginsModule,
     AICredentialsModule,
     ApiKeysModule,
     AuditApiModule,

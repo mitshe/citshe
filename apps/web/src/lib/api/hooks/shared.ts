@@ -13,6 +13,12 @@ export const queryKeys = {
     all: ["orchestration"] as const,
     queue: () => [...queryKeys.orchestration.all, "queue"] as const,
   },
+  plugins: {
+    all: ["plugins"] as const,
+    list: () => [...queryKeys.plugins.all, "list"] as const,
+    status: (type: string) =>
+      [...queryKeys.plugins.all, "status", type] as const,
+  },
   integrations: {
     all: ["integrations"] as const,
     list: () => [...queryKeys.integrations.all, "list"] as const,

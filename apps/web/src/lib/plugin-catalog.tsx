@@ -1,0 +1,119 @@
+import { Cloud, Database, Megaphone } from "lucide-react";
+import type { PluginType } from "@/lib/api/types";
+
+export interface PluginField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: "text" | "password";
+  required?: boolean;
+  helpText?: string;
+}
+
+export interface PluginDef {
+  type: PluginType;
+  name: string;
+  tagline: string;
+  icon: React.ReactNode;
+  accent: string; // tailwind text color for the icon
+  docsUrl?: string;
+  fields: PluginField[];
+}
+
+/** The stack tools citshe can plug into — Cloudflare, Neon, Google Ads. */
+export const pluginCatalog: PluginDef[] = [
+  {
+    type: "CLOUDFLARE",
+    name: "Cloudflare",
+    tagline: "Deploys, Pages & R2 — is it live?",
+    icon: <Cloud className="h-5 w-5" />,
+    accent: "text-orange-500",
+    docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
+    fields: [
+      {
+        key: "apiToken",
+        label: "API Token",
+        placeholder: "Cloudflare API token",
+        type: "password",
+        required: true,
+        helpText: "Token with Pages:Read and R2:Read on your account.",
+      },
+      {
+        key: "accountId",
+        label: "Account ID",
+        placeholder: "32-char account id",
+        required: true,
+      },
+      {
+        key: "pagesProject",
+        label: "Pages project",
+        placeholder: "e.g. dronexamine-web (optional)",
+      },
+      {
+        key: "r2Bucket",
+        label: "R2 bucket",
+        placeholder: "e.g. assets (optional)",
+      },
+    ],
+  },
+  {
+    type: "NEON",
+    name: "Neon",
+    tagline: "Postgres — size, branch, activity",
+    icon: <Database className="h-5 w-5" />,
+    accent: "text-emerald-500",
+    docsUrl: "https://console.neon.tech/app/settings/api-keys",
+    fields: [
+      {
+        key: "apiKey",
+        label: "API Key",
+        placeholder: "neon_api_...",
+        type: "password",
+        required: true,
+      },
+      {
+        key: "projectId",
+        label: "Project ID",
+        placeholder: "e.g. cool-forest-12345678",
+        required: true,
+      },
+    ],
+  },
+  {
+    type: "GOOGLE_ADS",
+    name: "Google Ads",
+    tagline: "Campaigns, spend & conversions",
+    icon: <Megaphone className="h-5 w-5" />,
+    accent: "text-blue-500",
+    docsUrl: "https://developers.google.com/google-ads/api/docs/get-started/dev-token",
+    fields: [
+      {
+        key: "developerToken",
+        label: "Developer Token",
+        type: "password",
+        required: true,
+      },
+      {
+        key: "customerId",
+        label: "Customer ID",
+        placeholder: "digits only, e.g. 1234567890",
+        required: true,
+      },
+      {
+        key: "accessToken",
+        label: "OAuth Access Token",
+        type: "password",
+        helpText: "Optional — needed to read live campaign metrics.",
+      },
+      {
+        key: "loginCustomerId",
+        label: "Login Customer ID",
+        placeholder: "manager account (optional)",
+      },
+    ],
+  },
+];
+
+export function getPluginDef(type: PluginType): PluginDef | undefined {
+  return pluginCatalog.find((p) => p.type === type);
+}
