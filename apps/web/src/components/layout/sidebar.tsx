@@ -9,15 +9,15 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  Zap,
   Home,
-  Blocks,
+  Plus,
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OrgSwitcher } from "./org-switcher";
-import { useSessions } from "@/lib/api/hooks";
+import { useSessions, usePlugins } from "@/lib/api/hooks";
+import { getPluginDef } from "@/lib/plugin-catalog";
 
 interface NavItem {
   title: string;
@@ -26,14 +26,12 @@ interface NavItem {
   tourId?: string;
 }
 
-/** Flat navigation — everything one tap away. */
+/** Fixed primary actions — the work you do in every portal. */
 const primaryNav: NavItem[] = [
   { title: "Home", href: "/home", icon: Home, tourId: "nav-home" },
-  { title: "Repos", href: "/repos", icon: FolderKanban, tourId: "nav-repos" },
   { title: "Tasks", href: "/tasks", icon: ListTodo, tourId: "nav-tasks" },
-  { title: "Plugins", href: "/plugins", icon: Blocks, tourId: "nav-plugins" },
+  { title: "Repos", href: "/repos", icon: FolderKanban, tourId: "nav-repos" },
   { title: "Terminals", href: "/sessions", icon: MessageSquareCode, tourId: "nav-sessions" },
-  { title: "Skills", href: "/skills", icon: Zap, tourId: "nav-skills" },
 ];
 
 interface SidebarContentProps {
@@ -63,8 +61,67 @@ export function SidebarContent({ onNavigate }: SidebarContentProps) {
         ))}
       </div>
 
+      <StackNav isActive={isActive} onNavigate={onNavigate} />
+
       <RecentSessions onNavigate={onNavigate} />
     </TooltipProvider>
+  );
+}
+
+/** The connected stack tools — each becomes its own nav item + page. */
+function StackNav({
+  isActive,
+  onNavigate,
+}: {
+  isActive: (href: string) => boolean;
+  onNavigate?: () => void;
+}) {
+  const { data: plugins = [] } = usePlugins();
+
+  return (
+    <div className="mt-4 space-y-0.5">
+      <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+        Stack
+      </p>
+      {plugins.map((p) => {
+        const def = getPluginDef(p.type);
+        if (!def) return null;
+        const href = `/stack/${p.type.toLowerCase()}`;
+        const active = isActive(href);
+        return (
+          <Link
+            key={p.type}
+            href={href}
+            onClick={onNavigate}
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+              active
+                ? "bg-secondary font-medium text-foreground"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}
+          >
+            <span className={cn("shrink-0", def.accent)}>
+              <span className="[&>svg]:h-4 [&>svg]:w-4">{def.icon}</span>
+            </span>
+            {def.name}
+          </Link>
+        );
+      })}
+      <Link
+        href="/stack"
+        onClick={onNavigate}
+        className={cn(
+          "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+          isActive("/stack") &&
+            !plugins.some((p) => isActive(`/stack/${p.type.toLowerCase()}`))
+            ? "bg-secondary font-medium text-foreground"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        )}
+      >
+        <Plus className="h-4 w-4 shrink-0" />
+        Add tool
+      </Link>
+    </div>
   );
 }
 

@@ -8,32 +8,32 @@ const webVersion = pkg.version;
 import {
   Plug,
   Bot,
-  GitBranch,
   Building2,
   Users,
   Key,
   Settings,
+  Zap,
   ChevronRight,
 } from "lucide-react";
 
 const setupLinks = [
   {
-    title: "AI Providers",
-    description: "API keys for Claude, OpenAI, OpenRouter, Gemini",
+    title: "AI",
+    description: "Claude Code engine + a panel key (OpenRouter / Claude API)",
     href: "/settings/ai",
     icon: Bot,
   },
   {
-    title: "Integrations",
-    description: "Connect GitHub, GitLab, Jira, Slack and more",
+    title: "GitHub",
+    description: "Connect GitHub to pull in your repositories",
     href: "/settings/integrations",
     icon: Plug,
   },
   {
-    title: "Repositories",
-    description: "Sync and manage Git repositories",
-    href: "/settings/repositories",
-    icon: GitBranch,
+    title: "Skills",
+    description: "Reusable Claude Code instructions for workers",
+    href: "/skills",
+    icon: Zap,
   },
 ];
 

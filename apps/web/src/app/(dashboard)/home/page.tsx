@@ -31,10 +31,15 @@ import {
   usePluginStatus,
 } from "@/lib/api/hooks";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
-import { PluginCard } from "@/components/plugins/plugin-card";
-import { pluginCatalog } from "@/lib/plugin-catalog";
+import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
-import type { Task, TaskStatus, QueueOverview, HealthState } from "@citshe/types";
+import type {
+  Task,
+  TaskStatus,
+  QueueOverview,
+  HealthState,
+  PluginType,
+} from "@citshe/types";
 
 const ACTIVE_STATUSES: TaskStatus[] = ["PENDING", "QUEUED", "ANALYZING", "IN_PROGRESS", "REVIEW"];
 const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
@@ -139,22 +144,22 @@ export default function HomePage() {
             />
           </div>
 
-          {/* Stack — only what's connected; a single quiet link to add more */}
+          {/* Stack — compact shortcuts; full view lives on each tool's page */}
           {hasPlugin && (
             <section className="space-y-2.5">
-              <SectionHeader label="Stack" href="/plugins" cta="Manage" />
+              <SectionHeader label="Stack" href="/stack" cta="Manage" />
               <div className="grid gap-3 sm:grid-cols-2">
                 {pluginCatalog
                   .filter((def) => connectedTypes.has(def.type))
                   .map((def) => (
-                    <PluginCard key={def.type} type={def.type} />
+                    <StackTile key={def.type} type={def.type} />
                   ))}
               </div>
             </section>
           )}
           {!hasPlugin && (
             <Link
-              href="/plugins"
+              href="/stack"
               className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/10 px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-muted/30"
             >
               <Blocks className="h-5 w-5 text-blue-500" />
@@ -364,6 +369,45 @@ function StatusLine() {
         </span>
       )}
     </p>
+  );
+}
+
+/** Compact stack shortcut — health + top metrics, links to the tool's page. */
+function StackTile({ type }: { type: PluginType }) {
+  const def = getPluginDef(type);
+  const { data: status } = usePluginStatus(type);
+  if (!def) return null;
+
+  const dot: Record<HealthState, string> = {
+    ok: "bg-emerald-500",
+    warn: "bg-amber-500",
+    down: "bg-red-500",
+    idle: "bg-muted-foreground/50",
+  };
+  const state = status?.headline.state ?? "idle";
+
+  return (
+    <Link
+      href={`/stack/${type.toLowerCase()}`}
+      className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 transition-colors hover:bg-muted/40"
+    >
+      <span className={def.accent}>{def.icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{def.name}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {status
+            ? status.metrics
+                .slice(0, 2)
+                .map((m) => `${m.value}`)
+                .join(" · ") || status.headline.label
+            : "…"}
+        </p>
+      </div>
+      <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className={cn("h-1.5 w-1.5 rounded-full", dot[state])} />
+        {status?.headline.label ?? "—"}
+      </span>
+    </Link>
   );
 }
 

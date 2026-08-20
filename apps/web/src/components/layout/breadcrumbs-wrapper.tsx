@@ -11,9 +11,9 @@ interface BreadcrumbItem {
 
 const pathLabels: Record<string, string> = {
   tasks: "Tasks",
-  sessions: "Threads",
+  sessions: "Terminals",
   repos: "Repos",
-  plugins: "Plugins",
+  stack: "Stack",
   skills: "Skills",
   settings: "Settings",
   integrations: "Integrations",
