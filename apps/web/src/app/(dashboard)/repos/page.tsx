@@ -162,6 +162,11 @@ function RepoCard({ repo }: { repo: Repository }) {
           <div className="flex items-center gap-2">
             <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="truncate font-medium">{repo.name}</span>
+            {repo.fullPath.includes("/") && (
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {repo.fullPath.split("/")[0]}
+              </span>
+            )}
           </div>
           <a
             href={repo.webUrl}
@@ -437,7 +442,14 @@ function ConnectRepoDialog({
                 >
                   <Github className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{r.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate font-medium">{r.name}</p>
+                      {r.fullPath.includes("/") && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {r.fullPath.split("/")[0]}
+                        </span>
+                      )}
+                    </div>
                     <p className="truncate text-xs text-muted-foreground">
                       {r.fullPath}
                     </p>
