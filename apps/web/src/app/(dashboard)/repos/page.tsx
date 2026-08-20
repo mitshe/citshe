@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -325,10 +325,12 @@ function ConnectRepoDialog({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const remoteMutate = remote.mutateAsync;
+
+  const load = useCallback(async () => {
     setError(null);
     try {
-      await remote.mutateAsync();
+      await remoteMutate();
       setLoaded(true);
     } catch (err) {
       // Surface the reason in the dialog (not just a toast that vanishes) —
@@ -336,7 +338,14 @@ function ConnectRepoDialog({
       setError(err instanceof Error ? err.message : "Failed to load repos");
       setLoaded(true);
     }
-  };
+  }, [remoteMutate]);
+
+  // Fetch the repo list when the dialog opens. A controlled Radix dialog only
+  // fires onOpenChange on internal interactions, NOT when `open` flips from a
+  // parent prop — so triggering the load there never ran. Do it on `open`.
+  useEffect(() => {
+    if (open && !loaded) void load();
+  }, [open, loaded, load]);
 
   const list = (remote.data ?? []).filter(
     (r) =>
@@ -386,7 +395,6 @@ function ConnectRepoDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (o && !loaded) void load();
         if (!o) reset();
         onOpenChange(o);
       }}
