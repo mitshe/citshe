@@ -326,6 +326,7 @@ model Repository {
 enum AIProvider {
   CLAUDE
   CLAUDE_CODE_LOCAL
+  OPENROUTER
 }
 
 model AICredential {

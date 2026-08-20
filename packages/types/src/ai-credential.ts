@@ -1,13 +1,8 @@
 // AI Credential types
 
-export type AIProvider =
-  | "CLAUDE"
-  | "OPENAI"
-  | "OPENROUTER"
-  | "GEMINI"
-  | "GROQ"
-  | "CLAUDE_CODE_LOCAL"
-  | "OPENCLAW";
+// The engine is Claude Code (subscription, in-container). Panel-side small tasks
+// use an API key: Claude API or OpenRouter.
+export type AIProvider = "CLAUDE" | "CLAUDE_CODE_LOCAL" | "OPENROUTER";
 
 export interface AICredential {
   id: string;

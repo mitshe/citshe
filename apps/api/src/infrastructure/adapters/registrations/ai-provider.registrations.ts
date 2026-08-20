@@ -6,6 +6,7 @@
 import { aiProviderRegistry, AdapterConfig } from '../adapter-registry';
 import { createClaudeAdapter } from '../ai-provider/claude.adapter';
 import { createClaudeCodeLocalAdapter } from '../ai-provider/claude-code-local.adapter';
+import { createOpenRouterAdapter } from '../ai-provider/openrouter.adapter';
 
 // Register Claude adapter
 aiProviderRegistry.register('CLAUDE', (config: AdapterConfig) =>
@@ -18,4 +19,12 @@ aiProviderRegistry.register('CLAUDE', (config: AdapterConfig) =>
 // Register Claude Code Local adapter
 aiProviderRegistry.register('CLAUDE_CODE_LOCAL', () =>
   createClaudeCodeLocalAdapter(),
+);
+
+// Register OpenRouter adapter (panel small tasks — one key, 100+ models)
+aiProviderRegistry.register('OPENROUTER', (config: AdapterConfig) =>
+  createOpenRouterAdapter({
+    apiKey: config.apiKey || '',
+    defaultModel: config.defaultModel,
+  }),
 );

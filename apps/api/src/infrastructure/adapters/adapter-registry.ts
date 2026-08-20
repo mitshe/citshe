@@ -81,7 +81,11 @@ export const GIT_PROVIDER_TYPES = ['GITHUB'] as const;
 export type GitProviderType = (typeof GIT_PROVIDER_TYPES)[number];
 
 // AI provider types
-export const AI_PROVIDER_TYPES = ['CLAUDE', 'CLAUDE_CODE_LOCAL'] as const;
+export const AI_PROVIDER_TYPES = [
+  'CLAUDE',
+  'CLAUDE_CODE_LOCAL',
+  'OPENROUTER',
+] as const;
 export type AIProviderType = (typeof AI_PROVIDER_TYPES)[number];
 
 // Type guards
