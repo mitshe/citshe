@@ -194,7 +194,10 @@ export const api = {
 
   integrations: {
     list: (token: string) =>
-      request<{ integrations: Integration[] }>("/integrations", { token }),
+      request<{
+        integrations: Integration[];
+        githubApp?: { available: boolean };
+      }>("/integrations", { token }),
 
     get: (id: string, token: string) =>
       request<{ integration: Integration }>(`/integrations/${id}`, { token }),

@@ -71,6 +71,32 @@ export function PluginCard({ type }: { type: PluginType }) {
         </div>
       )}
 
+      {status?.items && status.items.length > 0 && (
+        <div className="mt-3 space-y-1 border-t border-border/60 pt-2.5">
+          {status.items.map((it, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between gap-2 text-xs"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    it.state ? dotColor[it.state] : "bg-muted-foreground/40",
+                  )}
+                />
+                <span className="truncate text-muted-foreground">
+                  {it.label}
+                </span>
+              </span>
+              <span className="shrink-0 text-muted-foreground/70">
+                {it.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {status?.links && status.links.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-3 border-t border-border/60 pt-2.5">
           {status.links.map((l, i) => (

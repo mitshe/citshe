@@ -36,23 +36,13 @@ export const pluginCatalog: PluginDef[] = [
         placeholder: "Cloudflare API token",
         type: "password",
         required: true,
-        helpText: "Token with Pages:Read and R2:Read on your account.",
+        helpText:
+          "Token with Pages, R2 and Workers read access. citshe discovers everything the token can see — no need to name a project or bucket.",
       },
       {
         key: "accountId",
         label: "Account ID",
-        placeholder: "32-char account id",
-        required: true,
-      },
-      {
-        key: "pagesProject",
-        label: "Pages project",
-        placeholder: "e.g. dronexamine-web (optional)",
-      },
-      {
-        key: "r2Bucket",
-        label: "R2 bucket",
-        placeholder: "e.g. assets (optional)",
+        placeholder: "auto-detected from token (optional)",
       },
     ],
   },

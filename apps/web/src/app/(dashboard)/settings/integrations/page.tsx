@@ -36,6 +36,7 @@ import {
   useTestIntegration,
   useTestIntegrationBeforeConnect,
   useGithubAppStart,
+  useGithubAppAvailable,
 } from "@/lib/api/hooks";
 import type { IntegrationType } from "@/lib/api/types";
 import { toast } from "sonner";
@@ -92,6 +93,7 @@ export default function IntegrationsPage() {
   const testIntegration = useTestIntegration();
   const testBeforeConnect = useTestIntegrationBeforeConnect();
   const githubAppStart = useGithubAppStart();
+  const { data: ssoAvailable } = useGithubAppAvailable();
 
   const startGithubSso = async () => {
     try {
@@ -282,7 +284,7 @@ export default function IntegrationsPage() {
           </DialogHeader>
 
           <DialogBody className="space-y-4">
-            {configureDialog?.id === "GITHUB" && (
+            {configureDialog?.id === "GITHUB" && ssoAvailable && (
               <>
                 <Button
                   className="w-full"

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -35,7 +36,12 @@ export class IntegrationsController {
   @ApiOperation({ summary: 'List connected integrations' })
   async list(@OrganizationId() organizationId: string) {
     const integrations = await this.integrations.findAll(organizationId);
-    return { integrations };
+    // Tell the UI whether GitHub App SSO is available so it can hide the button
+    // when the App isn't configured (PAT-only mode).
+    return {
+      integrations,
+      githubApp: { available: this.githubApp.isConfigured() },
+    };
   }
 
   @Get(':id')
@@ -89,6 +95,11 @@ export class IntegrationsController {
   @Get('github/app/start')
   @ApiOperation({ summary: 'Begin GitHub App install (SSO). Returns install URL.' })
   startGithubApp(@OrganizationId() organizationId: string) {
+    if (!this.githubApp.isConfigured()) {
+      throw new BadRequestException(
+        'GitHub App SSO is not configured on this server. Use a token instead.',
+      );
+    }
     const url = this.githubApp.buildInstallUrl(organizationId);
     return { url };
   }

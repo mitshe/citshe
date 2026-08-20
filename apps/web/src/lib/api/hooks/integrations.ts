@@ -21,6 +21,20 @@ export function useIntegrations() {
   });
 }
 
+/** Whether GitHub App SSO is configured on the server (else PAT-only). */
+export function useGithubAppAvailable() {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: [...queryKeys.integrations.all, "github-app-available"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await api.integrations.list(token);
+      return res.githubApp?.available ?? false;
+    },
+  });
+}
+
 export function useCreateIntegration() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();
