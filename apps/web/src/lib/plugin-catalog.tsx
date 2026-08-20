@@ -66,11 +66,6 @@ export const pluginCatalog: PluginDef[] = [
         helpText:
           "Token with read access. citshe lists the projects the token can see and shows the freshest deployment.",
       },
-      {
-        key: "teamId",
-        label: "Team ID",
-        placeholder: "for team-scoped tokens (optional)",
-      },
     ],
   },
   {

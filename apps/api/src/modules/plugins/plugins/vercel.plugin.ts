@@ -25,7 +25,6 @@ const API = 'https://api.vercel.com';
 
 interface VercelConfig {
   apiToken: string;
-  teamId?: string; // optional — for team-scoped tokens; personal if absent
 }
 
 function timeAgo(ms: number): string {
@@ -67,16 +66,8 @@ class VercelPlugin implements StackPlugin {
     return config as unknown as VercelConfig;
   }
 
-  /** Adds ?teamId=... when the token is team-scoped. */
-  private q(config: VercelConfig, path: string): string {
-    if (!config.teamId) return path;
-    return path.includes('?')
-      ? `${path}&teamId=${config.teamId}`
-      : `${path}?teamId=${config.teamId}`;
-  }
-
   private async get(config: VercelConfig, path: string) {
-    const res = await fetch(`${API}${this.q(config, path)}`, {
+    const res = await fetch(`${API}${path}`, {
       headers: { Authorization: `Bearer ${config.apiToken}` },
     });
     if (!res.ok) throw new Error(`Vercel returned ${res.status}`);
@@ -184,7 +175,7 @@ class VercelPlugin implements StackPlugin {
         return { ok: false, message: 'Nothing to redeploy.' };
       }
       try {
-        const res = await fetch(`${API}${this.q(c, '/v13/deployments')}`, {
+        const res = await fetch(`${API}/v13/deployments`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${c.apiToken}`,
