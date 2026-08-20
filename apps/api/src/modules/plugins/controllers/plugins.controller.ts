@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -74,6 +75,16 @@ export class PluginsController {
       type.toUpperCase() as PluginType,
     );
     return { status };
+  }
+
+  @Get('previews')
+  @ApiOperation({ summary: 'Recent preview deployments (optionally for a repo)' })
+  async previews(
+    @OrganizationId() organizationId: string,
+    @Query('repo') repo?: string,
+  ) {
+    const previews = await this.plugins.listPreviews(organizationId, repo);
+    return { previews };
   }
 
   @Post(':type/action')

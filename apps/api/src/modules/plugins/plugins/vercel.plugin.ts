@@ -7,9 +7,19 @@ import {
   PluginItem,
   PluginAction,
   PluginActionResult,
+  PreviewDeployment,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
+
+/** Fuzzy match a repo name to a Vercel project name. */
+function nameMatches(project: string, repo?: string): boolean {
+  if (!repo) return true;
+  const norm = (s: string) => s.toLowerCase().replace(/[-_.]/g, '');
+  const p = norm(project);
+  const r = norm(repo.split('/').pop() || repo);
+  return p.includes(r) || r.includes(p);
+}
 
 const API = 'https://api.vercel.com';
 
@@ -196,6 +206,40 @@ class VercelPlugin implements StackPlugin {
       }
     }
     return { ok: false, message: `Unknown action: ${actionId}` };
+  }
+
+  /** Recent PREVIEW deployments (target !== production) for a repo's project. */
+  async listPreviews(
+    config: PluginConfig,
+    repoName?: string,
+  ): Promise<PreviewDeployment[]> {
+    const c = this.cfg(config);
+    try {
+      const json = await this.get(c, '/v6/deployments?limit=30');
+      const deployments: Array<Record<string, unknown>> =
+        json?.deployments ?? [];
+      return deployments
+        .filter((d) => (d.target ?? 'preview') !== 'production')
+        .filter((d) => nameMatches((d.name as string) || '', repoName))
+        .slice(0, 8)
+        .map((d) => {
+          const meta = (d.meta ?? {}) as Record<string, string>;
+          const state = deployHealth(d.readyState as string);
+          return {
+            url: `https://${d.url as string}`,
+            branch: meta.githubCommitRef || meta.gitBranch,
+            commit: (meta.githubCommitSha || '').slice(0, 7) || undefined,
+            when: d.createdAt
+              ? new Date(d.createdAt as number).toISOString()
+              : undefined,
+            state: state.state,
+            project: d.name as string,
+            provider: 'vercel' as const,
+          };
+        });
+    } catch {
+      return [];
+    }
   }
 }
 

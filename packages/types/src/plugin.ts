@@ -78,3 +78,14 @@ export interface PluginActionResult {
   ok: boolean;
   message: string;
 }
+
+/** A preview/branch deployment surfaced from a deploy plugin. */
+export interface PreviewDeployment {
+  url: string;
+  branch?: string;
+  commit?: string;
+  when?: string;
+  state: HealthState;
+  project?: string;
+  provider: "cloudflare" | "vercel";
+}

@@ -78,6 +78,22 @@ export function useDeletePlugin() {
   });
 }
 
+/** Recent preview deployments (optionally for a repo). Test on a real deploy. */
+export function usePreviews(repo?: string, enabled = true) {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: queryKeys.plugins.previews(repo),
+    queryFn: async () => {
+      const token = await getToken();
+      const { previews } = await api.plugins.previews(repo, token);
+      return previews;
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 /** Run a plugin write-action (redeploy, add subdomain…). Refreshes status. */
 export function useRunPluginAction(type: string) {
   const getToken = useAuthToken();

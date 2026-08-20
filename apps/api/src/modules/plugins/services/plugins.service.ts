@@ -162,6 +162,41 @@ export class PluginsService {
     }
   }
 
+  /**
+   * Aggregate recent preview deployments across all connected deploy plugins
+   * (Cloudflare + Vercel), optionally filtered to a repo. So a repo card can
+   * show clickable preview URLs — test on a real deploy, not locally.
+   */
+  async listPreviews(organizationId: string, repoName?: string) {
+    const plugins = await this.prisma.plugin.findMany({
+      where: {
+        organizationId,
+        status: IntegrationStatus.CONNECTED,
+        type: { in: [PluginType.CLOUDFLARE, PluginType.VERCEL] },
+      },
+    });
+
+    const all = await Promise.all(
+      plugins.map(async (plugin) => {
+        const impl = pluginRegistry.get(plugin.type);
+        if (!impl.listPreviews) return [];
+        try {
+          return await impl.listPreviews(this.decrypt(plugin), repoName);
+        } catch (err) {
+          this.logger.debug(
+            `Previews from ${plugin.type} failed: ${(err as Error).message}`,
+          );
+          return [];
+        }
+      }),
+    );
+
+    return all
+      .flat()
+      .sort((a, b) => (b.when ?? '').localeCompare(a.when ?? ''))
+      .slice(0, 10);
+  }
+
   /** Run a plugin write-action (redeploy, add subdomain, …). */
   async runAction(
     organizationId: string,

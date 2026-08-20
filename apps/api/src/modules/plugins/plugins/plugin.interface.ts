@@ -51,6 +51,17 @@ export interface PluginActionResult {
   message: string;
 }
 
+/** A preview/branch deployment surfaced from a deploy plugin. */
+export interface PreviewDeployment {
+  url: string;
+  branch?: string;
+  commit?: string;
+  when?: string; // ISO
+  state: HealthState;
+  project?: string;
+  provider: 'cloudflare' | 'vercel';
+}
+
 /**
  * A stack tool (Cloudflare / Vercel / Neon / Google Ads / VPS). Reports a
  * normalized status so citshe answers "is it live, did the migration run, is
@@ -69,4 +80,13 @@ export interface StackPlugin {
     actionId: string,
     input?: Record<string, unknown>,
   ): Promise<PluginActionResult>;
+  /**
+   * List recent preview / branch deployments (non-production), optionally
+   * filtered to a repo. Lets citshe show a clickable preview URL per repo so
+   * you test on a real deploy instead of running locally. Optional.
+   */
+  listPreviews?(
+    config: PluginConfig,
+    repoName?: string,
+  ): Promise<PreviewDeployment[]>;
 }

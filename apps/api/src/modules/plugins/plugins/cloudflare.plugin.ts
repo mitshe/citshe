@@ -7,9 +7,19 @@ import {
   PluginItem,
   PluginAction,
   PluginActionResult,
+  PreviewDeployment,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
+
+/** Fuzzy match a repo name to a project name (ignore separators/case). */
+function nameMatches(project: string, repo?: string): boolean {
+  if (!repo) return true;
+  const norm = (s: string) => s.toLowerCase().replace(/[-_.]/g, '');
+  const p = norm(project);
+  const r = norm(repo.split('/').pop() || repo);
+  return p.includes(r) || r.includes(p);
+}
 
 const API = 'https://api.cloudflare.com/client/v4';
 
@@ -290,6 +300,61 @@ class CloudflarePlugin implements StackPlugin {
     }
 
     return { ok: false, message: `Unknown action: ${actionId}` };
+  }
+
+  /** Recent PREVIEW deployments (branch builds) for a repo's Pages project. */
+  async listPreviews(
+    config: PluginConfig,
+    repoName?: string,
+  ): Promise<PreviewDeployment[]> {
+    const { apiToken } = this.cfg(config);
+    const accountId = await this.resolveAccount(this.cfg(config));
+
+    // Find the matching Pages project(s) by name.
+    let projects: string[] = [];
+    try {
+      const json = await this.get(
+        apiToken,
+        `/accounts/${accountId}/pages/projects`,
+      );
+      projects = (json?.result ?? [])
+        .map((p: Record<string, unknown>) => p.name as string)
+        .filter((n: string) => nameMatches(n, repoName));
+    } catch {
+      return [];
+    }
+
+    const previews: PreviewDeployment[] = [];
+    for (const project of projects.slice(0, 3)) {
+      try {
+        const json = await this.get(
+          apiToken,
+          `/accounts/${accountId}/pages/projects/${project}/deployments?per_page=20`,
+        );
+        for (const dep of json?.result ?? []) {
+          if (dep.environment !== 'preview') continue;
+          const stage = dep.latest_stage?.status;
+          const state: HealthState =
+            stage === 'success'
+              ? 'ok'
+              : stage === 'building' || stage === 'queued'
+                ? 'warn'
+                : 'down';
+          previews.push({
+            url: dep.url,
+            branch: dep.deployment_trigger?.metadata?.branch,
+            commit: dep.deployment_trigger?.metadata?.commit_hash?.slice(0, 7),
+            when: dep.created_on,
+            state,
+            project,
+            provider: 'cloudflare',
+          });
+        }
+      } catch {
+        // skip project
+      }
+    }
+    return previews.slice(0, 8);
   }
 }
 

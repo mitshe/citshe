@@ -23,6 +23,7 @@ import {
   Check,
   RefreshCw,
   Github,
+  Rocket,
 } from "lucide-react";
 import {
   useRepositories,
@@ -31,6 +32,7 @@ import {
   useAnalyzeRepo,
   useIntegrations,
   useGithubAppStart,
+  usePreviews,
 } from "@/lib/api/hooks";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import { cn } from "@/lib/utils";
@@ -245,6 +247,49 @@ function RepoCard({ repo }: { repo: Repository }) {
           </button>
         )}
       </div>
+
+      <RepoPreviews repoName={repo.name} />
+    </div>
+  );
+}
+
+/** Clickable preview deployments for this repo — test on a real deploy. */
+function RepoPreviews({ repoName }: { repoName: string }) {
+  const { data: previews = [] } = usePreviews(repoName);
+  if (previews.length === 0) return null;
+
+  const dot: Record<string, string> = {
+    ok: "bg-emerald-500",
+    warn: "bg-amber-500",
+    down: "bg-red-500",
+    idle: "bg-muted-foreground/50",
+  };
+
+  return (
+    <div className="mt-3 space-y-1.5 border-t border-border/60 pt-2.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+        <Rocket className="h-3 w-3" />
+        Previews
+      </p>
+      {previews.slice(0, 4).map((p, i) => (
+        <a
+          key={i}
+          href={p.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 text-xs hover:underline"
+        >
+          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dot[p.state])} />
+          <span className="min-w-0 flex-1 truncate text-foreground">
+            {p.branch || p.url.replace(/^https?:\/\//, "")}
+          </span>
+          {p.commit && (
+            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+              {p.commit}
+            </span>
+          )}
+        </a>
+      ))}
     </div>
   );
 }
