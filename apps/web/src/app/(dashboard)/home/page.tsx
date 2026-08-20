@@ -82,9 +82,10 @@ export default function HomePage() {
         ? "Good afternoon"
         : "Good evening";
 
-  // A portal is "set up" once AI + a repo are connected. Before that we show a
-  // calm, guided checklist instead of a wall of scattered "connect X" boxes.
-  const isSetUp = hasCredentials && hasRepo;
+  // A portal is "set up" once it has a repo — the engine is Claude Code
+  // (subscription), and the panel AI key + stack tools are optional. Before
+  // that, show a calm guided checklist instead of scattered "connect X" boxes.
+  const isSetUp = hasRepo;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 space-y-8">
@@ -244,14 +245,6 @@ function SetupChecklist({
 }) {
   const steps = [
     {
-      done: hasCredentials,
-      icon: <KeyRound className="h-5 w-5" />,
-      title: "Connect AI",
-      desc: "Add an API key so AI can run tasks and power terminals.",
-      href: "/settings/ai",
-      cta: "Add key",
-    },
-    {
       done: hasRepo,
       icon: <FolderGit2 className="h-5 w-5" />,
       title: "Connect a repo",
@@ -263,9 +256,17 @@ function SetupChecklist({
       done: hasPlugin,
       icon: <Blocks className="h-5 w-5" />,
       title: "Plug in your stack",
-      desc: "Cloudflare, Neon, Google Ads — see deploys & health. Optional.",
-      href: "/plugins",
-      cta: "Add plugin",
+      desc: "Cloudflare, Neon, Vercel — see deploys & health. Optional.",
+      href: "/stack",
+      cta: "Add tool",
+    },
+    {
+      done: hasCredentials,
+      icon: <KeyRound className="h-5 w-5" />,
+      title: "Panel AI",
+      desc: "Connect OpenRouter or Claude API for in-panel helpers. Optional.",
+      href: "/settings/ai",
+      cta: "Connect",
     },
   ];
   const doneCount = steps.filter((s) => s.done).length;

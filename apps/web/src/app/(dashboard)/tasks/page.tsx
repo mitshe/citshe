@@ -56,7 +56,6 @@ import {
   useDeleteTask,
   useProcessTask,
   useRefineTask,
-  useAICredentials,
 } from "@/lib/api/hooks";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import { getTaskStatus } from "@/lib/status-config";
@@ -286,8 +285,6 @@ function TaskRow({
   onDelete: () => void;
 }) {
   const processTask = useProcessTask();
-  const { data: credentials = [] } = useAICredentials();
-  const hasAI = credentials.length > 0;
 
   const status = getTaskStatus(task.status);
   const liveWorker =
@@ -356,8 +353,8 @@ function TaskRow({
             size="sm"
             variant="ghost"
             className="h-7 px-2"
-            disabled={!hasAI || processTask.isPending}
-            title={hasAI ? "Delegate to a worker" : "Add an AI key first"}
+            disabled={processTask.isPending}
+            title="Delegate to a worker (Claude Code)"
             onClick={run}
           >
             {processTask.isPending ? (
