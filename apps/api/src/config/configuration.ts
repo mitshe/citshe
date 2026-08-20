@@ -94,12 +94,12 @@ export const configValidationSchema = Joi.object({
     .uri({ scheme: ['http', 'https'] })
     .default('http://localhost:3000'),
 
-  // GitHub App (SSO connect). Optional — absent means PAT-only.
-  GITHUB_APP_SLUG: Joi.string().optional(),
-  GITHUB_APP_ID: Joi.string().optional(),
-  GITHUB_APP_CLIENT_ID: Joi.string().optional(),
-  GITHUB_APP_CLIENT_SECRET: Joi.string().optional(),
-  GITHUB_APP_PRIVATE_KEY: Joi.string().optional(),
+  // GitHub App (SSO connect). Optional — blank/absent means PAT-only.
+  GITHUB_APP_SLUG: Joi.string().allow('').optional(),
+  GITHUB_APP_ID: Joi.string().allow('').optional(),
+  GITHUB_APP_CLIENT_ID: Joi.string().allow('').optional(),
+  GITHUB_APP_CLIENT_SECRET: Joi.string().allow('').optional(),
+  GITHUB_APP_PRIVATE_KEY: Joi.string().allow('').optional(),
 
   SENTRY_ENABLED: Joi.string().valid('true', 'false').default('false'),
   SENTRY_DSN: Joi.string().uri().optional(),
