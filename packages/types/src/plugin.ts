@@ -1,6 +1,6 @@
-// Plugin types — stack tools (Cloudflare / Neon / Google Ads) per portal.
+// Plugin types — stack tools (Cloudflare / Vercel / Neon / Google Ads) per portal.
 
-export type PluginType = "CLOUDFLARE" | "NEON" | "GOOGLE_ADS";
+export type PluginType = "CLOUDFLARE" | "VERCEL" | "NEON" | "GOOGLE_ADS";
 
 export type PluginConnStatus = "CONNECTED" | "ERROR" | "DISCONNECTED";
 

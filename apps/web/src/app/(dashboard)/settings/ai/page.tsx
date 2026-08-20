@@ -54,7 +54,6 @@ import {
   GoogleIcon,
   GroqIcon,
 } from "@/components/icons/brand-icons";
-import { OpenClawIcon } from "@/components/icons/openclaw-icon";
 import {
   useAICredentials,
   useCreateAICredential,
@@ -106,11 +105,13 @@ const providerConfig: Record<
     icon: <AnthropicIcon />,
     color: "bg-[#D97757]",
   },
+  // Kept in the type map for compatibility; not offered in the picker below
+  // (citshe = Claude Code only). Full provider cleanup is a separate task.
   OPENCLAW: {
-    name: "OpenClaw",
-    description: "Open-source AI agent platform with 50+ providers",
-    icon: <OpenClawIcon />,
-    color: "bg-[#10B981]",
+    name: "Claude Code",
+    description: "Claude Code CLI",
+    icon: <AnthropicIcon />,
+    color: "bg-[#D97757]",
   },
 };
 
@@ -131,9 +132,7 @@ export default function AICredentialsPage() {
     isDefault: false,
   });
 
-  const isLocalProvider =
-    addForm.provider === "CLAUDE_CODE_LOCAL" ||
-    addForm.provider === "OPENCLAW";
+  const isLocalProvider = addForm.provider === "CLAUDE_CODE_LOCAL";
 
   const handleTestConnection = async (id: string) => {
     try {
@@ -207,9 +206,12 @@ export default function AICredentialsPage() {
     }
   };
 
-  const availableProviders = (
-    Object.keys(providerConfig) as AIProvider[]
-  ).filter((provider) => !credentials.some((c) => c.provider === provider));
+  // citshe = Claude Code only. We keep the full provider map for type/back-compat,
+  // but the picker offers exactly Claude Code — nothing else.
+  const OFFERED_PROVIDERS: AIProvider[] = ["CLAUDE_CODE_LOCAL"];
+  const availableProviders = OFFERED_PROVIDERS.filter(
+    (provider) => !credentials.some((c) => c.provider === provider),
+  );
 
   return (
     <div className="space-y-6 p-4 sm:p-6">

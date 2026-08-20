@@ -236,6 +236,7 @@ model Integration {
 
 enum PluginType {
   CLOUDFLARE
+  VERCEL
   NEON
   GOOGLE_ADS
 }

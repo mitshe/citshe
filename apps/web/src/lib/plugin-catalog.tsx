@@ -1,4 +1,4 @@
-import { Cloud, Database, Megaphone } from "lucide-react";
+import { Cloud, Database, Megaphone, Triangle } from "lucide-react";
 import type { PluginType } from "@/lib/api/types";
 
 export interface PluginField {
@@ -43,6 +43,30 @@ export const pluginCatalog: PluginDef[] = [
         key: "accountId",
         label: "Account ID",
         placeholder: "auto-detected from token (optional)",
+      },
+    ],
+  },
+  {
+    type: "VERCEL",
+    name: "Vercel",
+    tagline: "Deploys & projects — is it live?",
+    icon: <Triangle className="h-5 w-5" />,
+    accent: "text-foreground",
+    docsUrl: "https://vercel.com/account/tokens",
+    fields: [
+      {
+        key: "apiToken",
+        label: "API Token",
+        placeholder: "Vercel API token",
+        type: "password",
+        required: true,
+        helpText:
+          "Token with read access. citshe lists the projects the token can see and shows the freshest deployment.",
+      },
+      {
+        key: "teamId",
+        label: "Team ID",
+        placeholder: "for team-scoped tokens (optional)",
       },
     ],
   },

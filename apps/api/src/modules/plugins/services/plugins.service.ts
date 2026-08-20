@@ -13,6 +13,7 @@ import { PluginConfig, PluginStatus } from '../plugins/plugin.interface';
 
 // Register the concrete plugins (side-effect imports).
 import '../plugins/cloudflare.plugin';
+import '../plugins/vercel.plugin';
 import '../plugins/neon.plugin';
 import '../plugins/google-ads.plugin';
 

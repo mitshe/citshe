@@ -113,7 +113,7 @@ export function ThreadFormFields({
           </Select>
         )}
         <p className="text-xs text-muted-foreground">
-          Threads run CLI agents (Claude Code or OpenClaw) in isolated containers
+          Threads run Claude Code in isolated containers
         </p>
       </div>
 

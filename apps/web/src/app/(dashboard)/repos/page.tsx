@@ -273,13 +273,18 @@ function ConnectRepoDialog({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
+    setError(null);
     try {
       await remote.mutateAsync();
       setLoaded(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load repos");
+      // Surface the reason in the dialog (not just a toast that vanishes) —
+      // most often "no GitHub connected yet".
+      setError(err instanceof Error ? err.message : "Failed to load repos");
+      setLoaded(true);
     }
   };
 
@@ -324,6 +329,7 @@ function ConnectRepoDialog({
     setSearch("");
     setSelected(new Set());
     setLoaded(false);
+    setError(null);
   };
 
   return (
@@ -349,9 +355,27 @@ function ConnectRepoDialog({
             <div className="flex justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : error ? (
+            <div className="space-y-3 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Couldn&apos;t load your repositories. Connect GitHub first.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/settings/integrations">Connect GitHub</Link>
+              </Button>
+            </div>
+          ) : loaded && (remote.data ?? []).length === 0 ? (
+            <div className="space-y-3 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No repositories found. Connect GitHub to see your repos here.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/settings/integrations">Connect GitHub</Link>
+              </Button>
+            </div>
           ) : list.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {loaded ? "No repositories to connect." : "Loading…"}
+              {loaded ? "No repositories match your search." : "Loading…"}
             </p>
           ) : (
             <div className="max-h-72 space-y-1 overflow-y-auto">

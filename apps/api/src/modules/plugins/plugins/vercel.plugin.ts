@@ -1,0 +1,153 @@
+import { PluginType } from '@prisma/client';
+import {
+  PluginConfig,
+  PluginStatus,
+  StackPlugin,
+  PluginMetric,
+  PluginItem,
+  HealthState,
+} from './plugin.interface';
+import { pluginRegistry } from './plugin.registry';
+
+const API = 'https://api.vercel.com';
+
+interface VercelConfig {
+  apiToken: string;
+  teamId?: string; // optional — for team-scoped tokens; personal if absent
+}
+
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/** Map Vercel deployment readyState → our normalized health. */
+function deployHealth(state?: string): { state: HealthState; label: string } {
+  switch (state) {
+    case 'READY':
+      return { state: 'ok', label: 'Live' };
+    case 'BUILDING':
+    case 'QUEUED':
+    case 'INITIALIZING':
+      return { state: 'warn', label: 'Deploying' };
+    case 'ERROR':
+    case 'CANCELED':
+      return { state: 'down', label: 'Deploy failed' };
+    default:
+      return { state: 'idle', label: 'Connected' };
+  }
+}
+
+/**
+ * Vercel stack plugin. Connect with just an API token — citshe discovers the
+ * projects the token can see and surfaces the freshest deployment (the "is it
+ * live"). Mirrors the Cloudflare plugin: one token, list everything you have.
+ */
+class VercelPlugin implements StackPlugin {
+  type = PluginType.VERCEL;
+
+  private cfg(config: PluginConfig): VercelConfig {
+    return config as unknown as VercelConfig;
+  }
+
+  /** Adds ?teamId=... when the token is team-scoped. */
+  private q(config: VercelConfig, path: string): string {
+    if (!config.teamId) return path;
+    return path.includes('?')
+      ? `${path}&teamId=${config.teamId}`
+      : `${path}?teamId=${config.teamId}`;
+  }
+
+  private async get(config: VercelConfig, path: string) {
+    const res = await fetch(`${API}${this.q(config, path)}`, {
+      headers: { Authorization: `Bearer ${config.apiToken}` },
+    });
+    if (!res.ok) throw new Error(`Vercel returned ${res.status}`);
+    return res.json();
+  }
+
+  async testConnection(config: PluginConfig) {
+    const c = this.cfg(config);
+    if (!c.apiToken) return { ok: false, error: 'An API token is required.' };
+    try {
+      // Token is valid if it can read the current user.
+      const res = await fetch(`${API}/v2/user`, {
+        headers: { Authorization: `Bearer ${c.apiToken}` },
+      });
+      if (!res.ok) return { ok: false, error: `Token rejected (${res.status}).` };
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  async getStatus(config: PluginConfig): Promise<PluginStatus> {
+    const c = this.cfg(config);
+    const metrics: PluginMetric[] = [];
+    const items: PluginItem[] = [];
+    let headline: { label: string; state: HealthState } = {
+      label: 'Connected',
+      state: 'ok',
+    };
+
+    // --- Projects + freshest deployment per project (the "is it live") ---
+    try {
+      const json = await this.get(c, '/v9/projects?limit=100');
+      const projects: Array<Record<string, unknown>> = json?.projects ?? [];
+      metrics.push({ label: 'Projects', value: String(projects.length) });
+
+      // Each project carries its latest deployments; rank by createdAt.
+      const withDeploy = projects
+        .map((p) => {
+          const dep = ((p.latestDeployments as Array<Record<string, unknown>>) ??
+            [])[0];
+          return {
+            name: p.name as string,
+            when: (dep?.createdAt as number) || 0,
+            state: dep?.readyState as string | undefined,
+          };
+        })
+        .filter((p) => p.when)
+        .sort((a, b) => b.when - a.when);
+
+      const latest = withDeploy[0];
+      if (latest) {
+        const h = deployHealth(latest.state);
+        headline = { label: h.label, state: h.state };
+        metrics.push({
+          label: 'Last deploy',
+          value: timeAgo(latest.when),
+          hint: latest.name,
+          state: h.state,
+        });
+      }
+
+      for (const p of withDeploy.slice(0, 5)) {
+        const h = deployHealth(p.state);
+        items.push({ label: p.name, value: timeAgo(p.when), state: h.state });
+      }
+    } catch {
+      metrics.push({ label: 'Projects', value: 'no access', state: 'warn' });
+    }
+
+    if (metrics.length === 0) {
+      metrics.push({ label: 'Vercel', value: 'connected' });
+    }
+
+    return {
+      type: this.type,
+      connected: true,
+      headline,
+      metrics,
+      items: items.length ? items : undefined,
+      links: [{ label: 'Open in Vercel', url: 'https://vercel.com/dashboard' }],
+    };
+  }
+}
+
+pluginRegistry.register(new VercelPlugin());
