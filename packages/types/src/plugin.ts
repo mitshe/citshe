@@ -79,6 +79,33 @@ export interface PluginActionResult {
   message: string;
 }
 
+export type ResourceKind = "pages" | "zones" | "workers" | "r2";
+
+export interface PluginResourceItem {
+  id: string;
+  name: string;
+}
+
+export interface PluginResourceGroup {
+  kind: ResourceKind;
+  label: string;
+  items: PluginResourceItem[];
+}
+
+/** Per-portal selection of which Cloudflare resources to show. */
+export interface PluginSelection {
+  pages?: string[];
+  zones?: string[];
+  workers?: string[];
+  r2?: string[];
+}
+
+/** Response of GET /plugins/:type/resources. */
+export interface PluginResources {
+  groups: PluginResourceGroup[];
+  selected: PluginSelection;
+}
+
 /** A preview/branch deployment surfaced from a deploy plugin. */
 export interface PreviewDeployment {
   url: string;

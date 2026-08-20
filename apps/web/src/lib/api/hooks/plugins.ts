@@ -78,6 +78,36 @@ export function useDeletePlugin() {
   });
 }
 
+/** List a plugin's resources + current selection (for the picker dialog). */
+export function usePluginResources(type: string, enabled = true) {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: [...queryKeys.plugins.all, "resources", type],
+    queryFn: async () => {
+      const token = await getToken();
+      return api.plugins.resources(type, token);
+    },
+    enabled,
+  });
+}
+
+/** Save the per-portal resource selection. Refreshes status. */
+export function useSetPluginSelection(type: string) {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (selection: Record<string, string[]>) => {
+      const token = await getToken();
+      return api.plugins.updateConfig(type, { selection }, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+    },
+  });
+}
+
 /** Recent preview deployments (optionally for a repo). Test on a real deploy. */
 export function usePreviews(repo?: string, enabled = true) {
   const getToken = useAuthToken();

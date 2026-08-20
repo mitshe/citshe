@@ -163,6 +163,50 @@ export class PluginsService {
   }
 
   /**
+   * List the resources a plugin can see (grouped) plus the current selection —
+   * powers the "pick which resources matter for this portal" dialog.
+   */
+  async listResources(organizationId: string, type: PluginType) {
+    const plugin = await this.prisma.plugin.findFirst({
+      where: { organizationId, type },
+    });
+    if (!plugin) throw new NotFoundException(`${type} is not connected.`);
+
+    const impl = pluginRegistry.get(type);
+    const config = this.decrypt(plugin);
+    const groups = impl.listResources
+      ? await impl.listResources(config)
+      : [];
+    const selected =
+      (config as { selection?: Record<string, unknown> }).selection ?? {};
+    return { groups, selected };
+  }
+
+  /**
+   * Merge a partial config (e.g. { selection }) into a plugin's stored config
+   * without touching the token. Busts the status cache.
+   */
+  async updateConfig(
+    organizationId: string,
+    type: PluginType,
+    partial: Record<string, unknown>,
+  ) {
+    const plugin = await this.prisma.plugin.findFirst({
+      where: { organizationId, type },
+    });
+    if (!plugin) throw new NotFoundException(`${type} is not connected.`);
+
+    const merged = { ...this.decrypt(plugin), ...partial };
+    const { encrypted, iv } = this.encryption.encryptJson(merged);
+    await this.prisma.plugin.update({
+      where: { id: plugin.id },
+      data: { config: new Uint8Array(encrypted), configIv: new Uint8Array(iv) },
+    });
+    this.statusCache.delete(plugin.id);
+    return { ok: true };
+  }
+
+  /**
    * Aggregate recent preview deployments across all connected deploy plugins
    * (Cloudflare + Vercel), optionally filtered to a repo. So a repo card can
    * show clickable preview URLs — test on a real deploy, not locally.

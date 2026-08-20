@@ -8,6 +8,8 @@ import {
   PluginAction,
   PluginActionResult,
   PreviewDeployment,
+  PluginResourceGroup,
+  PluginSelection,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
@@ -26,6 +28,7 @@ const API = 'https://api.cloudflare.com/client/v4';
 interface CfConfig {
   apiToken: string;
   accountId?: string; // optional — auto-detected from the token if absent
+  selection?: PluginSelection; // per-portal: which resources to show
 }
 
 function cfHeaders(token: string) {
@@ -72,6 +75,71 @@ class CloudflarePlugin implements StackPlugin {
     return acc.id as string;
   }
 
+  /** Everything the token can see, grouped — for the resource picker. */
+  async listResources(config: PluginConfig): Promise<PluginResourceGroup[]> {
+    const { apiToken } = this.cfg(config);
+    const accountId = await this.resolveAccount(this.cfg(config));
+    const groups: PluginResourceGroup[] = [];
+
+    const safeList = async (
+      path: string,
+      map: (r: Record<string, unknown>) => { id: string; name: string },
+      pick: (json: Record<string, unknown>) => Array<Record<string, unknown>>,
+    ) => {
+      try {
+        const json = await this.get(apiToken, path);
+        return pick(json).map(map);
+      } catch {
+        return [];
+      }
+    };
+
+    const pages = await safeList(
+      `/accounts/${accountId}/pages/projects`,
+      (p) => ({ id: p.name as string, name: p.name as string }),
+      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
+    );
+    if (pages.length) groups.push({ kind: 'pages', label: 'Pages', items: pages });
+
+    const zones = await safeList(
+      `/zones?per_page=50`,
+      (z) => ({ id: z.id as string, name: z.name as string }),
+      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
+    );
+    if (zones.length) groups.push({ kind: 'zones', label: 'Domains', items: zones });
+
+    const workers = await safeList(
+      `/accounts/${accountId}/workers/scripts`,
+      (w) => ({ id: w.id as string, name: w.id as string }),
+      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
+    );
+    if (workers.length)
+      groups.push({ kind: 'workers', label: 'Workers', items: workers });
+
+    const r2 = await safeList(
+      `/accounts/${accountId}/r2/buckets`,
+      (b) => ({ id: b.name as string, name: b.name as string }),
+      (j) =>
+        ((j.result as Record<string, unknown>)?.buckets as Array<
+          Record<string, unknown>
+        >) ?? [],
+    );
+    if (r2.length) groups.push({ kind: 'r2', label: 'R2 buckets', items: r2 });
+
+    return groups;
+  }
+
+  /** True when the user picked at least one resource of any kind. */
+  private hasSelection(sel?: PluginSelection): boolean {
+    if (!sel) return false;
+    return !!(
+      sel.pages?.length ||
+      sel.zones?.length ||
+      sel.workers?.length ||
+      sel.r2?.length
+    );
+  }
+
   async testConnection(config: PluginConfig) {
     const { apiToken } = this.cfg(config);
     if (!apiToken) return { ok: false, error: 'An API token is required.' };
@@ -88,8 +156,9 @@ class CloudflarePlugin implements StackPlugin {
   }
 
   async getStatus(config: PluginConfig): Promise<PluginStatus> {
-    const { apiToken } = this.cfg(config);
+    const { apiToken, selection } = this.cfg(config);
     const accountId = await this.resolveAccount(this.cfg(config));
+    const filtered = this.hasSelection(selection);
 
     const metrics: PluginMetric[] = [];
     const items: PluginItem[] = [];
@@ -100,13 +169,18 @@ class CloudflarePlugin implements StackPlugin {
       state: 'ok',
     };
 
-    // --- Pages: all projects + the freshest deployment (the "is it live") ---
+    const selPages = new Set(selection?.pages ?? []);
+    const wantPages = !filtered || selPages.size > 0;
+
+    // --- Pages: projects + the freshest deployment (the "is it live") ---
+    if (wantPages)
     try {
       const json = await this.get(
         apiToken,
         `/accounts/${accountId}/pages/projects`,
       );
-      const projects: Array<Record<string, unknown>> = json?.result ?? [];
+      let projects: Array<Record<string, unknown>> = json?.result ?? [];
+      if (filtered) projects = projects.filter((p) => selPages.has(p.name as string));
       metrics.push({ label: 'Pages projects', value: String(projects.length) });
 
       // Rank by latest deployment time and surface the top few.
@@ -188,31 +262,56 @@ class CloudflarePlugin implements StackPlugin {
       metrics.push({ label: 'Pages', value: 'no access', state: 'warn' });
     }
 
-    // --- R2: how many buckets (you have them all, so we count them all) ---
-    try {
-      const json = await this.get(
-        apiToken,
-        `/accounts/${accountId}/r2/buckets`,
-      );
-      const buckets: Array<Record<string, unknown>> = json?.result?.buckets ?? [];
-      metrics.push({ label: 'R2 buckets', value: String(buckets.length) });
-    } catch {
-      // R2 may be off / token lacks scope — skip quietly.
+    // --- Domains (zones): the selected ones + their status/DNS count ---
+    const selZones = selection?.zones ?? [];
+    if (selZones.length) {
+      for (const zoneId of selZones.slice(0, 8)) {
+        try {
+          const zj = await this.get(apiToken, `/zones/${zoneId}`);
+          const z = zj?.result;
+          const st = (z?.status as string) || '';
+          items.push({
+            label: (z?.name as string) || zoneId,
+            value: st || 'zone',
+            state: st === 'active' ? 'ok' : 'warn',
+          });
+        } catch {
+          // zone unavailable — skip
+        }
+      }
+      metrics.push({ label: 'Domains', value: String(selZones.length) });
     }
 
-    // --- Workers: how many scripts ---
-    try {
-      const json = await this.get(
-        apiToken,
-        `/accounts/${accountId}/workers/scripts`,
-      );
-      const scripts: Array<unknown> = json?.result ?? [];
-      if (scripts.length) {
-        metrics.push({ label: 'Workers', value: String(scripts.length) });
+    // --- R2 buckets (filtered to selection when set) ---
+    const selR2 = new Set(selection?.r2 ?? []);
+    if (!filtered || selR2.size > 0)
+      try {
+        const json = await this.get(apiToken, `/accounts/${accountId}/r2/buckets`);
+        let buckets: Array<Record<string, unknown>> =
+          json?.result?.buckets ?? [];
+        if (filtered) buckets = buckets.filter((b) => selR2.has(b.name as string));
+        metrics.push({ label: 'R2 buckets', value: String(buckets.length) });
+      } catch {
+        // R2 may be off / token lacks scope — skip quietly.
       }
-    } catch {
-      // optional
-    }
+
+    // --- Workers (filtered to selection when set) ---
+    const selWorkers = new Set(selection?.workers ?? []);
+    if (!filtered || selWorkers.size > 0)
+      try {
+        const json = await this.get(
+          apiToken,
+          `/accounts/${accountId}/workers/scripts`,
+        );
+        let scripts: Array<Record<string, unknown>> = json?.result ?? [];
+        if (filtered)
+          scripts = scripts.filter((s) => selWorkers.has(s.id as string));
+        if (scripts.length) {
+          metrics.push({ label: 'Workers', value: String(scripts.length) });
+        }
+      } catch {
+        // optional
+      }
 
     if (metrics.length === 0) {
       metrics.push({ label: 'Cloudflare', value: 'connected' });

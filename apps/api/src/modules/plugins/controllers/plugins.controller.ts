@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -75,6 +76,33 @@ export class PluginsController {
       type.toUpperCase() as PluginType,
     );
     return { status };
+  }
+
+  @Get(':type/resources')
+  @ApiOperation({ summary: 'Resources the plugin can see, + current selection' })
+  async resources(
+    @OrganizationId() organizationId: string,
+    @Param('type') type: string,
+  ) {
+    return this.plugins.listResources(
+      organizationId,
+      type.toUpperCase() as PluginType,
+    );
+  }
+
+  @Put(':type/config')
+  @ApiOperation({ summary: 'Merge a partial config (e.g. selection) into a plugin' })
+  @HttpCode(HttpStatus.OK)
+  async updateConfig(
+    @OrganizationId() organizationId: string,
+    @Param('type') type: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.plugins.updateConfig(
+      organizationId,
+      type.toUpperCase() as PluginType,
+      body,
+    );
   }
 
   @Get('previews')

@@ -18,6 +18,8 @@ export interface PluginDef {
   accent: string; // tailwind text color for the icon
   docsUrl?: string;
   fields: PluginField[];
+  /** Supports picking which resources matter for this portal. */
+  configurable?: boolean;
 }
 
 /** The stack tools citshe can plug into — Cloudflare, Neon, Google Ads. */
@@ -28,6 +30,7 @@ export const pluginCatalog: PluginDef[] = [
     tagline: "Deploys, Pages & R2 — is it live?",
     icon: <Cloud className="h-5 w-5" />,
     accent: "text-orange-500",
+    configurable: true,
     docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
     fields: [
       {

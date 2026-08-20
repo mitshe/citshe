@@ -51,6 +51,27 @@ export interface PluginActionResult {
   message: string;
 }
 
+export type ResourceKind = 'pages' | 'zones' | 'workers' | 'r2';
+
+export interface PluginResourceItem {
+  id: string;
+  name: string;
+}
+
+export interface PluginResourceGroup {
+  kind: ResourceKind;
+  label: string;
+  items: PluginResourceItem[];
+}
+
+/** Per-portal selection of which Cloudflare resources to show. */
+export interface PluginSelection {
+  pages?: string[];
+  zones?: string[];
+  workers?: string[];
+  r2?: string[];
+}
+
 /** A preview/branch deployment surfaced from a deploy plugin. */
 export interface PreviewDeployment {
   url: string;
@@ -89,4 +110,9 @@ export interface StackPlugin {
     config: PluginConfig,
     repoName?: string,
   ): Promise<PreviewDeployment[]>;
+  /**
+   * List the resources the token can see, grouped by kind, so the user can pick
+   * which ones matter for this portal (checkboxes). Optional.
+   */
+  listResources?(config: PluginConfig): Promise<PluginResourceGroup[]>;
 }

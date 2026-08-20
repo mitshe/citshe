@@ -33,18 +33,21 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   usePlugins,
   useConnectPlugin,
   useTestPlugin,
   useDeletePlugin,
+  usePluginResources,
+  useSetPluginSelection,
 } from "@/lib/api/hooks";
 import { pluginCatalog, type PluginDef } from "@/lib/plugin-catalog";
 import { PluginCard } from "@/components/plugins/plugin-card";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Plugin } from "@/lib/api/types";
+import type { Plugin, PluginSelection } from "@/lib/api/types";
 
 type TestStatus = "idle" | "testing" | "ok" | "error";
 
@@ -53,6 +56,7 @@ export default function PluginsPage() {
   const deletePlugin = useDeletePlugin();
   const [dialog, setDialog] = useState<PluginDef | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Plugin | null>(null);
+  const [configureType, setConfigureType] = useState<string | null>(null);
 
   const byType = useMemo(() => {
     const map = new Map<string, Plugin>();
@@ -82,7 +86,16 @@ export default function PluginsPage() {
               return (
                 <div key={def.type} className="space-y-2">
                   <PluginCard type={def.type} />
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-end gap-4">
+                    {def.configurable && (
+                      <button
+                        onClick={() => setConfigureType(def.type)}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        <SlidersHorizontal className="h-3 w-3" />
+                        Configure resources
+                      </button>
+                    )}
                     <button
                       onClick={() => setRemoveTarget(connected)}
                       className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive"
@@ -119,6 +132,13 @@ export default function PluginsPage() {
 
       {dialog && (
         <ConnectDialog def={dialog} onClose={() => setDialog(null)} />
+      )}
+
+      {configureType && (
+        <ResourcePicker
+          type={configureType}
+          onClose={() => setConfigureType(null)}
+        />
       )}
 
       <AlertDialog
@@ -332,6 +352,130 @@ function ConnectDialog({
               <Plus className="mr-1.5 h-4 w-4" />
             )}
             Connect
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================================
+// Resource picker — choose which resources matter for this portal (checkboxes)
+// ============================================================================
+
+function ResourcePicker({
+  type,
+  onClose,
+}: {
+  type: string;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = usePluginResources(type);
+  const save = useSetPluginSelection(type);
+  const [sel, setSel] = useState<Record<string, Set<string>>>({});
+  const [seeded, setSeeded] = useState(false);
+
+  // Seed the checkboxes from the current selection once loaded.
+  if (data && !seeded) {
+    const initial: Record<string, Set<string>> = {};
+    for (const g of data.groups) {
+      const chosen = (data.selected as PluginSelection)?.[g.kind] ?? [];
+      initial[g.kind] = new Set(chosen);
+    }
+    setSel(initial);
+    setSeeded(true);
+  }
+
+  const toggle = (kind: string, id: string) => {
+    setSel((prev) => {
+      const next = { ...prev, [kind]: new Set(prev[kind] ?? []) };
+      if (next[kind].has(id)) next[kind].delete(id);
+      else next[kind].add(id);
+      return next;
+    });
+  };
+
+  const onSave = async () => {
+    const selection: Record<string, string[]> = {};
+    for (const [kind, set] of Object.entries(sel)) {
+      if (set.size) selection[kind] = [...set];
+    }
+    try {
+      await save.mutateAsync(selection);
+      toast.success("Resources updated");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Configure resources</DialogTitle>
+          <DialogDescription>
+            Pick what matters for this portal. Leave everything unchecked to show
+            all.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="max-h-[60vh] space-y-4 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (data?.groups.length ?? 0) === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No resources found for this token.
+            </p>
+          ) : (
+            data!.groups.map((g) => (
+              <div key={g.kind} className="space-y-1.5">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  {g.label}
+                </p>
+                <div className="space-y-1">
+                  {g.items.map((it) => {
+                    const checked = sel[g.kind]?.has(it.id) ?? false;
+                    return (
+                      <button
+                        key={it.id}
+                        onClick={() => toggle(g.kind, it.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                          checked
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border hover:bg-muted/40",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                            checked
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border",
+                          )}
+                        >
+                          {checked && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className="truncate">{it.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={onSave} disabled={save.isPending}>
+            {save.isPending && (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            )}
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -10,6 +10,7 @@ import type {
   PluginStatus,
   PluginTestResult,
   PluginActionResult,
+  PluginResources,
   PreviewDeployment,
   ConnectPluginDto,
   CreateTaskDto,
@@ -644,6 +645,20 @@ export const api = {
         `/plugins/previews${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`,
         { token },
       ),
+
+    resources: (type: string, token: string) =>
+      request<PluginResources>(`/plugins/${type}/resources`, { token }),
+
+    updateConfig: (
+      type: string,
+      partial: Record<string, unknown>,
+      token: string,
+    ) =>
+      request<{ ok: boolean }>(`/plugins/${type}/config`, {
+        method: "PUT",
+        body: JSON.stringify(partial),
+        token,
+      }),
 
     delete: (id: string, token: string) =>
       request<void>(`/plugins/${id}`, { method: "DELETE", token }),
