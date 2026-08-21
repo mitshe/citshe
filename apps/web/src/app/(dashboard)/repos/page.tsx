@@ -14,6 +14,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   FolderGit2,
   Loader2,
   Plus,
@@ -24,12 +34,14 @@ import {
   RefreshCw,
   Github,
   Rocket,
+  Trash2,
 } from "lucide-react";
 import {
   useRepositories,
   useRemoteRepositories,
   useSyncSelectiveRepositories,
   useAnalyzeRepo,
+  useDeleteRepository,
   useIntegrations,
   useGithubAppStart,
   usePreviews,
@@ -144,14 +156,25 @@ export default function ReposPage() {
 
 function RepoCard({ repo }: { repo: Repository }) {
   const analyze = useAnalyzeRepo();
+  const deleteRepo = useDeleteRepository();
   const quickLaunch = useQuickLaunch();
   const analyzing = repo.analysisStatus === "analyzing" || analyze.isPending;
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
 
   const runAnalysis = async () => {
     try {
       await analyze.mutateAsync(repo.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Analysis failed");
+    }
+  };
+
+  const disconnect = async () => {
+    try {
+      await deleteRepo.mutateAsync(repo.id);
+      toast.success("Removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove repo");
     }
   };
 
@@ -202,8 +225,35 @@ function RepoCard({ repo }: { repo: Repository }) {
               <RefreshCw className="h-3.5 w-3.5" />
             )}
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-muted-foreground hover:text-destructive"
+            onClick={() => setDisconnectOpen(true)}
+            title="Disconnect this repo"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
+
+      <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect repo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove {repo.name} from this portal? This does not delete it on
+              GitHub — tasks and threads keep working.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={disconnect}>
+              Disconnect
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Analysis */}
       <div className="mt-3 space-y-2">
