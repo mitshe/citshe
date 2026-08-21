@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +28,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { GitHubIcon } from "@/components/icons/brand-icons";
+import { StatusDot } from "@/components/ui/status-dot";
 import {
   useIntegrations,
   useCreateIntegration,
@@ -221,23 +221,23 @@ export default function IntegrationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl sm:text-3xl font-bold">Integrations</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Integrations</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Connect GitHub so agents can clone repos, push branches, and open pull
           requests.
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="overflow-hidden rounded-md border border-border bg-surface-card">
         {integrations.map((integration) => (
           <IntegrationRow
             key={integration.id}
@@ -380,7 +380,7 @@ export default function IntegrationsPage() {
                     <Loader2 className="w-4 h-4 animate-spin" />
                   )}
                   {preConnectTest.status === "success" && (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <CheckCircle2 className="w-4 h-4 text-ok" />
                   )}
                   {preConnectTest.status === "error" && (
                     <XCircle className="w-4 h-4" />
@@ -451,68 +451,64 @@ function IntegrationRow({
   isTesting: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border transition-colors">
+    <div className="flex items-center gap-3 px-3.5 py-3 transition-linear">
       <div
         className={cn(
-          "flex items-center justify-center w-10 h-10 shrink-0 rounded-lg text-white",
+          "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
           integration.color,
         )}
       >
         {integration.icon}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium">{integration.name}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
+            {integration.name}
+          </span>
           {integration.isConnected && (
-            <Badge
-              variant={
-                integration.status === "ERROR" ? "destructive" : "secondary"
-              }
-              className="gap-1"
-            >
-              {integration.status === "ERROR" ? (
-                <XCircle className="w-3 h-3" />
-              ) : (
-                <CheckCircle2 className="w-3 h-3" />
-              )}
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <StatusDot
+                state={integration.status === "ERROR" ? "failed" : "ok"}
+                size={7}
+              />
               {integration.status === "ERROR" ? "Error" : "Connected"}
-            </Badge>
+            </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground truncate">
+        <p className="truncate text-xs text-muted-foreground">
           {integration.errorMessage || integration.description}
         </p>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex shrink-0 items-center gap-1">
         {integration.isConnected ? (
           <>
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={onTest}
               disabled={isTesting}
               title="Test connection"
             >
               {isTesting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="h-4 w-4" />
               )}
             </Button>
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={onDisconnect}
               disabled={isDisconnecting}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               title="Disconnect"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           </>
         ) : (
           <Button variant="outline" size="sm" onClick={onConfigure}>
-            <Settings className="w-4 h-4 mr-1.5" />
+            <Settings className="mr-1.5 h-4 w-4" />
             Connect
           </Button>
         )}

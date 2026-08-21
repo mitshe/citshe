@@ -24,11 +24,11 @@ export function TaskListView({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-card">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b border-border bg-surface-inset/60 text-[11px] uppercase tracking-wide text-text-subtle">
               <th className="px-3 py-2 font-medium">Title</th>
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 font-medium">Priority</th>

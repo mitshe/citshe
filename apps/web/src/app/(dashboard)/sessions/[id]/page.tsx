@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusDot, type StatusDotState } from "@/components/ui/status-dot";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Loader2,
   Play,
   Square,
   ArrowLeft,
-  Radio,
   Info,
   Terminal as TerminalIcon,
   PanelLeft,
@@ -44,6 +44,7 @@ import {
   useStopSession,
   useDeleteSession,
   useRecreateSession,
+  useUpdateSession,
   useSessionFiles,
   useSessionGitStatus,
   useReadSessionFile,
@@ -70,6 +71,28 @@ const statusLabels: Record<string, string> = {
   FAILED: "Failed",
 };
 
+const statusDotStates: Record<string, StatusDotState> = {
+  CREATING: "creating",
+  RUNNING: "running",
+  PAUSED: "paused",
+  COMPLETED: "done",
+  FAILED: "failed",
+};
+
+// NestJS 4xx bodies carry the readable reason in `data.message`; the ApiError's
+// own `.message` is only the generic "API Error: 400 …". Prefer the former.
+function readableError(err: unknown, fallback: string): string {
+  const data = (err as { data?: { message?: unknown } })?.data;
+  if (data && typeof data.message === "string") return data.message;
+  if (Array.isArray(data?.message) && typeof data.message[0] === "string") {
+    return data.message[0];
+  }
+  if (err instanceof Error && !err.message.startsWith("API Error:")) {
+    return err.message;
+  }
+  return fallback;
+}
+
 import { providerLabels } from "@/lib/status-config";
 
 let terminalCounter = 0;
@@ -87,6 +110,7 @@ export default function SessionDetailPage() {
   const stopSession = useStopSession();
   const deleteSession = useDeleteSession();
   const recreateSession = useRecreateSession();
+  const updateSession = useUpdateSession();
   const closeTerminalMutation = useCloseTerminal();
   const readFile = useReadSessionFile();
   const deleteFile = useDeleteSessionFile();
@@ -145,6 +169,10 @@ export default function SessionDetailPage() {
     setTabs(initialTabs);
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
   const [activeTabId, setActiveTabId] = useState(agentTerminalId);
+
+  // Inline session-name editing (header)
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [fileContents, setFileContents] = useState<
     Record<string, { content: string | null; loading: boolean }>
   >({});
@@ -595,7 +623,24 @@ export default function SessionDetailPage() {
         },
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create PR");
+      toast.error(readableError(err, "Failed to create PR"));
+    }
+  };
+
+  const startEditName = () => {
+    if (!session) return;
+    setNameDraft(session.name);
+    setEditingName(true);
+  };
+
+  const commitName = async () => {
+    const next = nameDraft.trim();
+    setEditingName(false);
+    if (!next || next === session?.name) return;
+    try {
+      await updateSession.mutateAsync({ id: sessionId, data: { name: next } });
+    } catch {
+      toast.error("Failed to rename thread");
     }
   };
 
@@ -647,6 +692,7 @@ export default function SessionDetailPage() {
   const isCreating = sessionStatus === "CREATING";
   const isFailed = sessionStatus === "FAILED";
   const isActive = isRunning || isPaused;
+  const hasRepo = !!(session.repositories && session.repositories.length > 0);
   const sessionErrorMessage =
     (session as { errorMessage?: string | null }).errorMessage ||
     "The terminal failed to start.";
@@ -654,37 +700,49 @@ export default function SessionDetailPage() {
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden">
       {/* Top Bar */}
-      <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-background shrink-0">
-        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+      <div className="flex h-12 items-center justify-between gap-2 px-2 sm:px-4 border-b border-border bg-surface-card shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           <Button
             variant="ghost"
             size="icon"
-            className="shrink-0"
+            className="h-8 w-8 shrink-0"
             onClick={() => router.push("/sessions")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
+          <StatusDot
+            state={statusDotStates[sessionStatus] ?? "idle"}
+            pulse={isRunning}
+            className="shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <TerminalIcon className="w-4 h-4 shrink-0" />
-              <h1 className="font-semibold text-sm truncate">{session.name}</h1>
-              <Badge
-                variant={
-                  isRunning
-                    ? "default"
-                    : isPaused
-                      ? "secondary"
-                      : sessionStatus === "FAILED"
-                        ? "destructive"
-                        : "outline"
-                }
-                className="gap-1"
-              >
-                {isRunning && <Radio className="w-3 h-3 animate-pulse" />}
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={commitName}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitName();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  className="h-6 w-40 sm:w-56 rounded-sm border border-border bg-surface-inset px-1.5 text-sm font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              ) : (
+                <h1
+                  className="font-semibold text-sm truncate cursor-text hover:text-foreground/90 transition-linear"
+                  title="Click to rename"
+                  onClick={startEditName}
+                >
+                  {session.name}
+                </h1>
+              )}
+              <span className="text-[11px] text-text-subtle shrink-0">
                 {statusLabels[sessionStatus] || sessionStatus}
-              </Badge>
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground truncate">
               {session.repositories?.[0]?.repository?.name || "No repo"}
               {session.branch && ` · ${session.branch}`}
               {session.aiCredential &&
@@ -692,44 +750,43 @@ export default function SessionDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {isRunning && (
-            <>
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="hidden sm:flex">
-                      <Info className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    className="max-w-xs text-xs space-y-1 p-3"
-                  >
-                    <p className="font-semibold mb-1.5">Keyboard Shortcuts</p>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Ctrl+S</kbd>
-                      <span>Save file</span>
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Ctrl+F</kbd>
-                      <span>Find in file</span>
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Ctrl+H</kbd>
-                      <span>Find &amp; Replace</span>
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Ctrl+G</kbd>
-                      <span>Go to line</span>
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Ctrl+P</kbd>
-                      <span>Command palette</span>
-                      <kbd className="bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-[10px] font-mono border border-border">Middle Click</kbd>
-                      <span>Close tab</span>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex">
+                    <Info className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="bottom"
+                  className="max-w-xs text-xs space-y-1 p-3"
+                >
+                  <p className="font-semibold mb-1.5">Keyboard Shortcuts</p>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-center">
+                    <Kbd>Ctrl+S</Kbd>
+                    <span>Save file</span>
+                    <Kbd>Ctrl+F</Kbd>
+                    <span>Find in file</span>
+                    <Kbd>Ctrl+H</Kbd>
+                    <span>Find &amp; Replace</span>
+                    <Kbd>Ctrl+G</Kbd>
+                    <span>Go to line</span>
+                    <Kbd>Ctrl+P</Kbd>
+                    <span>Command palette</span>
+                    <Kbd>Middle Click</Kbd>
+                    <span>Close tab</span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           {isRunning && session?.repositories && session.repositories.length > 0 && (
             <Button
               variant="outline"
               size="sm"
+              className="h-8"
               onClick={handleCreatePR}
               disabled={pushAndPR.isPending}
             >
@@ -742,7 +799,7 @@ export default function SessionDetailPage() {
             </Button>
           )}
           {isCompleted && (
-            <Button variant="outline" size="sm" onClick={handleResume} disabled={resumeSession.isPending}>
+            <Button variant="outline" size="sm" className="h-8" onClick={handleResume} disabled={resumeSession.isPending}>
               {resumeSession.isPending ? (
                 <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Resuming...</>
               ) : (
@@ -751,7 +808,7 @@ export default function SessionDetailPage() {
             </Button>
           )}
           {isRunning && (
-            <Button variant="destructive" size="sm" onClick={handleStop} disabled={stopSession.isPending}>
+            <Button variant="destructive" size="sm" className="h-8" onClick={handleStop} disabled={stopSession.isPending}>
               {stopSession.isPending ? (
                 <><Loader2 className="w-4 h-4 sm:mr-1 animate-spin" /> <span className="hidden sm:inline">Stopping...</span></>
               ) : (
@@ -764,7 +821,7 @@ export default function SessionDetailPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                className="h-8 w-8 text-danger hover:text-danger hover:bg-danger/10"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -781,7 +838,7 @@ export default function SessionDetailPage() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Delete
                 </AlertDialogAction>
@@ -797,7 +854,7 @@ export default function SessionDetailPage() {
         {isMobile && !mobileSidebarOpen && (
           <button
             onClick={() => setMobileSidebarOpen(true)}
-            className="absolute top-2 left-2 z-20 p-1.5 rounded-md bg-background border shadow-sm hover:bg-muted transition-colors"
+            className="absolute top-2 left-2 z-20 p-1.5 rounded-md bg-surface-card border border-border shadow-sm hover:bg-surface-hover transition-linear"
             title="Show files"
           >
             <PanelLeft className="w-4 h-4" />
@@ -815,15 +872,15 @@ export default function SessionDetailPage() {
         {/* File Browser Sidebar */}
         {isMobile ? (
           <div
-            className={`absolute top-0 left-0 z-40 h-full w-64 bg-background shadow-xl transition-transform duration-200 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+            className={`absolute top-0 left-0 z-40 h-full w-64 bg-surface-inset border-r border-border shadow-xl transition-transform duration-200 ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
           >
-            <div className="flex items-center justify-between px-3 py-2 border-b">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+              <p className="text-[11px] font-medium text-text-subtle uppercase tracking-wider">
                 Files
               </p>
               <button
                 onClick={() => setMobileSidebarOpen(false)}
-                className="p-1 rounded hover:bg-muted"
+                className="p-1 rounded hover:bg-surface-hover"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -833,6 +890,7 @@ export default function SessionDetailPage() {
                 files={files}
                 basePath="/workspace"
                 isLoading={filesLoading}
+                hasRepo={hasRepo}
                 onFileClick={(path) => {
                   handleOpenFile(path);
                   setMobileSidebarOpen(false);
@@ -848,11 +906,12 @@ export default function SessionDetailPage() {
           </div>
         ) : (
           <>
-            <div style={{ width: sidebarWidth }} className="shrink-0 h-full">
+            <div style={{ width: sidebarWidth }} className="shrink-0 h-full bg-surface-inset">
               <FileTree
                 files={files}
                 basePath="/workspace"
                 isLoading={filesLoading}
+                hasRepo={hasRepo}
                 onFileClick={handleOpenFile}
                 onDelete={handleDeleteFile}
                 onRename={handleRenameFile}
@@ -864,7 +923,7 @@ export default function SessionDetailPage() {
             {/* Resize handle */}
             <div
               onMouseDown={handleResizeStart}
-              className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+              className="w-px shrink-0 cursor-col-resize bg-border hover:bg-primary/40 active:bg-primary/60 transition-linear"
             />
           </>
         )}
@@ -891,7 +950,7 @@ export default function SessionDetailPage() {
               .map((tab) => (
                 <div
                   key={tab.id}
-                  className="bg-[#0a0a0a]"
+                  className="bg-surface-inset"
                   style={{
                     width: "100%",
                     height: "100%",
@@ -900,15 +959,17 @@ export default function SessionDetailPage() {
                 >
                   {isFailed ? (
                     <div className="flex items-center justify-center h-full p-6 text-muted-foreground">
-                      <div className="text-center max-w-md">
-                        <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+                      <div className="rounded-lg border border-border bg-surface-card p-6 text-center max-w-md">
+                        <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-danger/10 text-danger">
+                          <AlertCircle className="w-5 h-5" />
+                        </div>
                         <p className="text-sm font-medium text-foreground">
                           {sessionErrorMessage}
                         </p>
                         <p className="text-xs mt-2">
                           If this says the executor image is missing, build it
                           with{" "}
-                          <code className="bg-muted text-foreground px-1 py-0.5 rounded font-mono">
+                          <code className="bg-surface-inset text-foreground px-1 py-0.5 rounded-sm font-mono">
                             just executor-build
                           </code>
                           .
@@ -949,17 +1010,17 @@ export default function SessionDetailPage() {
                     />
                   ) : isCreating ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center">
-                        <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin" />
-                        <p className="text-sm font-medium">Starting container…</p>
+                      <div className="rounded-lg border border-border bg-surface-card px-8 py-7 text-center">
+                        <StatusDot state="creating" size={22} className="mx-auto mb-4" />
+                        <p className="text-sm font-medium text-foreground">Starting container…</p>
                         <p className="text-xs mt-1">Preparing the container environment</p>
                       </div>
                     </div>
                   ) : isCompleted ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
-                        <TerminalIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <p className="mb-3">Thread stopped</p>
+                        <TerminalIcon className="w-10 h-10 mx-auto mb-4 opacity-40" />
+                        <p className="mb-3 text-sm">Thread stopped</p>
                         <Button
                           variant="outline"
                           size="sm"
@@ -971,7 +1032,7 @@ export default function SessionDetailPage() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <TerminalIcon className="w-12 h-12 opacity-50" />
+                      <TerminalIcon className="w-10 h-10 opacity-40" />
                     </div>
                   )}
                 </div>
@@ -1016,8 +1077,8 @@ export default function SessionDetailPage() {
                   ) : isCreating ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
-                        <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin" />
-                        <p className="text-sm font-medium">Starting thread...</p>
+                        <StatusDot state="creating" size={22} className="mx-auto mb-4" />
+                        <p className="text-sm font-medium text-foreground">Starting thread…</p>
                         <p className="text-xs mt-1">Browser will be available once the thread is running</p>
                       </div>
                     </div>

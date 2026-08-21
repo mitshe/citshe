@@ -7,8 +7,8 @@ export default function NotFound() {
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md text-center">
         <div className="mb-6 flex justify-center">
-          <div className="rounded-full bg-zinc-100 p-4">
-            <FileQuestion className="h-8 w-8 text-zinc-600" />
+          <div className="rounded-lg border border-border bg-surface-card p-4">
+            <FileQuestion className="h-8 w-8 text-muted-foreground" />
           </div>
         </div>
 

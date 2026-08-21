@@ -143,13 +143,13 @@ function SetupForm() {
             />
             {form.password && (
               <div className="space-y-1 text-xs">
-                <p className={passwordValid ? "text-green-600" : "text-muted-foreground"}>
+                <p className={passwordValid ? "text-ok" : "text-muted-foreground"}>
                   {passwordValid ? "\u2713" : "\u2022"} At least 8 characters
                 </p>
-                <p className={passwordHasLetter ? "text-green-600" : "text-muted-foreground"}>
+                <p className={passwordHasLetter ? "text-ok" : "text-muted-foreground"}>
                   {passwordHasLetter ? "\u2713" : "\u2022"} Contains a letter
                 </p>
-                <p className={passwordHasNumber ? "text-green-600" : "text-muted-foreground"}>
+                <p className={passwordHasNumber ? "text-ok" : "text-muted-foreground"}>
                   {passwordHasNumber ? "\u2713" : "\u2022"} Contains a number
                 </p>
               </div>
@@ -174,7 +174,11 @@ function SetupForm() {
             )}
           </div>
 
-          <Button type="submit" className="w-full" disabled={!canSubmit}>
+          <Button
+            type="submit"
+            className="w-full shadow-[0_0_0_1px_var(--accent-glow),0_2px_16px_-4px_var(--accent-glow)]"
+            disabled={!canSubmit}
+          >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -253,7 +257,11 @@ function LoginForm() {
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full shadow-[0_0_0_1px_var(--accent-glow),0_2px_16px_-4px_var(--accent-glow)]"
+            disabled={isLoading}
+          >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

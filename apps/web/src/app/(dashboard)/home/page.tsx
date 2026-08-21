@@ -31,7 +31,10 @@ import {
   usePluginStatus,
 } from "@/lib/api/hooks";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
-import { OPEN_COMMAND_EVENT } from "@/components/command-palette";
+import { OPEN_COMMAND_EVENT } from "@/components/shell/command-palette";
+import { StatusDot } from "@/components/ui/status-dot";
+import { Kbd } from "@/components/ui/kbd";
+import { Skeleton } from "@/components/ui/skeleton";
 import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import type {
@@ -51,6 +54,9 @@ const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
 const STUCK_STATUSES: TaskStatus[] = ["QUEUED", "ANALYZING", "IN_PROGRESS"];
 const STUCK_AFTER_MS = 5 * 60 * 1000;
 
+/** HealthState (ok/warn/down/idle) is a 1:1 subset of StatusDot's states. */
+type StatusDotHealth = "ok" | "warn" | "down" | "idle";
+
 /** No worker picked this up and it's gone quiet — likely the executor. */
 function isStuck(task: Task): boolean {
   return (
@@ -62,10 +68,10 @@ function isStuck(task: Task): boolean {
 
 export default function HomePage() {
   const { currentOrg } = useAuthContext();
-  const { data: tasks = [] } = useTasks();
-  const { data: sessions = [] } = useSessions();
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
   const { data: credentials = [] } = useAICredentials();
-  const { data: repos = [] } = useRepositories();
+  const { data: repos = [], isLoading: reposLoading } = useRepositories();
   const { data: queue } = useQueueOverview();
   const { data: plugins = [] } = usePlugins();
   const quickLaunch = useQuickLaunch();
@@ -112,14 +118,17 @@ export default function HomePage() {
 
       {/* Header */}
       <header className="space-y-1.5">
-        <p className="text-sm text-muted-foreground">{greeting}</p>
-        <h1 className="text-3xl font-semibold tracking-tight">
+        <p className="text-xs font-medium uppercase tracking-wider text-text-subtle">
+          {greeting}
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {currentOrg?.name ?? "Your portal"}
         </h1>
         {isSetUp && connectedTypes.has("CLOUDFLARE") ? (
           <StatusLine />
         ) : isSetUp ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <StatusDot state="idle" size={8} />
             {repos.length} repo{repos.length === 1 ? "" : "s"} connected
             {" · not deployed"}
           </p>
@@ -149,19 +158,19 @@ export default function HomePage() {
                 )
               }
               title="Terminal"
-              accent="text-emerald-500"
+              accent="text-ok"
             />
             <ActionCard
               href="/tasks"
               icon={<ListPlus className="h-5 w-5" />}
               title="New task"
-              accent="text-amber-500"
+              accent="text-warn"
             />
             <ActionCard
               href="/repos"
               icon={<FolderGit2 className="h-5 w-5" />}
               title="Repos"
-              accent="text-violet-500"
+              accent="text-primary"
             />
           </div>
 
@@ -169,19 +178,31 @@ export default function HomePage() {
           <div className="grid gap-5 md:grid-cols-3">
             {/* Repos */}
             <section className="space-y-2.5">
-              <SectionHeader label="Repos" href="/repos" cta="All" />
+              <SectionHeader
+                label="Repos"
+                href="/repos"
+                cta="All"
+                count={repos.length}
+              />
               <div className="space-y-2">
-                {repos.slice(0, 5).map((repo) => (
-                  <Link
-                    key={repo.id}
-                    href="/repos"
-                    className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
-                  >
-                    <FolderGit2 className="h-4 w-4 shrink-0 text-violet-500" />
-                    <span className="flex-1 truncate text-sm">{repo.name}</span>
-                  </Link>
-                ))}
-                {repos.length === 0 && <EmptyCell label="No repos yet" />}
+                {reposLoading ? (
+                  <RowSkeletons />
+                ) : repos.length === 0 ? (
+                  <EmptyCell label="No repos yet" />
+                ) : (
+                  repos.slice(0, 5).map((repo) => (
+                    <Link
+                      key={repo.id}
+                      href="/repos"
+                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+                    >
+                      <FolderGit2 className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="flex-1 truncate text-sm text-foreground">
+                        {repo.name}
+                      </span>
+                    </Link>
+                  ))
+                )}
               </div>
             </section>
 
@@ -191,45 +212,59 @@ export default function HomePage() {
                 label="Live terminals"
                 href="/sessions"
                 cta="All"
+                count={runningThreads.length}
               />
               <div className="space-y-2">
-                {runningThreads.map((s) => (
-                  <Link
-                    key={s.id}
-                    href={`/sessions/${s.id}`}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
-                  >
-                    <Terminal className="h-4 w-4 shrink-0 text-emerald-500" />
-                    <span className="flex-1 truncate text-sm">{s.name}</span>
-                    <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-emerald-500">
-                      {s.status === "CREATING" ? (
-                        <>
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Starting
-                        </>
-                      ) : (
-                        <>
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Live
-                        </>
-                      )}
-                    </span>
-                  </Link>
-                ))}
-                {runningThreads.length === 0 && (
+                {sessionsLoading ? (
+                  <RowSkeletons />
+                ) : runningThreads.length === 0 ? (
                   <EmptyCell label="No live terminals" />
+                ) : (
+                  runningThreads.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/sessions/${s.id}`}
+                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+                    >
+                      <Terminal className="h-4 w-4 shrink-0 text-ok" />
+                      <span className="flex-1 truncate text-sm text-foreground">
+                        {s.name}
+                      </span>
+                      <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+                        {s.status === "CREATING" ? (
+                          <>
+                            <StatusDot state="creating" />
+                            Starting
+                          </>
+                        ) : (
+                          <>
+                            <StatusDot state="running" />
+                            Live
+                          </>
+                        )}
+                      </span>
+                    </Link>
+                  ))
                 )}
               </div>
             </section>
 
             {/* Recent tasks */}
             <section className="space-y-2.5">
-              <SectionHeader label="Recent tasks" href="/tasks" cta="All" />
+              <SectionHeader
+                label="Recent tasks"
+                href="/tasks"
+                cta="All"
+                count={active.length}
+              />
               <div className="space-y-2">
-                {active.slice(0, 5).map((t) => (
-                  <TaskRow key={t.id} task={t} />
-                ))}
-                {active.length === 0 && <EmptyCell label="No active tasks" />}
+                {tasksLoading ? (
+                  <RowSkeletons />
+                ) : active.length === 0 ? (
+                  <EmptyCell label="No active tasks" />
+                ) : (
+                  active.slice(0, 5).map((t) => <TaskRow key={t.id} task={t} />)
+                )}
               </div>
             </section>
           </div>
@@ -250,16 +285,18 @@ export default function HomePage() {
           {!hasPlugin && (
             <Link
               href="/stack"
-              className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/10 px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-muted/30"
+              className="group flex items-center gap-3 rounded-md border border-dashed border-border bg-surface-inset/40 px-4 py-3.5 transition-linear hover:border-primary/50 hover:bg-surface-hover"
             >
-              <Blocks className="h-5 w-5 text-blue-500" />
+              <Blocks className="h-5 w-5 text-info" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Connect your stack</p>
+                <p className="text-sm font-medium text-foreground">
+                  Connect your stack
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Cloudflare, Neon, Google Ads — see deploys & health here
                 </p>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground transition-linear group-hover:translate-x-0.5 group-hover:text-foreground" />
             </Link>
           )}
 
@@ -276,18 +313,14 @@ function QuickSearch() {
   return (
     <button
       type="button"
-      onClick={() =>
-        window.dispatchEvent(new Event(OPEN_COMMAND_EVENT))
-      }
-      className="flex w-full items-center gap-3 rounded-xl border border-border bg-background/50 px-4 py-3 text-left transition-colors hover:bg-muted/40 hover:border-primary/30"
+      onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_EVENT))}
+      className="group flex w-full items-center gap-3 rounded-md border border-border bg-surface-inset px-4 py-3 text-left transition-linear hover:border-border-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <Search className="h-4 w-4 shrink-0 text-text-subtle transition-linear group-hover:text-muted-foreground" />
       <span className="flex-1 text-sm text-muted-foreground">
         Search tasks, repos, terminals…
       </span>
-      <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-flex">
-        ⌘K
-      </kbd>
+      <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
     </button>
   );
 }
@@ -295,9 +328,26 @@ function QuickSearch() {
 /** Small muted placeholder row for empty columns. */
 function EmptyCell({ label }: { label: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-muted/10 px-3.5 py-3 text-center text-xs text-muted-foreground">
+    <div className="rounded-md border border-dashed border-border bg-surface-inset/40 px-3.5 py-4 text-center text-xs text-text-subtle">
       {label}
     </div>
+  );
+}
+
+/** Skeleton rows matching the column list item height. */
+function RowSkeletons({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3"
+        >
+          <Skeleton className="h-4 w-4 rounded-sm" />
+          <Skeleton className="h-3.5 flex-1" />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -345,8 +395,10 @@ function SetupChecklist({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Set up this portal</h2>
-        <span className="text-xs text-muted-foreground">
+        <h2 className="text-sm font-medium text-foreground">
+          Set up this portal
+        </h2>
+        <span className="text-xs font-medium text-text-subtle">
           {doneCount}/{steps.length}
         </span>
       </div>
@@ -355,17 +407,17 @@ function SetupChecklist({
           <div
             key={step.title}
             className={cn(
-              "flex items-center gap-3.5 rounded-xl border px-4 py-3.5 transition-colors",
+              "flex items-center gap-3.5 rounded-md border px-4 py-3.5 transition-linear",
               step.done
-                ? "border-border bg-muted/20"
-                : "border-border bg-background/50",
+                ? "border-border bg-surface-inset/40"
+                : "border-border bg-surface-card",
             )}
           >
             <div
               className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
                 step.done
-                  ? "bg-emerald-500/10 text-emerald-500"
+                  ? "bg-ok/10 text-ok"
                   : "bg-primary/10 text-primary",
               )}
             >
@@ -375,7 +427,9 @@ function SetupChecklist({
               <p
                 className={cn(
                   "text-sm font-medium",
-                  step.done && "text-muted-foreground line-through",
+                  step.done
+                    ? "text-text-subtle line-through"
+                    : "text-foreground",
                 )}
               >
                 {step.title}
@@ -389,7 +443,7 @@ function SetupChecklist({
             {!step.done && (
               <Link
                 href={step.href}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-[0_0_0_1px_var(--accent-glow),0_0_16px_-4px_var(--accent-glow)] transition-linear hover:brightness-110"
               >
                 {step.cta}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -413,25 +467,19 @@ function StatusLine() {
   if (isLoading) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <StatusDot state="idle" size={8} />
         Checking deploy status…
       </p>
     );
   }
   if (!status) return null;
 
-  const dot: Record<HealthState, string> = {
-    ok: "bg-emerald-500",
-    warn: "bg-amber-500",
-    down: "bg-red-500",
-    idle: "bg-muted-foreground/50",
-  };
   const deploy = status.metrics.find((m) => m.label === "Last deploy");
 
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-      <span className="flex items-center gap-1.5 font-medium">
-        <span className={cn("h-2 w-2 rounded-full", dot[status.headline.state])} />
+      <span className="flex items-center gap-1.5 font-medium text-foreground">
+        <StatusDot state={status.headline.state as StatusDotHealth} size={8} />
         {status.headline.label}
       </span>
       {deploy && (
@@ -450,22 +498,16 @@ function StackTile({ type }: { type: PluginType }) {
   const { data: status } = usePluginStatus(type);
   if (!def) return null;
 
-  const dot: Record<HealthState, string> = {
-    ok: "bg-emerald-500",
-    warn: "bg-amber-500",
-    down: "bg-red-500",
-    idle: "bg-muted-foreground/50",
-  };
-  const state = status?.headline.state ?? "idle";
+  const state: HealthState = status?.headline.state ?? "idle";
 
   return (
     <Link
       href={`/stack/${type.toLowerCase()}`}
-      className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 transition-colors hover:bg-muted/40"
+      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
       <span className={def.accent}>{def.icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{def.name}</p>
+        <p className="text-sm font-medium text-foreground">{def.name}</p>
         <p className="truncate text-xs text-muted-foreground">
           {status
             ? status.metrics
@@ -476,7 +518,7 @@ function StackTile({ type }: { type: PluginType }) {
         </p>
       </div>
       <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-muted-foreground">
-        <span className={cn("h-1.5 w-1.5 rounded-full", dot[state])} />
+        <StatusDot state={state as StatusDotHealth} size={8} />
         {status?.headline.label ?? "—"}
       </span>
     </Link>
@@ -487,19 +529,26 @@ function SectionHeader({
   label,
   href,
   cta,
+  count,
 }: {
   label: string;
   href: string;
   cta: string;
+  count?: number;
 }) {
   return (
     <div className="flex items-center justify-between">
-      <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+      <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-subtle">
         {label}
+        {count != null && count > 0 && (
+          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] tabular-nums normal-case tracking-normal text-muted-foreground">
+            {count}
+          </span>
+        )}
       </h2>
       <Link
         href={href}
-        className="text-xs text-muted-foreground hover:text-foreground"
+        className="text-xs text-muted-foreground transition-linear hover:text-foreground"
       >
         {cta} →
       </Link>
@@ -521,9 +570,9 @@ function ActionCard({
   accent: string;
 }) {
   const inner = (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background/50 px-2 py-4 text-center transition-colors hover:bg-muted/40 hover:border-primary/30 cursor-pointer">
+    <div className="group flex cursor-pointer flex-col items-center gap-2 rounded-md border border-border bg-surface-card px-2 py-4 text-center transition-linear hover:border-primary/40 hover:bg-surface-hover hover:shadow-[0_0_24px_-8px_var(--accent-glow)]">
       <span className={accent}>{icon}</span>
-      <span className="text-sm font-medium">{title}</span>
+      <span className="text-sm font-medium text-foreground">{title}</span>
     </div>
   );
   if (href) return <Link href={href}>{inner}</Link>;
@@ -542,15 +591,15 @@ function WorkersStrip({ queue }: { queue: QueueOverview }) {
   if (active === 0 && waiting === 0 && !queue.queuePaused) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-2.5">
+    <div className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-2.5">
       <Cpu
         className={cn(
           "h-4 w-4 shrink-0",
-          active > 0 ? "text-emerald-500" : "text-muted-foreground",
+          active > 0 ? "text-ok" : "text-text-subtle",
         )}
       />
       <div className="flex-1 text-sm">
-        <span className="font-medium">
+        <span className="font-medium tabular-nums text-foreground">
           {active}/{queue.maxWorkers}
         </span>{" "}
         <span className="text-muted-foreground">
@@ -559,17 +608,17 @@ function WorkersStrip({ queue }: { queue: QueueOverview }) {
         {waiting > 0 && (
           <span className="text-muted-foreground"> · {waiting} waiting</span>
         )}
-        {queue.queuePaused && <span className="text-amber-500"> · paused</span>}
+        {queue.queuePaused && <span className="text-warn"> · paused</span>}
       </div>
       <button
         type="button"
         disabled={setPaused.isPending}
         onClick={() => setPaused.mutate(!queue.queuePaused)}
         className={cn(
-          "flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
+          "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-linear disabled:opacity-50",
           queue.queuePaused
-            ? "text-emerald-600 hover:bg-emerald-500/10"
-            : "text-muted-foreground hover:bg-muted/60",
+            ? "text-ok hover:bg-ok/10"
+            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
         )}
       >
         {queue.queuePaused ? (
@@ -599,21 +648,23 @@ function TaskRow({ task }: { task: Task }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
+      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
       <span className={cn("shrink-0", textColor)}>{meta.icon}</span>
-      <span className="flex-1 truncate text-sm">{task.title}</span>
+      <span className="flex-1 truncate text-sm text-foreground">
+        {task.title}
+      </span>
       {stuck && (
         <span
           title="No worker picked this up. Is the executor image built? Run `just executor-build`."
-          className="flex items-center gap-1 shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600"
+          className="flex items-center gap-1 shrink-0 rounded-sm border border-warn/25 bg-warn/10 px-2 py-0.5 text-[11px] font-medium text-warn"
         >
           <AlertTriangle className="h-3 w-3" />
           Stuck — executor?
         </span>
       )}
       {liveWorker && (
-        <span className="flex items-center gap-1 shrink-0 text-[11px] font-medium text-emerald-500">
+        <span className="flex items-center gap-1 shrink-0 text-[11px] font-medium text-ok">
           <Terminal className="h-3.5 w-3.5" />
           Watch
         </span>

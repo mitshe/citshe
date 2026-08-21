@@ -42,15 +42,16 @@ export function SelfhostedSignIn() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <span className="pointer-events-none absolute bottom-0 left-0 right-0 select-none text-center font-brand text-[28vw] font-bold leading-[0.7] tracking-tighter text-foreground/[0.04] translate-y-[25%]">
+        citshe
+      </span>
+      <Card className="relative w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold">
-              m
-            </div>
-          </div>
-          <CardTitle className="text-2xl">Sign in to citshe</CardTitle>
+          <span className="mb-2 font-brand text-2xl font-bold tracking-tight text-foreground">
+            citshe
+          </span>
+          <CardTitle className="text-xl">Sign in</CardTitle>
           <CardDescription>
             Enter your email and password to continue
           </CardDescription>
@@ -90,7 +91,11 @@ export function SelfhostedSignIn() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              className="w-full shadow-[0_0_0_1px_var(--accent-glow),0_2px_16px_-4px_var(--accent-glow)]"
+              disabled={isLoading}
+            >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign in
             </Button>

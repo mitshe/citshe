@@ -19,8 +19,8 @@ export default function DashboardError({ error, reset }: ErrorProps) {
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md text-center">
         <div className="mb-6 flex justify-center">
-          <div className="rounded-full bg-zinc-100 p-4">
-            <AlertCircle className="h-8 w-8 text-zinc-600" />
+          <div className="rounded-lg border border-border bg-surface-card p-4">
+            <AlertCircle className="h-8 w-8 text-danger" />
           </div>
         </div>
 
@@ -31,15 +31,15 @@ export default function DashboardError({ error, reset }: ErrorProps) {
         </p>
 
         {process.env.NODE_ENV === "development" && error.message && (
-          <div className="mb-6 rounded-lg border bg-zinc-50 p-4 text-left">
-            <p className="text-xs font-medium text-zinc-500 mb-1">
+          <div className="mb-6 rounded-lg border border-border bg-surface-inset p-4 text-left">
+            <p className="text-xs font-medium text-text-subtle mb-1">
               Error details:
             </p>
-            <p className="text-sm font-mono text-zinc-700 break-words">
+            <p className="text-sm font-mono text-muted-foreground break-words">
               {error.message}
             </p>
             {error.digest && (
-              <p className="mt-2 text-xs text-zinc-400">
+              <p className="mt-2 text-xs text-text-subtle">
                 Digest: {error.digest}
               </p>
             )}

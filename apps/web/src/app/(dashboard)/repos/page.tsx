@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { StatusDot } from "@/components/ui/status-dot";
+import { EmptyState } from "@/components/ui/empty-state";
+import type { StatusDotState } from "@/components/ui/status-dot";
 import {
   Dialog,
   DialogBody,
@@ -35,6 +39,7 @@ import {
   Github,
   Rocket,
   Trash2,
+  Search,
 } from "lucide-react";
 import {
   useRepositories,
@@ -49,7 +54,26 @@ import {
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Repository } from "@/lib/api/types";
+import type { Repository, RepoAnalysisStatus } from "@/lib/api/types";
+
+type RepoFilter = "all" | "analyzed" | "pending";
+
+/** Map a repo's analysis status to a StatusDot state. */
+function analysisDot(status: RepoAnalysisStatus | null | undefined): {
+  state: StatusDotState;
+  label: string;
+} {
+  switch (status) {
+    case "analyzing":
+      return { state: "creating", label: "Analyzing" };
+    case "done":
+      return { state: "ok", label: "Analyzed" };
+    case "failed":
+      return { state: "failed", label: "Analysis failed" };
+    default:
+      return { state: "idle", label: "Not analyzed" };
+  }
+}
 
 export default function ReposPage() {
   const searchParams = useSearchParams();
@@ -58,6 +82,8 @@ export default function ReposPage() {
   const { data: integrations = [] } = useIntegrations();
   const githubAppStart = useGithubAppStart();
   const [connectOpen, setConnectOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<RepoFilter>("all");
 
   const hasGitIntegration = integrations.some(
     (i) => i.type === "GITHUB" && i.status === "CONNECTED",
@@ -85,8 +111,19 @@ export default function ReposPage() {
     }
   };
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return repos.filter((r) => {
+      if (q && !r.name.toLowerCase().includes(q) && !r.fullPath.toLowerCase().includes(q))
+        return false;
+      if (filter === "analyzed") return r.analysisStatus === "done";
+      if (filter === "pending") return r.analysisStatus !== "done";
+      return true;
+    });
+  }, [repos, search, filter]);
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8 space-y-5">
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:py-8">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Repos</h1>
@@ -116,7 +153,7 @@ export default function ReposPage() {
       </div>
 
       {!hasGitIntegration && (
-        <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm">
+        <div className="rounded-md border border-dashed border-border bg-surface-inset/40 p-4 text-sm">
           <p className="text-muted-foreground">
             Connect GitHub to pull in your repositories — authorize once, then
             pick repos.{" "}
@@ -130,20 +167,67 @@ export default function ReposPage() {
         </div>
       )}
 
+      {/* Search + filter */}
+      {(repos.length > 0 || search) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-subtle" />
+            <Input
+              placeholder="Search repos…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 pl-8"
+            />
+          </div>
+          <SegmentedControl
+            value={filter}
+            onChange={setFilter}
+            aria-label="Filter repos"
+            options={[
+              { value: "all", label: "All" },
+              { value: "analyzed", label: "Analyzed" },
+              { value: "pending", label: "Pending" },
+            ]}
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : repos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border py-16 text-center">
-          <FolderGit2 className="mx-auto h-8 w-8 text-muted-foreground/50" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            No repos connected yet.
-          </p>
-        </div>
+        <EmptyState
+          icon={<FolderGit2 />}
+          title="No repos connected yet"
+          description="Connect a repository and citshe analyzes its stack, CI and structure automatically."
+          action={
+            hasGitIntegration ? (
+              <Button size="sm" onClick={() => setConnectOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Connect a repo
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={startGithubSso}
+                disabled={githubAppStart.isPending}
+              >
+                <Github className="mr-1.5 h-4 w-4" />
+                Connect GitHub
+              </Button>
+            )
+          }
+        />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<Search />}
+          title="No matching repos"
+          description="Try a different search or filter."
+        />
       ) : (
-        <div className="space-y-3">
-          {repos.map((repo) => (
+        <div className="space-y-2.5">
+          {filtered.map((repo) => (
             <RepoCard key={repo.id} repo={repo} />
           ))}
         </div>
@@ -160,6 +244,7 @@ function RepoCard({ repo }: { repo: Repository }) {
   const quickLaunch = useQuickLaunch();
   const analyzing = repo.analysisStatus === "analyzing" || analyze.isPending;
   const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const dot = analysisDot(analyzing ? "analyzing" : repo.analysisStatus);
 
   const runAnalysis = async () => {
     try {
@@ -179,26 +264,40 @@ function RepoCard({ repo }: { repo: Repository }) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-background/50 p-4">
+    <div className="rounded-md border border-border bg-surface-card p-4 transition-linear">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="truncate font-medium">{repo.name}</span>
             {repo.fullPath.includes("/") && (
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {repo.fullPath.split("/")[0]}
               </span>
             )}
           </div>
-          <a
-            href={repo.webUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="truncate text-xs text-muted-foreground hover:underline"
-          >
-            {repo.fullPath}
-          </a>
+          <div className="mt-1 flex items-center gap-2.5 text-xs text-muted-foreground">
+            <span
+              className="inline-flex items-center gap-1.5"
+              title={dot.label}
+            >
+              <StatusDot state={dot.state} size={7} />
+              {dot.label}
+            </span>
+            <span className="inline-flex items-center gap-1 text-text-subtle">
+              <GitBranch className="h-3 w-3" />
+              {repo.defaultBranch}
+            </span>
+            <a
+              href={repo.webUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-text-subtle hover:text-foreground hover:underline"
+            >
+              <Github className="h-3 w-3" />
+              {repo.provider === "GITHUB" ? "GitHub" : repo.provider}
+            </a>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
@@ -228,7 +327,7 @@ function RepoCard({ repo }: { repo: Repository }) {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-muted-foreground hover:text-destructive"
+            className="h-7 px-2 text-muted-foreground hover:text-danger"
             onClick={() => setDisconnectOpen(true)}
             title="Disconnect this repo"
           >
@@ -258,7 +357,7 @@ function RepoCard({ repo }: { repo: Repository }) {
       {/* Analysis */}
       <div className="mt-3 space-y-2">
         {analyzing ? (
-          <p className="flex items-center gap-1.5 text-xs text-blue-500">
+          <p className="flex items-center gap-1.5 text-xs text-info">
             <Sparkles className="h-3.5 w-3.5" />
             Analyzing project…
           </p>
@@ -286,7 +385,7 @@ function RepoCard({ repo }: { repo: Repository }) {
             </div>
           </>
         ) : repo.analysisStatus === "failed" ? (
-          <p className="text-xs text-destructive">
+          <p className="text-xs text-danger">
             Analysis failed.{" "}
             <button onClick={runAnalysis} className="underline">
               Retry
@@ -295,7 +394,7 @@ function RepoCard({ repo }: { repo: Repository }) {
         ) : (
           <button
             onClick={runAnalysis}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-linear hover:text-foreground"
           >
             <Sparkles className="h-3.5 w-3.5" />
             Analyze project
@@ -313,16 +412,16 @@ function RepoPreviews({ repoName }: { repoName: string }) {
   const { data: previews = [] } = usePreviews(repoName);
   if (previews.length === 0) return null;
 
-  const dot: Record<string, string> = {
-    ok: "bg-emerald-500",
-    warn: "bg-amber-500",
-    down: "bg-red-500",
-    idle: "bg-muted-foreground/50",
+  const dotState: Record<string, StatusDotState> = {
+    ok: "ok",
+    warn: "warn",
+    down: "down",
+    idle: "idle",
   };
 
   return (
-    <div className="mt-3 space-y-1.5 border-t border-border/60 pt-2.5">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+    <div className="mt-3 space-y-1.5 border-t border-border pt-2.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-subtle">
         <Rocket className="h-3 w-3" />
         Previews
       </p>
@@ -332,9 +431,9 @@ function RepoPreviews({ repoName }: { repoName: string }) {
           href={p.url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-2 text-xs hover:underline"
+          className="flex items-center gap-2 text-xs transition-linear hover:underline"
         >
-          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dot[p.state])} />
+          <StatusDot state={dotState[p.state] ?? "idle"} size={6} />
           <span className="min-w-0 flex-1 truncate text-foreground">
             {p.branch || p.url.replace(/^https?:\/\//, "")}
           </span>
@@ -351,7 +450,7 @@ function RepoPreviews({ repoName }: { repoName: string }) {
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+    <span className="rounded-md bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
       {children}
     </span>
   );
@@ -492,10 +591,10 @@ function ConnectRepoDialog({
                   key={`${r.integrationId}-${r.externalId}`}
                   onClick={() => toggle(r.externalId)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-linear",
                     selected.has(r.externalId)
                       ? "border-primary/40 bg-primary/5"
-                      : "border-border hover:bg-muted/40",
+                      : "border-border hover:bg-surface-hover",
                   )}
                 >
                   <Github className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -503,7 +602,7 @@ function ConnectRepoDialog({
                     <div className="flex items-center gap-1.5">
                       <p className="truncate font-medium">{r.name}</p>
                       {r.fullPath.includes("/") && (
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           {r.fullPath.split("/")[0]}
                         </span>
                       )}

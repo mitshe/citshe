@@ -50,8 +50,13 @@ export default function BrowserView({ sessionId }: BrowserViewProps) {
 
   return (
     <div className={`flex flex-col ${fullscreen ? "fixed inset-0 z-50 bg-background" : "h-full"}`}>
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30 shrink-0">
-        <span className="text-xs text-muted-foreground">Browser</span>
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-surface-card shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <Globe className="h-3.5 w-3.5 text-text-subtle shrink-0" />
+          <span className="text-xs text-muted-foreground truncate">
+            {browserInfo?.httpUrl ?? "Browser"}
+          </span>
+        </div>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"

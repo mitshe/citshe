@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, ChevronRight, Check } from "lucide-react";
+import { Loader2, Plus, ChevronRight, Check, Boxes } from "lucide-react";
 import { usePlugins } from "@/lib/api/hooks";
 import { pluginCatalog, type PluginDef } from "@/lib/plugin-catalog";
 import { ConnectDialog } from "@/components/plugins/plugin-dialogs";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function StackPage() {
   const { data: plugins = [], isLoading } = usePlugins();
@@ -27,8 +28,14 @@ export default function StackPage() {
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
+      ) : pluginCatalog.length === 0 ? (
+        <EmptyState
+          icon={<Boxes />}
+          title="No tools available"
+          description="There are no stack integrations to connect right now."
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {pluginCatalog.map((def) => {
             const connected = connectedTypes.has(def.type);
             if (connected) {
@@ -36,7 +43,7 @@ export default function StackPage() {
                 <Link
                   key={def.type}
                   href={`/stack/${def.type.toLowerCase()}`}
-                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-background/50 px-4 py-3.5 transition-colors hover:bg-muted/40"
+                  className="flex w-full items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:bg-surface-hover"
                 >
                   <span className={def.accent}>{def.icon}</span>
                   <div className="min-w-0 flex-1">
@@ -45,11 +52,11 @@ export default function StackPage() {
                       {def.tagline}
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-500">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-ok">
                     <Check className="h-3.5 w-3.5" />
                     Connected
                   </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-4 w-4 text-text-subtle" />
                 </Link>
               );
             }
@@ -57,7 +64,7 @@ export default function StackPage() {
               <button
                 key={def.type}
                 onClick={() => setDialog(def)}
-                className="flex w-full items-center gap-3 rounded-xl border border-dashed border-border bg-muted/10 px-4 py-3.5 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+                className="flex w-full items-center gap-3 rounded-md border border-dashed border-border bg-surface-inset/40 px-4 py-3.5 text-left transition-linear hover:border-border-strong hover:bg-surface-hover"
               >
                 <span className={def.accent}>{def.icon}</span>
                 <div className="min-w-0 flex-1">
@@ -76,9 +83,7 @@ export default function StackPage() {
         </div>
       )}
 
-      {dialog && (
-        <ConnectDialog def={dialog} onClose={() => setDialog(null)} />
-      )}
+      {dialog && <ConnectDialog def={dialog} onClose={() => setDialog(null)} />}
     </div>
   );
 }

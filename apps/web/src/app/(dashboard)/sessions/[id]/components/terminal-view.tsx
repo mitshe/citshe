@@ -64,10 +64,13 @@ export function TerminalView({
         fontSize: 13,
         lineHeight: 1.2,
         theme: {
-          background: "#0a0a0a",
-          foreground: "#e4e4e7",
-          cursor: "#e4e4e7",
-          selectionBackground: "#3f3f46",
+          // Aligned to the dark DS: surface-inset bg, accent (indigo) cursor,
+          // translucent accent selection.
+          background: "#161619",
+          foreground: "#ececed",
+          cursor: "#7c7ff5",
+          cursorAccent: "#161619",
+          selectionBackground: "rgba(124, 127, 245, 0.24)",
           black: "#18181b",
           red: "#ef4444",
           green: "#22c55e",

@@ -121,15 +121,15 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
     <button
       onClick={copy}
       className={cn(
-        "p-1.5 rounded hover:bg-white/10 transition-colors",
+        "p-1.5 rounded hover:bg-surface-hover transition-linear",
         className,
       )}
       title="Copy"
     >
       {copied ? (
-        <Check className="w-3.5 h-3.5 text-emerald-400" />
+        <Check className="w-3.5 h-3.5 text-ok" />
       ) : (
-        <Copy className="w-3.5 h-3.5 text-zinc-400" />
+        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
       )}
     </button>
   );
@@ -188,7 +188,7 @@ function WelcomePage({
           your API key in the Authorization header.
         </p>
         <div className="relative group">
-          <pre className="bg-zinc-950 text-zinc-100 rounded-xl p-5 text-sm font-mono overflow-x-auto border border-zinc-800">
+          <pre className="bg-surface-inset text-foreground rounded-lg p-5 text-sm font-mono overflow-x-auto border border-border">
             {`curl -X GET "${apiUrl}/api/v1/tasks" \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json"`}
@@ -219,7 +219,7 @@ function WelcomePage({
       <div className="space-y-3 mb-10">
         <h2 className="text-xl font-semibold">Base URL</h2>
         <div className="relative group">
-          <code className="block bg-muted rounded-xl p-4 text-sm font-mono">
+          <code className="block bg-surface-inset border border-border rounded-lg p-4 text-sm font-mono">
             {apiUrl}/api/v1
           </code>
           <div className="absolute top-1/2 -translate-y-1/2 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -237,7 +237,7 @@ function WelcomePage({
             return (
               <div
                 key={tag}
-                className="border rounded-xl p-5 hover:border-primary/30 transition-colors"
+                className="border border-border rounded-lg p-5 hover:border-border-strong transition-linear"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -320,14 +320,16 @@ function CodeBlock({
   return (
     <div
       className={cn(
-        "rounded-xl border border-zinc-800 overflow-hidden",
+        "rounded-lg border border-border overflow-hidden",
         className,
       )}
     >
       {title && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 border-b border-zinc-800">
-          {Icon && <Icon className="w-3.5 h-3.5 text-zinc-500" />}
-          <span className="text-xs font-medium text-zinc-400">{title}</span>
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-card border-b border-border">
+          {Icon && <Icon className="w-3.5 h-3.5 text-text-subtle" />}
+          <span className="text-xs font-medium text-muted-foreground">
+            {title}
+          </span>
           <div className="ml-auto">
             <CopyButton text={code} />
           </div>
@@ -336,7 +338,7 @@ function CodeBlock({
       <div className="relative group">
         <pre
           className={cn(
-            "bg-zinc-950 text-zinc-100 p-4 text-sm font-mono overflow-x-auto",
+            "bg-surface-inset text-foreground p-4 text-sm font-mono overflow-x-auto",
             language === "bash" ? "whitespace-pre-wrap" : "",
           )}
         >
@@ -379,7 +381,7 @@ function SchemaProperty({
           {nullable && "?"}
         </span>
         {required && (
-          <span className="text-[10px] text-red-500 font-medium uppercase">
+          <span className="text-[10px] text-danger font-medium uppercase">
             required
           </span>
         )}
@@ -593,7 +595,7 @@ function EndpointDetail({
       {operation.parameters && operation.parameters.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Parameters</h2>
-          <div className="border rounded-xl divide-y">
+          <div className="border border-border rounded-lg divide-y">
             {operation.parameters.map((param) => (
               <div key={param.name} className="px-4 py-3">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -607,7 +609,7 @@ function EndpointDetail({
                     {param.in}
                   </span>
                   {param.required && (
-                    <span className="text-[10px] text-red-500 font-medium uppercase">
+                    <span className="text-[10px] text-danger font-medium uppercase">
                       required
                     </span>
                   )}
@@ -677,7 +679,7 @@ function EndpointDetail({
                   icon={FileJson}
                 />
               ) : (
-                <div className="border rounded-xl divide-y">
+                <div className="border border-border rounded-lg divide-y">
                   {Object.entries(requestSchemaInfo.properties).map(
                     ([name, schema]) => (
                       <SchemaProperty
@@ -733,7 +735,7 @@ function EndpointDetail({
                     icon={FileJson}
                   />
                 ) : (
-                  <div className="border rounded-xl divide-y">
+                  <div className="border border-border rounded-lg divide-y">
                     {Object.entries(responseSchemaInfo.properties).map(
                       ([name, schema]) => (
                         <SchemaProperty
@@ -754,7 +756,7 @@ function EndpointDetail({
                 )}
               </>
             ) : (
-              <div className="border rounded-xl p-4 text-sm text-muted-foreground">
+              <div className="border border-border rounded-lg p-4 text-sm text-muted-foreground">
                 No response body
               </div>
             )}
@@ -767,7 +769,7 @@ function EndpointDetail({
             ) && (
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold">Error Responses</h2>
-                <div className="border rounded-xl divide-y">
+                <div className="border border-border rounded-lg divide-y">
                   {Object.entries(operation.responses)
                     .filter(([status]) => status !== "200" && status !== "201")
                     .map(([status, response]) => (

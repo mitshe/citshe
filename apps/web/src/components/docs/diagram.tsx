@@ -12,12 +12,12 @@ interface DiagramBlockProps {
 
 export function DiagramBlock({ parts }: DiagramBlockProps) {
   return (
-    <div className="my-8 p-6 rounded-xl bg-muted/30 border overflow-x-auto">
+    <div className="my-8 p-6 rounded-lg bg-surface-inset border border-border overflow-x-auto">
       <div className="flex items-center justify-center gap-2 min-w-max">
         {parts.map((part, index) => (
           <React.Fragment key={index}>
             <div className="flex flex-col items-center">
-              <div className="px-4 py-2 rounded-lg bg-background border shadow-sm text-sm font-medium text-center">
+              <div className="px-4 py-2 rounded-md bg-surface-card border border-border text-sm font-medium text-center">
                 {part.label}
               </div>
               {part.sublabel && (

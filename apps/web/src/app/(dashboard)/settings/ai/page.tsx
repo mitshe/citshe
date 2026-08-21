@@ -23,6 +23,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { AnthropicIcon, OpenRouterIcon } from "@/components/icons/brand-icons";
+import { StatusDot } from "@/components/ui/status-dot";
 import {
   useAICredentials,
   useCreateAICredential,
@@ -96,27 +97,27 @@ export default function AICredentialsPage() {
       {/* Pillar 1 — the engine that does the actual work */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-medium">Agent engine</h2>
+          <h2 className="text-sm font-medium text-foreground">Agent engine</h2>
           <p className="text-xs text-muted-foreground">
             Workers that clone a repo, write code and open a PR.
           </p>
         </div>
-        <div className="rounded-xl border border-border bg-background/50 p-4">
+        <div className="rounded-md border border-border bg-surface-card p-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#D97757]/10 text-[#D97757]">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#D97757]/10 text-[#D97757]">
               <Terminal className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Claude Code</span>
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="font-medium text-foreground">Claude Code</span>
+                <span className="rounded-sm border border-border bg-surface-inset px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                   subscription
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 Runs inside each worker container. Authenticated once on your
                 server with{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                <code className="rounded-sm border border-border bg-surface-inset px-1 py-0.5 font-mono text-xs">
                   claude /login
                 </code>{" "}
                 — no API key here. This is the engine; it uses your Claude
@@ -130,9 +131,10 @@ export default function AICredentialsPage() {
       {/* Pillar 2 — a cheap key for small in-panel helpers */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-medium">Panel AI</h2>
+          <h2 className="text-sm font-medium text-foreground">Panel AI</h2>
           <p className="text-xs text-muted-foreground">
             Small in-panel helpers — “Improve with AI”, summaries. Optional.
+            This is the panel key, separate from the Claude Code engine above.
           </p>
         </div>
 
@@ -141,8 +143,8 @@ export default function AICredentialsPage() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : panelKey ? (
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-background/50 p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-surface-card p-4">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset">
               {panelKey.provider === "OPENROUTER" ? (
                 <OpenRouterIcon className="h-5 w-5" />
               ) : (
@@ -150,16 +152,21 @@ export default function AICredentialsPage() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {panelKey.provider === "OPENROUTER"
-                  ? "OpenRouter"
-                  : "Claude API"}
-              </p>
-              <p className="text-xs text-muted-foreground">Connected</p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-foreground">
+                  {panelKey.provider === "OPENROUTER"
+                    ? "OpenRouter"
+                    : "Claude API"}
+                </p>
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <StatusDot state="ok" size={7} />
+                  Connected
+                </span>
+              </div>
             </div>
             <button
               onClick={() => handleDelete(panelKey.id)}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive"
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-linear hover:text-destructive"
             >
               <Trash2 className="h-3 w-3" />
               Remove
@@ -172,11 +179,11 @@ export default function AICredentialsPage() {
                 key={def.provider}
                 onClick={() => setConnectDef(def)}
                 disabled={byProvider.has(def.provider)}
-                className="flex items-start gap-3 rounded-xl border border-dashed border-border bg-muted/10 p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/30 disabled:opacity-50"
+                className="flex items-start gap-3 rounded-md border border-dashed border-border bg-surface-inset/40 p-4 text-left transition-linear hover:border-primary/40 hover:bg-surface-hover disabled:opacity-50"
               >
                 <span className="shrink-0">{def.icon}</span>
                 <div className="min-w-0">
-                  <p className="font-medium">Connect {def.name}</p>
+                  <p className="font-medium text-foreground">Connect {def.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {def.description}
                   </p>

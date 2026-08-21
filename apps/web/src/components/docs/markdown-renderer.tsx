@@ -143,13 +143,15 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                     const isInline = !className;
                     if (isInline) {
                       return (
-                        <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-sm text-foreground">
+                        <code className="px-1.5 py-0.5 rounded bg-surface-inset border border-border font-mono text-sm text-foreground">
                           {children}
                         </code>
                       );
                     }
                     return (
-                      <code className="text-zinc-100 text-sm">{children}</code>
+                      <code className="text-foreground font-mono text-sm">
+                        {children}
+                      </code>
                     );
                   },
                   pre: ({ children }) => {
@@ -171,7 +173,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
 
                     return (
                       <div className="group relative my-4">
-                        <pre className="overflow-x-auto rounded-lg bg-zinc-950 dark:bg-zinc-900 p-4 border border-zinc-800">
+                        <pre className="overflow-x-auto rounded-lg bg-surface-inset p-4 border border-border">
                           {children}
                         </pre>
                         <CopyButton text={codeText} />
@@ -179,20 +181,24 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
                     );
                   },
                   table: ({ children }) => (
-                    <div className="my-6 overflow-x-auto rounded-lg border">
+                    <div className="my-6 overflow-x-auto rounded-lg border border-border">
                       <table className="w-full text-sm">{children}</table>
                     </div>
                   ),
                   thead: ({ children }) => (
-                    <thead className="bg-muted/50 border-b">{children}</thead>
+                    <thead className="bg-surface-inset border-b border-border">
+                      {children}
+                    </thead>
                   ),
                   th: ({ children }) => (
-                    <th className="px-4 py-3 text-left font-medium">
+                    <th className="px-4 py-3 text-left font-medium text-foreground">
                       {children}
                     </th>
                   ),
                   td: ({ children }) => (
-                    <td className="px-4 py-3 border-t">{children}</td>
+                    <td className="px-4 py-3 border-t border-border">
+                      {children}
+                    </td>
                   ),
                   blockquote: ({ children }) => (
                     <blockquote className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground my-4">

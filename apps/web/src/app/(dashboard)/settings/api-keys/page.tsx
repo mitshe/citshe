@@ -2,22 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
   DialogBody,
@@ -104,25 +90,25 @@ export default function ApiKeysPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold">API Keys</h1>
-          <p className="text-muted-foreground">
-            Manage API keys for programmatic access
+          <h1 className="text-xl font-semibold tracking-tight">API Keys</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage API keys for programmatic access.
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" />
               Create API Key
             </Button>
           </DialogTrigger>
@@ -171,7 +157,7 @@ export default function ApiKeysPage() {
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="text-xs text-warn">
                     This key will only be shown once. Store it securely.
                   </p>
                 </div>
@@ -216,85 +202,76 @@ export default function ApiKeysPage() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Your API Keys</CardTitle>
-          <CardDescription>
-            Keys are used to authenticate API requests
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {apiKeys.length === 0 ? (
-            <div className="text-center py-8">
-              <Key className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No API keys yet</p>
-              <p className="text-sm text-muted-foreground">
-                Create your first API key to get started
-              </p>
+      {apiKeys.length === 0 ? (
+        <EmptyState
+          icon={<Key />}
+          title="No API keys yet"
+          description="Create your first API key to authenticate programmatic access to the API."
+          action={
+            <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create API Key
+            </Button>
+          }
+        />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+          {apiKeys.map((key, i) => (
+            <div
+              key={key.id}
+              className={`flex items-center gap-3 px-3.5 py-3 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset text-muted-foreground">
+                <Key className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {key.name}
+                  </span>
+                  <code className="rounded-sm border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    {key.prefix}...
+                  </code>
+                </div>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-text-subtle">
+                  <span>Created {formatDistanceToNow(new Date(key.createdAt))}</span>
+                  <span>
+                    Last used{" "}
+                    {key.lastUsedAt
+                      ? formatDistanceToNow(new Date(key.lastUsedAt))
+                      : "never"}
+                  </span>
+                  {key.expiresAt ? (
+                    <Badge variant="outline">
+                      Expires {new Date(key.expiresAt).toLocaleDateString()}
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">No expiry</Badge>
+                  )}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Revoke
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Key</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {apiKeys.map((key) => (
-                  <TableRow key={key.id}>
-                    <TableCell className="font-medium">{key.name}</TableCell>
-                    <TableCell>
-                      <code className="text-sm bg-muted px-2 py-1 rounded">
-                        {key.prefix}...
-                      </code>
-                    </TableCell>
-                    <TableCell>
-                      {formatDistanceToNow(new Date(key.createdAt))}
-                    </TableCell>
-                    <TableCell>
-                      {key.lastUsedAt
-                        ? formatDistanceToNow(new Date(key.lastUsedAt))
-                        : "Never"}
-                    </TableCell>
-                    <TableCell>
-                      {key.expiresAt ? (
-                        <Badge variant="outline">
-                          {new Date(key.expiresAt).toLocaleDateString()}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Never</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-red-600"
-                            onClick={() => setRevokeTarget({ id: key.id, name: key.name })}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Revoke
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
 
       <AlertDialog open={!!revokeTarget} onOpenChange={() => setRevokeTarget(null)}>
         <AlertDialogContent>
@@ -314,7 +291,7 @@ export default function ApiKeysPage() {
                 }
               }}
               disabled={deleteApiKey.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-white hover:bg-destructive/90"
             >
               Revoke
             </AlertDialogAction>

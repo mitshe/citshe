@@ -45,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Plus, Trash2, Loader2, Zap, Pencil, Github, Download, MoreHorizontal, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import type { Skill } from "@citshe/types";
@@ -184,10 +185,10 @@ export default function SkillsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Skills</h1>
           <p className="text-sm text-muted-foreground">
             Reusable instructions installed as Claude Code slash commands in threads.
           </p>
@@ -250,13 +251,23 @@ export default function SkillsPage() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : skills.length === 0 ? (
-        <div className="text-center py-12">
-          <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No skills yet</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create skills to give Claude Code specific instructions.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Zap />}
+          title="No skills yet"
+          description="Create skills to give Claude Code specific instructions, or import a set from a GitHub repository."
+          action={
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                <Github className="mr-1.5 h-4 w-4" />
+                Import from GitHub
+              </Button>
+              <Button size="sm" onClick={openCreate}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Create Skill
+              </Button>
+            </div>
+          }
+        />
       ) : (
         <div className="space-y-2">
           {selectMode && (
@@ -275,7 +286,7 @@ export default function SkillsPage() {
           {skills.map((skill) => (
             <div
               key={skill.id}
-              className="group flex items-center gap-3 px-4 py-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+              className="group flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3 cursor-pointer transition-linear hover:bg-surface-hover"
               onClick={() => selectMode ? toggleSelect(skill.id) : !skill.isSystem && openEdit(skill)}
             >
               {selectMode ? (
@@ -292,11 +303,9 @@ export default function SkillsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{skill.name}</span>
-                  {skill.isSystem && (
-                    <Badge variant="outline" className="text-[10px]">
-                      Built-in
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="text-[10px]">
+                    {skill.isSystem ? "Built-in" : "Custom"}
+                  </Badge>
                   {skill.category && (
                     <Badge variant="secondary" className="text-[10px]">
                       {skill.category}

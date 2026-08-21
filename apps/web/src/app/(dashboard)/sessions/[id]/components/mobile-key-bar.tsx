@@ -48,7 +48,7 @@ export function MobileKeyBar({ onSend, onFocus }: MobileKeyBarProps) {
   };
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-t border-border bg-background px-1.5 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex items-center gap-1 overflow-x-auto border-t border-border bg-surface-card px-1.5 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Key label="Esc" onClick={() => send(ESC)} />
       <Key label="Tab" onClick={() => send(TAB)} />
       <Key
@@ -105,7 +105,7 @@ function Key({
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
-        "flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 px-2.5 text-xs font-medium text-foreground active:bg-muted transition-colors",
+        "flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset px-2.5 text-xs font-medium text-foreground active:bg-surface-hover transition-linear",
         wide && "px-3",
         armed && "border-primary bg-primary/15 text-primary",
       )}

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusDot, type StatusDotState } from "@/components/ui/status-dot";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
   DialogBody,
@@ -39,7 +40,6 @@ import {
   Loader2,
   MessageSquareCode,
   Play,
-  Pause,
   Square,
   Clock,
   Trash2,
@@ -47,10 +47,7 @@ import {
   Search,
   MoreHorizontal,
   CheckSquare,
-  Activity,
   GitBranch,
-  CheckCircle2,
-  XCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -91,35 +88,18 @@ const EMPTY_SNAPSHOTS: Array<{
   enableDocker?: boolean;
 }> = [];
 
+// Maps a backend SessionStatus → StatusDot state + label. The list uses the
+// STATIC arc for running (no spinner) — the pulsing ripple is reserved for the
+// open-session header.
 const statusConfig: Record<
   SessionStatus,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode }
+  { label: string; state: StatusDotState }
 > = {
-  CREATING: {
-    label: "Creating",
-    variant: "outline",
-    icon: <Loader2 className="w-3 h-3 animate-spin" />,
-  },
-  RUNNING: {
-    label: "Running",
-    variant: "default",
-    icon: <Play className="w-3 h-3" />,
-  },
-  PAUSED: {
-    label: "Paused",
-    variant: "secondary",
-    icon: <Pause className="w-3 h-3" />,
-  },
-  COMPLETED: {
-    label: "Stopped",
-    variant: "outline",
-    icon: <Square className="w-3 h-3" />,
-  },
-  FAILED: {
-    label: "Failed",
-    variant: "destructive",
-    icon: <Square className="w-3 h-3" />,
-  },
+  CREATING: { label: "Creating", state: "creating" },
+  RUNNING: { label: "Running", state: "running" },
+  PAUSED: { label: "Paused", state: "paused" },
+  COMPLETED: { label: "Stopped", state: "done" },
+  FAILED: { label: "Failed", state: "failed" },
 };
 
 export default function SessionsPage() {
@@ -503,11 +483,156 @@ export default function SessionsPage() {
   const firstSelectedRepoId = form.repositoryIds[0] || undefined;
   const { data: branches = [] } = useRepoBranches(firstSelectedRepoId);
 
+  // Group the filtered list into RUNNING (running/creating) and STOPPED
+  // (everything else) so live threads float to the top.
+  const groupedSessions = [
+    {
+      key: "running",
+      label: "Running",
+      sessions: filteredSessions.filter(
+        (s) => s.status === "RUNNING" || s.status === "CREATING",
+      ),
+    },
+    {
+      key: "stopped",
+      label: "Stopped",
+      sessions: filteredSessions.filter(
+        (s) => s.status !== "RUNNING" && s.status !== "CREATING",
+      ),
+    },
+  ];
+
+  const renderSessionRow = (session: AgentSession) => {
+    const config = statusConfig[session.status as SessionStatus];
+    return (
+      <div
+        key={session.id}
+        className="group flex items-center gap-3 px-3 py-2.5 bg-surface-card hover:bg-surface-hover transition-linear cursor-pointer"
+        onClick={() =>
+          selectMode
+            ? toggleSelect(session.id)
+            : router.push(`/sessions/${session.id}`)
+        }
+      >
+        {selectMode ? (
+          <input
+            type="checkbox"
+            checked={selectedIds.has(session.id)}
+            onChange={() => toggleSelect(session.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer shrink-0"
+          />
+        ) : (
+          <StatusDot state={config.state} className="shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm truncate">{session.name}</span>
+            <span className="text-[11px] text-text-subtle shrink-0">
+              {config.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+            {session.aiCredential && (
+              <span className="truncate">
+                {providerLabels[session.aiCredential.provider] ||
+                  session.aiCredential.provider}
+              </span>
+            )}
+            {session.branch && (
+              <span className="flex items-center gap-1 font-mono shrink-0">
+                <GitBranch className="w-3 h-3" />
+                {session.branch}
+              </span>
+            )}
+            {session.enableDocker && <span className="shrink-0">Docker</span>}
+            {session.repositories && session.repositories.length > 0 && (
+              <span className="truncate max-w-[200px]">
+                {session.repositories
+                  .map((r) => r.repository?.name || "")
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            )}
+            <span className="flex items-center gap-1 shrink-0 text-text-subtle">
+              <Clock className="w-3 h-3" />
+              {formatDistanceToNow(new Date(session.lastActiveAt))}
+            </span>
+          </div>
+        </div>
+
+        {!selectMode && (
+          <div
+            className="flex items-center gap-1 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {session.status === "RUNNING" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 hidden sm:inline-flex text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-linear"
+                onClick={(e) => handleStop(e, session.id)}
+              >
+                <Square className="w-3.5 h-3.5 mr-1" />
+                Stop
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => router.push(`/sessions/${session.id}`)}
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Open
+                </DropdownMenuItem>
+                {session.status === "RUNNING" && (
+                  <DropdownMenuItem
+                    onClick={(e) =>
+                      handleStop(e as unknown as React.MouseEvent, session.id)
+                    }
+                  >
+                    <Square className="w-4 h-4 mr-2" />
+                    Stop
+                  </DropdownMenuItem>
+                )}
+                {session.status !== "CREATING" && (
+                  <DropdownMenuItem
+                    onClick={(e) =>
+                      handleEdit(e as unknown as React.MouseEvent, session)
+                    }
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() =>
+                    setDeleteTarget({ id: session.id, name: session.name })
+                  }
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Threads</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Threads</h1>
           <p className="text-sm text-muted-foreground">
             Isolated environments for AI coding agents
           </p>
@@ -647,27 +772,24 @@ export default function SessionsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-3 sm:gap-x-6 sm:gap-y-2 text-sm text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Activity className="h-4 w-4" />
-          <span>Total</span>
-          <span className="font-semibold text-foreground">{totalSessions}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Play className="h-4 w-4 text-green-500" />
-          <span>Running</span>
-          <span className="font-semibold text-foreground">{runningSessions}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <CheckCircle2 className="h-4 w-4 text-blue-500" />
-          <span>Stopped</span>
-          <span className="font-semibold text-foreground">{completedSessions}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <XCircle className="h-4 w-4 text-red-400" />
-          <span>Failed</span>
-          <span className="font-semibold text-foreground">{failedSessions}</span>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+        <span>
+          <span className="font-medium text-foreground">{totalSessions}</span> total
+        </span>
+        <span className="flex items-center gap-1.5">
+          <StatusDot state="running" size={8} />
+          <span className="font-medium text-foreground">{runningSessions}</span> running
+        </span>
+        <span className="flex items-center gap-1.5">
+          <StatusDot state="done" size={8} />
+          <span className="font-medium text-foreground">{completedSessions}</span> stopped
+        </span>
+        {failedSessions > 0 && (
+          <span className="flex items-center gap-1.5">
+            <StatusDot state="failed" size={8} />
+            <span className="font-medium text-foreground">{failedSessions}</span> failed
+          </span>
+        )}
       </div>
 
       <div>
@@ -676,114 +798,51 @@ export default function SessionsPage() {
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : filteredSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <MessageSquareCode className="w-12 h-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No threads yet</h3>
-              <p className="text-muted-foreground text-center mb-4 max-w-sm">
-                Threads are isolated containers where AI agents work on your code.
-                Create your first thread or{" "}
-                <Link href="/tasks" className="underline hover:text-foreground transition-colors">
-                  import tasks from Jira
-                </Link>{" "}
-                to get started.
-              </p>
-              <Button onClick={openCreate}>
-                <Plus className="w-4 h-4 mr-2" />
-                New Thread
-              </Button>
-            </div>
+            <EmptyState
+              icon={<MessageSquareCode />}
+              title="No threads yet"
+              description={
+                <>
+                  Threads are isolated containers where AI agents work on your
+                  code. Create your first thread or{" "}
+                  <Link href="/tasks" className="underline hover:text-foreground transition-colors">
+                    import tasks from Jira
+                  </Link>{" "}
+                  to get started.
+                </>
+              }
+              action={
+                <Button onClick={openCreate}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Thread
+                </Button>
+              }
+            />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-6">
               {selectMode && (
-                <div className="flex items-center gap-3 px-4 py-1">
+                <div className="flex items-center gap-3 px-1 py-1">
                   <input type="checkbox" checked={selectedIds.size === filteredSessions.length && filteredSessions.length > 0} onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer" />
                   <span className="text-xs text-muted-foreground">{selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}</span>
                 </div>
               )}
-              {filteredSessions.map((session) => {
-                const config = statusConfig[session.status as SessionStatus];
-                return (
-                  <div
-                    key={session.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => selectMode ? toggleSelect(session.id) : router.push(`/sessions/${session.id}`)}
-                  >
-                    {selectMode ? (
-                      <input type="checkbox" checked={selectedIds.has(session.id)} onChange={() => toggleSelect(session.id)} onClick={(e) => e.stopPropagation()} className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer shrink-0" />
-                    ) : (
-                      <MessageSquareCode className="h-4 w-4 text-primary shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{session.name}</span>
-                        <Badge variant={config.variant} className="gap-1">
-                          {config.icon}
-                          {config.label}
-                        </Badge>
-                      </div>
-                      {session.instructions && (
-                        <p className="text-xs text-muted-foreground truncate max-w-md">
-                          {session.instructions.split('\n')[0]}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                        {session.aiCredential && <span>{providerLabels[session.aiCredential.provider] || session.aiCredential.provider}</span>}
-                        {session.branch && (
-                          <span className="flex items-center gap-1 font-mono">
-                            <GitBranch className="w-3 h-3" />
-                            {session.branch}
-                          </span>
-                        )}
-                        {session.enableDocker && <span>Docker</span>}
-                        {session.repositories && session.repositories.length > 0 && (
-                          <span className="truncate max-w-[200px]">
-                            {session.repositories.map((r) => r.repository?.name || "").filter(Boolean).join(", ")}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {formatDistanceToNow(new Date(session.lastActiveAt))}
-                        </span>
-                      </div>
+              {groupedSessions.map(({ key, label, sessions: groupSessions }) =>
+                groupSessions.length === 0 ? null : (
+                  <div key={key}>
+                    <div className="flex items-center gap-2 px-1 pb-2">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
+                        {label}
+                      </span>
+                      <span className="text-[11px] text-text-subtle">
+                        {groupSessions.length}
+                      </span>
                     </div>
-
-                    {!selectMode && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(`/sessions/${session.id}`)}>
-                              <Play className="w-4 h-4 mr-2" />
-                              Open
-                            </DropdownMenuItem>
-                            {session.status === "RUNNING" && (
-                              <DropdownMenuItem onClick={(e) => handleStop(e as unknown as React.MouseEvent, session.id)}>
-                                <Square className="w-4 h-4 mr-2" />
-                                Stop
-                              </DropdownMenuItem>
-                            )}
-                            {session.status !== "CREATING" && (
-                              <DropdownMenuItem onClick={(e) => handleEdit(e as unknown as React.MouseEvent, session)}>
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ id: session.id, name: session.name })}>
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
+                    <div className="overflow-hidden rounded-lg border border-border divide-y divide-border">
+                      {groupSessions.map((session) => renderSessionRow(session))}
+                    </div>
                   </div>
-                );
-              })}
+                ),
+              )}
             </div>
           )}
       </div>

@@ -1,0 +1,327 @@
+/* ============================================================================
+   citshe design tokens — Linear-grade dark design system.
+   DARK-FIRST: :root is the dark palette. Light is an opt-in override (.light /
+   [data-theme="light"]) and prefers-color-scheme fallback.
+   All shadcn utility names (bg-background, text-foreground, border-border, ...)
+   are mapped so existing screens keep working — only the VALUES changed.
+   ============================================================================ */
+
+:root {
+  /* --- radius scale (8px base → sm 6 / md 8 / lg 12 / xl 16) --- */
+  --radius: 8px;
+
+  /* --- surfaces --- */
+  --background: oklch(0.17 0.005 285);
+  --surface-card: oklch(0.205 0.006 285);
+  --surface-inset: oklch(0.15 0.005 285);
+  --surface-hover: oklch(0.24 0.007 285);
+
+  /* --- text --- */
+  --foreground: oklch(0.96 0.004 285);
+  --muted-foreground: oklch(0.68 0.006 285);
+  --text-subtle: oklch(0.52 0.006 285);
+
+  /* --- borders / rings --- */
+  --border: oklch(1 0 0 / 0.08);
+  --border-strong: oklch(1 0 0 / 0.14);
+  --input: oklch(1 0 0 / 0.08);
+  --ring: oklch(0.72 0.14 250 / 0.6);
+
+  /* --- accent / primary --- */
+  --primary: oklch(0.62 0.19 265);
+  --primary-foreground: oklch(0.98 0 0);
+  --accent-glow: oklch(0.62 0.19 265 / 0.35);
+
+  /* --- state colors --- */
+  --ok: oklch(0.72 0.15 162);
+  --warn: oklch(0.78 0.14 74);
+  --danger: oklch(0.63 0.2 25);
+  --info: oklch(0.7 0.13 240);
+
+  /* --- shadcn token surface derivations (dark) --- */
+  --card: var(--surface-card);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-card);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-card);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+
+  /* --- charts --- */
+  --chart-1: var(--primary);
+  --chart-2: var(--ok);
+  --chart-3: var(--info);
+  --chart-4: var(--warn);
+  --chart-5: var(--danger);
+
+  /* --- sidebar --- */
+  --sidebar: oklch(0.16 0.005 285);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* --- landing gradients (keep helpers in globals working) --- */
+  --gradient-start: oklch(0.62 0.19 265);
+  --gradient-mid: oklch(0.58 0.16 250);
+  --gradient-end: oklch(0.66 0.14 290);
+  --glow: oklch(0.62 0.19 265 / 0.25);
+
+  /* --- fonts (Geist + brand) --- */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  /* --font-brand set by next/font (Space Grotesk) in layout */
+
+  /* --- motion --- */
+  --ease-linear: cubic-bezier(0.2, 0.6, 0.3, 1);
+  --duration-linear: 150ms;
+}
+
+/* keep the .dark selector mapped to the same dark palette so any explicit
+   `.dark` usage in third-party widgets stays consistent. */
+.dark {
+  color-scheme: dark;
+}
+
+/* --- Light theme: opt-in only (dark is default) --- */
+.light,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --background: oklch(0.99 0.002 90);
+  --surface-card: oklch(1 0 0);
+  --surface-inset: oklch(0.97 0.002 90);
+  --surface-hover: oklch(0.96 0.003 90);
+
+  --foreground: oklch(0.18 0.006 285);
+  --muted-foreground: oklch(0.46 0.006 285);
+  --text-subtle: oklch(0.58 0.006 285);
+
+  --border: oklch(0.14 0.01 285 / 0.1);
+  --border-strong: oklch(0.14 0.01 285 / 0.18);
+  --input: oklch(0.14 0.01 285 / 0.1);
+  --ring: oklch(0.62 0.14 250 / 0.5);
+
+  --primary: oklch(0.55 0.2 265);
+  --primary-foreground: oklch(0.99 0 0);
+  --accent-glow: oklch(0.55 0.2 265 / 0.25);
+
+  --ok: oklch(0.6 0.15 162);
+  --warn: oklch(0.65 0.15 74);
+  --danger: oklch(0.58 0.22 25);
+  --info: oklch(0.58 0.14 240);
+
+  --card: var(--surface-card);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-hover);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-hover);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+
+  --sidebar: oklch(0.98 0.002 90);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+
+  --glow: oklch(0.55 0.2 265 / 0.15);
+}
+
+/* ============================================================================
+   Tailwind v4 @theme inline — map CSS vars to utility names so
+   bg-background / text-foreground / border-border / etc. resolve to new values.
+   ============================================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* extended semantic tokens (new, additive) */
+  --color-surface-card: var(--surface-card);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-strong: var(--border-strong);
+  --color-text-subtle: var(--text-subtle);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-gradient-start: var(--gradient-start);
+  --color-gradient-mid: var(--gradient-mid);
+  --color-gradient-end: var(--gradient-end);
+  --color-glow: var(--glow);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-sm: calc(var(--radius) - 2px); /* 6 */
+  --radius-md: var(--radius); /* 8 */
+  --radius-lg: calc(var(--radius) + 4px); /* 12 */
+  --radius-xl: calc(var(--radius) + 8px); /* 16 */
+}
+
+/* ============================================================================
+   Motion utilities + keyframes (StatusDot etc.)
+   ============================================================================ */
+.transition-linear {
+  transition-duration: var(--duration-linear);
+  transition-timing-function: var(--ease-linear);
+}
+
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes st-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   StatusDot styles (dependency-free, driven by data-state)
+   ============================================================================ */
+.status-dot {
+  --sd-size: 10px;
+  display: inline-block;
+  position: relative;
+  width: var(--sd-size);
+  height: var(--sd-size);
+  flex: 0 0 auto;
+  border-radius: 9999px;
+  vertical-align: middle;
+}
+
+/* solid-dot states */
+.status-dot[data-state="failed"],
+.status-dot[data-state="down"] {
+  background: var(--danger);
+}
+.status-dot[data-state="ok"] {
+  background: var(--ok);
+}
+.status-dot[data-state="warn"] {
+  background: var(--warn);
+}
+.status-dot[data-state="idle"] {
+  background: var(--muted-foreground);
+}
+.status-dot[data-state="done"] {
+  background: var(--muted-foreground);
+  opacity: 0.7;
+}
+
+/* paused → gray hollow ring */
+.status-dot[data-state="paused"] {
+  background: transparent;
+  border: 1.5px solid var(--muted-foreground);
+}
+
+/* creating → amber rotating arc */
+.status-dot[data-state="creating"] {
+  --sd-size: 9px;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-top-color: var(--warn);
+  border-right-color: var(--warn);
+  animation: st-spin 0.8s linear infinite;
+}
+
+/* running (default) → static Linear-style emerald arc (~300deg ring) */
+.status-dot[data-state="running"] {
+  background: transparent;
+  /* conic fill masked into a ring */
+  background-image: conic-gradient(
+    var(--ok) 0deg 300deg,
+    oklch(0.72 0.15 162 / 0.18) 300deg 360deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(50% - 1.5px),
+    #000 calc(50% - 1.5px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(50% - 1.5px),
+    #000 calc(50% - 1.5px)
+  );
+}
+
+/* running + pulse → emerald dot with ripple (open-session header only) */
+.status-dot[data-state="running"][data-pulse="true"] {
+  background: var(--ok);
+  background-image: none;
+  -webkit-mask: none;
+  mask: none;
+}
+.status-dot[data-state="running"][data-pulse="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--ok);
+  animation: st-ripple 2.4s var(--ease-linear) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot[data-state="creating"] {
+    animation: none;
+  }
+  .status-dot[data-state="running"][data-pulse="true"]::after {
+    animation: none;
+    opacity: 0;
+  }
+}

@@ -101,21 +101,23 @@ export function TaskBoardView({
             }
             onDrop={droppable ? () => handleDrop(col) : undefined}
             className={cn(
-              "flex min-h-0 flex-col rounded-xl border bg-muted/20 transition-colors",
+              "flex min-h-0 flex-col rounded-lg border bg-surface-card transition-linear",
               isTarget
-                ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+                ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/25"
                 : "border-border",
             )}
           >
-            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <h2 className="text-sm font-semibold">{col.name}</h2>
-              <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-t-lg border-b border-border px-3 py-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {col.name}
+              </h2>
+              <span className="rounded-full bg-surface-inset px-1.5 text-[11px] font-medium text-text-subtle">
                 {byColumn[col.id].length}
               </span>
             </div>
             <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto p-2">
               {byColumn[col.id].length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-muted-foreground/50">
+                <p className="px-1 py-6 text-center text-xs text-text-subtle">
                   {isTarget ? "Drop here" : "Nothing here."}
                 </p>
               ) : (

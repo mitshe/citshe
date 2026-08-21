@@ -28,7 +28,11 @@ const pathLabels: Record<string, string> = {
 };
 
 function isDynamicSegment(segment: string): boolean {
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment)) {
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      segment,
+    )
+  ) {
     return true;
   }
   if (/^c[a-z0-9]{24,}$/i.test(segment)) {
@@ -40,9 +44,10 @@ function isDynamicSegment(segment: string): boolean {
   return false;
 }
 
-export function BreadcrumbsWrapper() {
+export function Breadcrumbs() {
   const pathname = usePathname();
 
+  // Hide on the open-terminal view.
   if (/^\/sessions\/[^/]+$/.test(pathname) || pathname.endsWith("/terminal")) {
     return null;
   }
@@ -68,7 +73,8 @@ export function BreadcrumbsWrapper() {
       continue;
     }
 
-    const label = pathLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
+    const label =
+      pathLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
     const isLast = i === segments.length - 1;
 
     breadcrumbs.push({
@@ -84,27 +90,27 @@ export function BreadcrumbsWrapper() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1 text-sm text-muted-foreground px-6 pt-4"
+      className="flex items-center gap-1 px-6 pt-4 text-[13px] text-text-subtle"
     >
       <Link
         href="/home"
-        className="flex items-center hover:text-foreground transition-colors"
+        className="flex items-center transition-linear hover:text-foreground"
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-3.5 w-3.5" />
       </Link>
 
       {breadcrumbs.map((item, index) => (
         <div key={index} className="flex items-center gap-1">
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-3.5 w-3.5 text-text-subtle/60" />
           {item.href ? (
             <Link
               href={item.href}
-              className="hover:text-foreground transition-colors"
+              className="transition-linear hover:text-foreground"
             >
               {item.label}
             </Link>
           ) : (
-            <span className="text-foreground font-medium">{item.label}</span>
+            <span className="font-medium text-foreground">{item.label}</span>
           )}
         </div>
       ))}

@@ -60,7 +60,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col shadow-2xl transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
+          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col shadow-2xl transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
           side === "right" &&
             "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-[85%] max-w-md gap-4 border-l",
           side === "left" &&
@@ -80,7 +80,7 @@ function SheetContent({
         )}
         {children}
         {side !== "bottom" && (
-          <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-md p-1.5 opacity-70 transition-all hover:opacity-100 hover:bg-muted focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+          <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-surface-hover absolute top-4 right-4 rounded-md p-1.5 opacity-70 transition-linear hover:opacity-100 hover:bg-surface-hover focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
@@ -105,7 +105,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sheet-footer"
       className={cn(
-        "mt-auto flex flex-col gap-3 p-6 pt-4 border-t bg-muted/30",
+        "mt-auto flex flex-col gap-3 p-6 pt-4 border-t border-border bg-surface-inset/40",
         className,
       )}
       {...props}

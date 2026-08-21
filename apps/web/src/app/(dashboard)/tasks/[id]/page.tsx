@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -51,7 +49,8 @@ import {
   RotateCcw,
   GitPullRequest,
 } from "lucide-react";
-import { formatDistanceToNow } from "@/lib/utils";
+import { StatusDot } from "@/components/ui/status-dot";
+import { formatDistanceToNow, cn } from "@/lib/utils";
 import {
   useTask,
   useUpdateTask,
@@ -64,6 +63,7 @@ import {
 import { toast } from "sonner";
 import type { Task, TaskStatus, TaskPriority } from "@/lib/api/types";
 import { getTaskStatus, getPriority } from "@/lib/status-config";
+import { StatusPill } from "../components/task-shared";
 
 // ---------------------------------------------------------------------------
 // Helpers — defensive narrowing of loosely-typed JSON (result / agentLogs)
@@ -282,39 +282,43 @@ export default function TaskDetailPage() {
 
   const isClosed =
     task.closedAt != null || CLOSED_STATUSES.includes(task.status);
-  const statusConfig = getTaskStatus(task.status);
   const labels = task.labels ?? [];
   const agentLogs = normalizeAgentLogs(task.agentLogs);
   const resultSummary = extractResultSummary(task.result);
   const prUrl = extractPrUrl(task.result);
   const saving = updateTask.isPending;
+  const liveWorker =
+    !!task.sessionId &&
+    (task.status === "ANALYZING" || task.status === "IN_PROGRESS");
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 max-w-4xl mx-auto">
+    <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:py-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Link href="/tasks">
             <Button variant="ghost" size="icon" className="shrink-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
-          {task.priority && (
-            <Badge variant={getPriority(task.priority).variant}>
-              {getPriority(task.priority).label}
-            </Badge>
-          )}
-          <Badge variant={isClosed ? "secondary" : "outline"} className="gap-1">
+          <StatusPill status={task.status} />
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              isClosed
+                ? "border-border bg-surface-inset/60 text-muted-foreground"
+                : "border-border text-foreground",
+            )}
+          >
             {isClosed ? (
               <CheckCircle2 className="w-3 h-3" />
             ) : (
               <Clock className="w-3 h-3" />
             )}
             {isClosed ? "Closed" : "Open"}
-          </Badge>
+          </span>
           {saving && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin" />
               Saving…
             </span>
@@ -418,11 +422,11 @@ export default function TaskDetailPage() {
               setEditingTitle(false);
             }
           }}
-          className="text-2xl font-bold h-auto py-1.5"
+          className="h-auto py-1.5 text-2xl font-semibold tracking-tight"
         />
       ) : (
         <h1
-          className="text-2xl font-bold break-words cursor-text rounded-md -mx-2 px-2 py-1 hover:bg-muted/50"
+          className="-mx-2 cursor-text break-words rounded-md px-2 py-1 text-2xl font-semibold tracking-tight transition-linear hover:bg-surface-hover"
           onClick={() => {
             setTitleDraft(task.title);
             setEditingTitle(true);
@@ -432,246 +436,286 @@ export default function TaskDetailPage() {
         </h1>
       )}
 
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-b pb-4">
-        {task.repository && (
-          <Link
-            href="/repos"
-            className="flex items-center gap-1.5 hover:text-foreground"
-          >
-            <FolderOpen className="w-4 h-4" />
-            {task.repository.name}
-          </Link>
-        )}
-        <div className="flex items-center gap-1.5">
-          <Clock className="w-4 h-4" />
-          Created {formatDistanceToNow(new Date(task.createdAt))}
-        </div>
-        {task.closedAt && (
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" />
-            Closed {formatDistanceToNow(new Date(task.closedAt))}
-          </div>
-        )}
-      </div>
-
-      {/* Status & priority controls */}
-      <div className="flex flex-wrap gap-6">
-        <div className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            Status
-          </span>
-          <Select
-            value={task.status}
-            onValueChange={(value: TaskStatus) => void save({ status: value })}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue>{statusConfig.label}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-              {/* Preserve non-selectable statuses so the trigger stays valid */}
-              {!STATUS_OPTIONS.some((o) => o.value === task.status) && (
-                <SelectItem value={task.status} disabled>
-                  {statusConfig.label}
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            Priority
-          </span>
-          <Select
-            value={task.priority ?? "medium"}
-            onValueChange={(value: TaskPriority) =>
-              void save({ priority: value })
-            }
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRIORITY_OPTIONS.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {getPriority(value).label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Labels */}
-      <div className="space-y-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Labels
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          {labels.map((label) => (
-            <Badge key={label} variant="secondary" className="gap-1 pr-1">
-              {label}
-              <button
-                type="button"
-                onClick={() => removeLabel(label)}
-                className="rounded-full hover:bg-muted-foreground/20 p-0.5"
-                aria-label={`Remove ${label}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </Badge>
-          ))}
-          <div className="flex items-center gap-1">
-            <Plus className="w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addLabel();
-                }
-              }}
-              onBlur={addLabel}
-              placeholder="Add label"
-              className="h-7 w-32 text-xs"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Description (inline editable) */}
-      <div className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Description
-        </h2>
-        {editingDescription ? (
-          <Textarea
-            ref={descriptionRef}
-            value={descriptionDraft}
-            onChange={(e) => setDescriptionDraft(e.target.value)}
-            onBlur={commitDescription}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                commitDescription();
-              } else if (e.key === "Escape") {
-                setEditingDescription(false);
-              }
-            }}
-            rows={5}
-            placeholder="Add a description…"
-          />
-        ) : (
-          <div
-            className="cursor-text rounded-md -mx-2 px-2 py-1.5 hover:bg-muted/50 min-h-9"
-            onClick={() => {
-              setDescriptionDraft(task.description ?? "");
-              setEditingDescription(true);
-            }}
-          >
-            {task.description ? (
-              <p className="whitespace-pre-wrap text-foreground text-sm">
-                {task.description}
-              </p>
+      {/* Two-column: main content + right meta rail */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+        {/* ---- Main content ---- */}
+        <div className="min-w-0 space-y-6">
+          {/* Description (inline editable) */}
+          <div className="space-y-2">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Description
+            </h2>
+            {editingDescription ? (
+              <Textarea
+                ref={descriptionRef}
+                value={descriptionDraft}
+                onChange={(e) => setDescriptionDraft(e.target.value)}
+                onBlur={commitDescription}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    commitDescription();
+                  } else if (e.key === "Escape") {
+                    setEditingDescription(false);
+                  }
+                }}
+                rows={5}
+                placeholder="Add a description…"
+              />
             ) : (
-              <p className="text-sm text-muted-foreground italic">
-                Add a description…
-              </p>
+              <div
+                className="-mx-2 min-h-9 cursor-text rounded-md px-2 py-1.5 transition-linear hover:bg-surface-hover"
+                onClick={() => {
+                  setDescriptionDraft(task.description ?? "");
+                  setEditingDescription(true);
+                }}
+              >
+                {task.description ? (
+                  <p className="whitespace-pre-wrap text-sm text-foreground">
+                    {task.description}
+                  </p>
+                ) : (
+                  <p className="text-sm italic text-muted-foreground">
+                    Add a description…
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Links */}
-      {(prUrl || task.sessionId) && (
-        <div className="flex flex-wrap gap-2">
-          {prUrl && (
-            <a href={prUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm">
-                <GitPullRequest className="w-4 h-4 mr-2" />
-                View PR
-                <ExternalLink className="w-3 h-3 ml-1.5 opacity-60" />
-              </Button>
-            </a>
-          )}
-          {task.sessionId && (
-            <Link href={`/sessions/${task.sessionId}`}>
-              <Button variant="outline" size="sm">
-                <Terminal className="w-4 h-4 mr-2" />
-                Watch terminal
-              </Button>
-            </Link>
-          )}
+          {/* Activity / AI log */}
+          <div className="space-y-3">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Activity
+            </h2>
+
+            {resultSummary && (
+              <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-primary">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Summary
+                </div>
+                <p className="whitespace-pre-wrap text-sm text-foreground">
+                  {resultSummary}
+                </p>
+              </div>
+            )}
+
+            {agentLogs.length > 0 ? (
+              <ol className="relative ml-2 space-y-4 border-l border-border pl-6">
+                {agentLogs.map((entry, index) => {
+                  const details = formatDetails(entry.details);
+                  return (
+                    <li key={index} className="relative">
+                      <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface-card ring-4 ring-background">
+                        <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                      </span>
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="text-sm font-medium text-foreground">
+                          {entry.agentName}
+                        </span>
+                        {entry.action && (
+                          <span className="text-sm text-muted-foreground">
+                            {entry.action}
+                          </span>
+                        )}
+                        {entry.timestamp && (
+                          <span className="text-xs text-text-subtle">
+                            {formatDistanceToNow(new Date(entry.timestamp))}
+                          </span>
+                        )}
+                      </div>
+                      {details && (
+                        <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
+                          {details}
+                        </pre>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              !resultSummary && (
+                <p className="text-sm italic text-text-subtle">
+                  No activity yet.
+                </p>
+              )
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Activity / AI log */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Activity</h2>
+        {/* ---- Right meta rail ---- */}
+        <aside className="space-y-5 lg:border-l lg:border-border lg:pl-6">
+          {/* Status */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Status
+            </span>
+            <Select
+              value={task.status}
+              onValueChange={(value: TaskStatus) => void save({ status: value })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>{getTaskStatus(task.status).label}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+                {/* Preserve non-selectable statuses so the trigger stays valid */}
+                {!STATUS_OPTIONS.some((o) => o.value === task.status) && (
+                  <SelectItem value={task.status} disabled>
+                    {getTaskStatus(task.status).label}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {resultSummary && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                AI Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="whitespace-pre-wrap text-sm text-foreground">
-                {resultSummary}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Priority */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Priority
+            </span>
+            <Select
+              value={task.priority ?? "medium"}
+              onValueChange={(value: TaskPriority) =>
+                void save({ priority: value })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITY_OPTIONS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {getPriority(value).label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {agentLogs.length > 0 ? (
-          <ol className="relative space-y-4 border-l pl-6 ml-2">
-            {agentLogs.map((entry, index) => {
-              const details = formatDetails(entry.details);
-              return (
-                <li key={index} className="relative">
-                  <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-muted ring-4 ring-background">
-                    <Bot className="w-3.5 h-3.5 text-muted-foreground" />
-                  </span>
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="text-sm font-medium">
-                      {entry.agentName}
-                    </span>
-                    {entry.action && (
-                      <span className="text-sm text-muted-foreground">
-                        {entry.action}
-                      </span>
-                    )}
-                    {entry.timestamp && (
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(entry.timestamp))}
-                      </span>
-                    )}
-                  </div>
-                  {details && (
-                    <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 text-xs text-muted-foreground font-mono">
-                      {details}
-                    </pre>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          !resultSummary && (
-            <p className="text-sm text-muted-foreground italic">
-              No activity yet.
-            </p>
-          )
-        )}
+          {/* Repository */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Repository
+            </span>
+            {task.repository ? (
+              <Link
+                href="/repos"
+                className="flex items-center gap-1.5 text-sm text-foreground transition-linear hover:text-primary"
+              >
+                <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate">{task.repository.name}</span>
+              </Link>
+            ) : (
+              <span className="text-sm text-text-subtle">—</span>
+            )}
+          </div>
+
+          {/* Labels */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Labels
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {labels.map((label) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-inset/60 py-0.5 pl-2 pr-1 text-[11px] font-medium text-muted-foreground"
+                >
+                  {label}
+                  <button
+                    type="button"
+                    onClick={() => removeLabel(label)}
+                    className="rounded-full p-0.5 transition-linear hover:bg-surface-hover hover:text-foreground"
+                    aria-label={`Remove ${label}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <div className="flex items-center gap-1">
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addLabel();
+                    }
+                  }}
+                  onBlur={addLabel}
+                  placeholder="Add label"
+                  className="h-7 w-24 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Timestamps */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+              Timeline
+            </span>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                Created {formatDistanceToNow(new Date(task.createdAt))}
+              </div>
+              {task.closedAt && (
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  Closed {formatDistanceToNow(new Date(task.closedAt))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Links */}
+          {(prUrl || task.sessionId) && (
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
+                Links
+              </span>
+              <div className="flex flex-col gap-2">
+                {prUrl && (
+                  <a href={prUrl} target="_blank" rel="noopener noreferrer">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                    >
+                      <GitPullRequest className="mr-2 h-4 w-4" />
+                      View PR
+                      <ExternalLink className="ml-auto h-3 w-3 opacity-60" />
+                    </Button>
+                  </a>
+                )}
+                {task.sessionId && (
+                  <Link href={`/sessions/${task.sessionId}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                    >
+                      {liveWorker ? (
+                        <StatusDot state="running" size={8} className="mr-2" />
+                      ) : (
+                        <Terminal className="mr-2 h-4 w-4" />
+                      )}
+                      Watch terminal
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
 
       {/* Delete confirm */}

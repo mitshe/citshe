@@ -15,7 +15,7 @@ export function StepsBlock({ steps }: StepsBlockProps) {
       {steps.map((step, index) => (
         <div
           key={index}
-          className="relative pl-10 pb-8 last:pb-0 border-l-2 border-muted ml-4"
+          className="relative pl-10 pb-8 last:pb-0 border-l-2 border-border ml-4"
         >
           <div className="absolute -left-[17px] top-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
             {index + 1}

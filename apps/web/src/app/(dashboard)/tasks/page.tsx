@@ -30,6 +30,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Loader2,
   ListTodo,
@@ -134,36 +136,15 @@ export default function TasksPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* View toggle (segmented control) */}
-          <div className="inline-flex items-center rounded-lg border border-border p-0.5">
-            <button
-              type="button"
-              onClick={() => changeView("board")}
-              aria-pressed={view === "board"}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                view === "board"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Board
-            </button>
-            <button
-              type="button"
-              onClick={() => changeView("list")}
-              aria-pressed={view === "list"}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                view === "list"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <ListIcon className="h-3.5 w-3.5" />
-              List
-            </button>
-          </div>
+          <SegmentedControl<ViewMode>
+            aria-label="View mode"
+            value={view}
+            onChange={changeView}
+            options={[
+              { value: "board", label: "Board", icon: <LayoutGrid /> },
+              { value: "list", label: "List", icon: <ListIcon /> },
+            ]}
+          />
           <Button size="sm" onClick={() => setNewOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New task
@@ -197,7 +178,7 @@ export default function TasksPage() {
             </SelectContent>
           </Select>
         )}
-        <label className="flex select-none items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <label className="flex h-9 select-none items-center gap-2 rounded-md border border-border bg-surface-inset px-3 text-xs text-muted-foreground transition-linear">
           <Switch checked={showClosed} onCheckedChange={setShowClosed} />
           Show closed
         </label>
@@ -213,10 +194,10 @@ export default function TasksPage() {
                 key={l}
                 onClick={() => setActiveLabel(active ? null : l)}
                 className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                  "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-linear",
                   active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "border-border bg-surface-inset/60 text-muted-foreground hover:border-border-strong hover:text-foreground",
                 )}
               >
                 {l}
@@ -226,7 +207,7 @@ export default function TasksPage() {
           {activeLabel && (
             <button
               onClick={() => setActiveLabel(null)}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground transition-linear hover:text-foreground"
             >
               <X className="h-3 w-3" />
               Clear
@@ -241,20 +222,23 @@ export default function TasksPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : isEmpty ? (
-        <div className="rounded-2xl border border-dashed border-border py-16 text-center">
-          <ListTodo className="mx-auto h-8 w-8 text-muted-foreground/50" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            No tasks yet. Create one and AI will help shape it.
-          </p>
-          <Button size="sm" className="mt-4" onClick={() => setNewOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            New task
-          </Button>
-        </div>
+        <EmptyState
+          icon={<ListTodo />}
+          title="No tasks yet"
+          description="Create one and AI will help shape it."
+          action={
+            <Button size="sm" onClick={() => setNewOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              New task
+            </Button>
+          }
+        />
       ) : filtered.length === 0 && hasFilters ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          Nothing matches your filters.
-        </p>
+        <EmptyState
+          icon={<Search />}
+          title="Nothing matches your filters"
+          description="Try a different search, repo, or label."
+        />
       ) : view === "board" ? (
         <TaskBoardView
           tasks={filtered}

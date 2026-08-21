@@ -26,7 +26,7 @@ export function NodeListBlock({ nodes }: NodeListBlockProps) {
       {nodes.map((node) => (
         <div
           key={node.name}
-          className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+          className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface-card hover:bg-surface-hover transition-linear"
         >
           <div
             className={cn(

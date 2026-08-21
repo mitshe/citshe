@@ -1,6 +1,6 @@
 import { AuthGuard } from "@/components/auth";
-import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { CommandPalette } from "@/components/command-palette";
+import { DashboardShell } from "@/components/shell/app-shell";
+import { CommandPalette } from "@/components/shell/command-palette";
 
 export const dynamic = "force-dynamic";
 

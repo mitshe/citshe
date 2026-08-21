@@ -7,8 +7,8 @@ interface ExampleBlockProps {
 
 export function ExampleBlock({ content }: ExampleBlockProps) {
   return (
-    <div className="my-6 rounded-xl border bg-muted/20 overflow-hidden">
-      <div className="px-4 py-2 bg-muted/50 border-b flex items-center gap-2">
+    <div className="my-6 rounded-lg border border-border bg-surface-card overflow-hidden">
+      <div className="px-4 py-2 bg-surface-inset border-b border-border flex items-center gap-2">
         <Play className="w-4 h-4 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Example

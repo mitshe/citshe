@@ -3,13 +3,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Save, Loader2, Building2, AlertTriangle } from "lucide-react";
+import { Save, Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useOrganization } from "@/lib/auth";
 
@@ -82,118 +75,101 @@ export default function OrganizationSettingsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <Building2 className="h-5 w-5 text-primary" />
-        </div>
+    <div className="mx-auto w-full max-w-2xl space-y-8 p-4 sm:p-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Organization</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Manage your portal name and regional settings.
+        </p>
+      </div>
+
+      {/* General */}
+      <section className="space-y-4">
         <div>
-          <h1 className="text-2xl font-bold">Organization</h1>
-          <p className="text-muted-foreground">
-            Manage your organization settings
+          <h2 className="text-sm font-medium text-foreground">General</h2>
+          <p className="text-xs text-muted-foreground">
+            Basic information about your organization.
           </p>
         </div>
-      </div>
+        <div className="space-y-2">
+          <Label htmlFor="orgName">Organization name</Label>
+          <Input
+            id="orgName"
+            value={settings.organizationName}
+            onChange={(e) => updateSetting("organizationName", e.target.value)}
+            placeholder="My Organization"
+          />
+          <p className="text-xs text-text-subtle">
+            This name will be visible to all team members.
+          </p>
+        </div>
+      </section>
 
+      <Separator />
 
-      <div className="grid gap-6">
-        {/* General Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>General</CardTitle>
-            <CardDescription>
-              Basic information about your organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="orgName">Organization Name</Label>
-              <Input
-                id="orgName"
-                value={settings.organizationName}
-                onChange={(e) =>
-                  updateSetting("organizationName", e.target.value)
-                }
-                placeholder="My Organization"
-              />
-              <p className="text-xs text-muted-foreground">
-                This name will be visible to all team members
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Regional Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Regional Settings</CardTitle>
-            <CardDescription>
-              Configure timezone and regional preferences for your organization
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="timezone">Default Timezone</Label>
-              <Select
-                value={settings.timezone}
-                onValueChange={(value) => updateSetting("timezone", value)}
-              >
-                <SelectTrigger id="timezone">
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timezones.map((tz) => (
-                    <SelectItem key={tz.value} value={tz.value}>
-                      {tz.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Used for scheduling workflows and displaying dates organization-wide
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Danger Zone */}
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader>
-            <CardTitle className="text-red-600 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              Danger Zone
-            </CardTitle>
-            <CardDescription>
-              These actions are irreversible. Please proceed with caution.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Delete Organization</p>
-                <p className="text-sm text-muted-foreground">
-                  Permanently delete your organization, all workflows, tasks, and data
-                </p>
-              </div>
-              <Button variant="destructive" size="sm" disabled>
-                Delete Organization
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Regional */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-medium text-foreground">Regional</h2>
+          <p className="text-xs text-muted-foreground">
+            Timezone used for scheduling and displaying dates.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="timezone">Default timezone</Label>
+          <Select
+            value={settings.timezone}
+            onValueChange={(value) => updateSetting("timezone", value)}
+          >
+            <SelectTrigger id="timezone">
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>
+              {timezones.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>
+                  {tz.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
+        <Button size="sm" onClick={handleSave} disabled={isSaving || !hasChanges}>
           {isSaving ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
-            <Save className="w-4 h-4 mr-2" />
+            <Save className="mr-2 h-4 w-4" />
           )}
-          {hasChanges ? "Save Changes" : "No Changes"}
+          {hasChanges ? "Save changes" : "No changes"}
         </Button>
       </div>
+
+      {/* Danger zone */}
+      <section className="space-y-3 rounded-md border border-destructive/30 bg-destructive/[0.04] p-4">
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <h2 className="text-sm font-medium">Danger zone</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          These actions are irreversible. Please proceed with caution.
+        </p>
+        <Separator className="bg-destructive/20" />
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              Delete organization
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Permanently delete your organization, all threads, tasks, and data.
+            </p>
+          </div>
+          <Button variant="destructive" size="sm" disabled>
+            Delete
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

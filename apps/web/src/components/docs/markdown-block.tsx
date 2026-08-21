@@ -24,12 +24,14 @@ export function MarkdownBlock({ content }: MarkdownBlockProps) {
           const isInline = !className;
           if (isInline) {
             return (
-              <code className="px-1.5 py-0.5 rounded bg-muted font-mono text-xs text-foreground">
+              <code className="px-1.5 py-0.5 rounded bg-surface-inset border border-border font-mono text-xs text-foreground">
                 {children}
               </code>
             );
           }
-          return <code className="text-zinc-100 text-xs">{children}</code>;
+          return (
+            <code className="text-foreground font-mono text-xs">{children}</code>
+          );
         },
         a: ({ href, children }) => (
           <Link
@@ -40,22 +42,26 @@ export function MarkdownBlock({ content }: MarkdownBlockProps) {
           </Link>
         ),
         table: ({ children }) => (
-          <div className="overflow-x-auto rounded-lg border my-3">
+          <div className="overflow-x-auto rounded-lg border border-border my-3">
             <table className="w-full text-sm">{children}</table>
           </div>
         ),
         thead: ({ children }) => (
-          <thead className="bg-muted/50 border-b">{children}</thead>
+          <thead className="bg-surface-inset border-b border-border">
+            {children}
+          </thead>
         ),
         th: ({ children }) => (
-          <th className="px-4 py-2 text-left font-medium">{children}</th>
+          <th className="px-4 py-2 text-left font-medium text-foreground">
+            {children}
+          </th>
         ),
         td: ({ children }) => (
-          <td className="px-4 py-2 border-t">{children}</td>
+          <td className="px-4 py-2 border-t border-border">{children}</td>
         ),
         pre: ({ children }) => (
           <div className="group relative my-3">
-            <pre className="overflow-x-auto rounded-lg bg-zinc-950 dark:bg-zinc-900 p-4 text-sm border border-zinc-800">
+            <pre className="overflow-x-auto rounded-lg bg-surface-inset p-4 text-sm border border-border">
               {children}
             </pre>
           </div>

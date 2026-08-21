@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +96,55 @@ export function prUrl(task: Task): string | null {
 
 /** MIME-ish key the drag payload uses. */
 export const DND_TASK_ID = "application/x-citshe-task-id";
+
+// ============================================================================
+// Shared visual primitives — status pill + label chip (new design system).
+// ============================================================================
+
+/** Status pill driven by status-config (kept as the source of truth). */
+export function StatusPill({
+  status,
+  className,
+}: {
+  status: TaskStatus;
+  className?: string;
+}) {
+  const s = getTaskStatus(status);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium [&>svg]:size-3 transition-linear",
+        s.color,
+        className,
+      )}
+    >
+      {s.icon}
+      {s.label}
+    </span>
+  );
+}
+
+/** Label chip — bordered pill, xs, subtle hover. */
+export function LabelChip({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick?: (label: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(label);
+      }}
+      className="inline-flex items-center rounded-full border border-border bg-surface-inset/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-linear hover:border-border-strong hover:text-foreground"
+    >
+      {label}
+    </button>
+  );
+}
 
 // ============================================================================
 // Shared task actions hook — Run / Move / Close / Reopen with toasts.
@@ -275,8 +324,9 @@ export function TaskCard({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
 }) {
-  const status = getTaskStatus(task.status);
   const link = prUrl(task);
+  const liveWorker =
+    !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
 
   return (
     <div
@@ -284,20 +334,15 @@ export function TaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cn(
-        "group rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-foreground/20",
+        "group rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
       {/* Status + menu */}
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 text-[11px] font-medium",
-            status.color.split(" ")[1],
-          )}
-        >
-          {status.icon}
-          {status.label}
+        <span className="inline-flex items-center gap-1.5">
+          <StatusPill status={task.status} />
+          {liveWorker && <StatusDot state="running" size={8} />}
         </span>
         <TaskMenu task={task} onDelete={onDelete} />
       </div>
@@ -305,7 +350,7 @@ export function TaskCard({
       {/* Title */}
       <Link
         href={`/tasks/${task.id}`}
-        className="block text-sm font-medium leading-snug hover:underline"
+        className="block text-sm font-medium leading-snug text-foreground hover:underline"
       >
         {task.title}
       </Link>
@@ -314,27 +359,21 @@ export function TaskCard({
       {(task.labels ?? []).length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {(task.labels ?? []).map((l) => (
-            <button
-              key={l}
-              onClick={() => onLabelClick(l)}
-              className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted-foreground/20"
-            >
-              {l}
-            </button>
+            <LabelChip key={l} label={l} onClick={onLabelClick} />
           ))}
         </div>
       )}
 
       {/* Footer: repo · updated · PR */}
-      <div className="mt-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-2.5 flex items-center gap-2 text-[11px] text-text-subtle">
         <span className="truncate">{repoName}</span>
-        <span className="text-muted-foreground/40">·</span>
+        <span className="text-text-subtle/50">·</span>
         <span className="whitespace-nowrap">
           {formatDistanceToNow(new Date(task.updatedAt))}
         </span>
         {link && (
           <>
-            <span className="text-muted-foreground/40">·</span>
+            <span className="text-text-subtle/50">·</span>
             <a
               href={link}
               target="_blank"
@@ -367,18 +406,17 @@ export function TaskRow({
   onDelete: (task: Task) => void;
   onLabelClick: (label: string) => void;
 }) {
-  const status = getTaskStatus(task.status);
   const priority = task.priority ? getPriority(task.priority) : null;
   const link = prUrl(task);
 
   return (
-    <tr className="group border-b border-border/60 last:border-0 hover:bg-muted/30">
+    <tr className="group border-b border-border last:border-0 transition-linear hover:bg-surface-hover">
       {/* Title */}
-      <td className="max-w-0 px-3 py-2.5">
+      <td className="max-w-0 px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Link
             href={`/tasks/${task.id}`}
-            className="truncate text-sm font-medium hover:underline"
+            className="truncate text-sm font-medium text-foreground hover:underline"
           >
             {task.title}
           </Link>
@@ -398,58 +436,51 @@ export function TaskRow({
       </td>
 
       {/* Status */}
-      <td className="px-3 py-2.5">
-        <Badge
-          variant="outline"
-          className={cn("gap-1 whitespace-nowrap font-medium", status.color)}
-        >
-          {status.icon}
-          {status.label}
-        </Badge>
+      <td className="px-3 py-2">
+        <StatusPill status={task.status} />
       </td>
 
       {/* Priority */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         {priority ? (
-          <Badge variant="outline" className={cn("font-medium", priority.color)}>
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              priority.color,
+            )}
+          >
             {priority.label}
-          </Badge>
+          </span>
         ) : (
-          <span className="text-xs text-muted-foreground/50">—</span>
+          <span className="text-xs text-text-subtle">—</span>
         )}
       </td>
 
       {/* Repo */}
-      <td className="px-3 py-2.5 text-xs text-muted-foreground">
+      <td className="px-3 py-2 text-xs text-muted-foreground">
         <span className="truncate">{repoName}</span>
       </td>
 
       {/* Labels */}
-      <td className="px-3 py-2.5">
+      <td className="px-3 py-2">
         {(task.labels ?? []).length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {(task.labels ?? []).map((l) => (
-              <button
-                key={l}
-                onClick={() => onLabelClick(l)}
-                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted-foreground/20"
-              >
-                {l}
-              </button>
+              <LabelChip key={l} label={l} onClick={onLabelClick} />
             ))}
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground/50">—</span>
+          <span className="text-xs text-text-subtle">—</span>
         )}
       </td>
 
       {/* Updated */}
-      <td className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">
+      <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
         {formatDistanceToNow(new Date(task.updatedAt))}
       </td>
 
       {/* Actions */}
-      <td className="px-3 py-2.5 text-right">
+      <td className="px-3 py-2 text-right">
         <TaskMenu
           task={task}
           onDelete={onDelete}

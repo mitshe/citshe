@@ -14,21 +14,23 @@ interface SidebarProps {
 export function Sidebar({ currentSlug, onSearchClick }: SidebarProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="p-5 border-b">
+      <div className="p-5 border-b border-border">
         <Link href="/docs" className="flex items-center gap-2">
-          <span className="font-semibold">citshe</span>
+          <span className="font-semibold font-brand tracking-tight">
+            citshe
+          </span>
           <span className="text-xs text-muted-foreground">Docs</span>
         </Link>
       </div>
 
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-border">
         <button
           onClick={onSearchClick}
-          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground bg-muted/50 hover:bg-muted rounded-lg transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground bg-surface-inset hover:bg-surface-hover border border-border rounded-lg transition-linear"
         >
           <Search className="w-4 h-4" />
           <span>Search...</span>
-          <kbd className="ml-auto text-xs bg-background px-1.5 py-0.5 rounded border">
+          <kbd className="ml-auto text-xs bg-surface-card px-1.5 py-0.5 rounded border border-border font-mono">
             ⌘K
           </kbd>
         </button>

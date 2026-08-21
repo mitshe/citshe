@@ -197,7 +197,7 @@ function FileTreeItem({
     return (
       <div
         className={cn(
-          "flex items-center gap-1.5 py-0.5 px-2 text-xs hover:bg-muted/50 rounded cursor-pointer",
+          "flex items-center gap-1.5 py-0.5 px-2 text-xs hover:bg-surface-hover rounded-sm cursor-pointer transition-linear",
           fileStatus
             ? colorClass
             : "text-muted-foreground hover:text-foreground",
@@ -227,7 +227,7 @@ function FileTreeItem({
     <div>
       <div
         className={cn(
-          "flex items-center gap-1 py-0.5 px-2 text-xs font-medium hover:bg-muted/50 rounded cursor-pointer",
+          "flex items-center gap-1 py-0.5 px-2 text-xs font-medium hover:bg-surface-hover rounded-sm cursor-pointer transition-linear",
           hasChangedChildren && "text-yellow-500",
         )}
         data-file-item
@@ -272,6 +272,7 @@ export function FileTree({
   onNewFolder,
   gitStatuses,
   hideHeader,
+  hasRepo = true,
 }: {
   files: string[];
   basePath: string;
@@ -283,6 +284,8 @@ export function FileTree({
   onNewFolder?: (dirPath: string) => void;
   gitStatuses?: Array<{ path: string; status: string }>;
   hideHeader?: boolean;
+  /** When false, an empty tree shows a "no repo attached" hint instead of "No files". */
+  hasRepo?: boolean;
 }) {
   const fileTree = buildFileTree(files, basePath);
 
@@ -302,10 +305,10 @@ export function FileTree({
   };
 
   return (
-    <div className="border-r shrink-0 flex flex-col overflow-hidden min-h-0 h-full">
+    <div className="border-r border-border bg-surface-inset shrink-0 flex flex-col overflow-hidden min-h-0 h-full">
       {!hideHeader && (
-        <div className="px-3 py-2 border-b shrink-0">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="px-3 py-2 border-b border-border shrink-0">
+          <p className="text-[11px] font-medium text-text-subtle uppercase tracking-wider">
             Files
           </p>
         </div>
@@ -335,8 +338,12 @@ export function FileTree({
       >
         <div className="py-1">
           {fileTree.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              {isLoading ? "Loading files..." : "No files"}
+            <p className="text-xs text-text-subtle text-center px-3 py-4 leading-relaxed">
+              {isLoading
+                ? "Loading files…"
+                : hasRepo
+                  ? "No files"
+                  : "This terminal has no repo attached"}
             </p>
           ) : (
             fileTree.map((node) => (

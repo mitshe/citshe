@@ -34,16 +34,15 @@ export function TabBar({
   onNewTerminal?: () => void;
 }) {
   return (
-    <div className="flex items-center border-b bg-background overflow-x-auto shrink-0">
+    <div className="flex items-center border-b border-border bg-surface-card overflow-x-auto shrink-0">
       {tabs.map((tab) => (
         <div
           key={tab.id}
           className={cn(
-            "group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r cursor-pointer select-none shrink-0",
-            "hover:bg-muted/50 transition-colors",
+            "group relative flex items-center gap-1.5 px-3 py-2 text-xs border-r border-border cursor-pointer select-none shrink-0 transition-linear",
             activeTabId === tab.id
-              ? "bg-background text-foreground border-b-2 border-b-primary"
-              : "bg-muted/30 text-muted-foreground",
+              ? "bg-surface-inset text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary"
+              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
           )}
           onClick={() => onTabClick(tab.id)}
           onAuxClick={(e) => {
@@ -115,7 +114,7 @@ export function TabBar({
           <span className="max-w-[150px] truncate">{tab.title}</span>
           {tab.closeable && (
             <button
-              className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity"
+              className="ml-1 p-0.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-surface-hover hover:text-foreground transition-linear"
               onClick={(e) => {
                 e.stopPropagation();
                 onTabClose(tab.id);
@@ -129,7 +128,7 @@ export function TabBar({
       {onNewTerminal && (
         <button
           onClick={onNewTerminal}
-          className="flex items-center justify-center w-8 h-full shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          className="flex items-center justify-center w-8 self-stretch shrink-0 text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-linear"
           title="New Terminal"
         >
           <Plus className="w-3.5 h-3.5" />

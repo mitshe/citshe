@@ -3,13 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -20,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
   DialogBody,
@@ -77,7 +71,7 @@ const ITEMS_PER_PAGE = 15;
 
 const providerConfig: Record<GitProvider, { name: string; color: string }> = {
   GITLAB: { name: "GitLab", color: "bg-orange-500" },
-  GITHUB: { name: "GitHub", color: "bg-gray-800" },
+  GITHUB: { name: "GitHub", color: "bg-[#24292e]" },
   BITBUCKET: { name: "Bitbucket", color: "bg-blue-600" },
 };
 
@@ -328,60 +322,64 @@ export default function RepositoriesPage() {
 
   if (!hasGitIntegration) {
     return (
-      <div className="space-y-6 p-4 sm:p-6">
+      <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
         <div>
-          <h1 className="text-2xl font-bold">Repositories</h1>
-          <p className="text-muted-foreground">
-            Manage Git repositories for your workflows
+          <h1 className="text-xl font-semibold tracking-tight">Repositories</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage Git repositories for your workflows.
           </p>
         </div>
-        <div className="text-center py-16 text-muted-foreground">
-          <GitBranch className="w-12 h-12 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground mb-2">No Git integrations connected</h3>
-          <p className="mb-6 max-w-sm mx-auto">Connect GitLab or GitHub first to import and manage your repositories.</p>
-          <Button asChild>
-            <Link href="/settings/integrations">
-              <Settings className="w-4 h-4 mr-2" />
-              Go to Integrations
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={<GitBranch />}
+          title="No Git integrations connected"
+          description="Connect GitHub first to import and manage your repositories."
+          action={
+            <Button size="sm" asChild>
+              <Link href="/settings/integrations">
+                <Settings className="mr-2 h-4 w-4" />
+                Go to Integrations
+              </Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold">Repositories</h1>
-          <p className="text-muted-foreground">
-            Manage Git repositories for your workflows
+          <h1 className="text-xl font-semibold tracking-tight">Repositories</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage Git repositories for your workflows.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {repositories.length > 0 && (
             <Button
               variant="outline"
+              size="sm"
               onClick={handleSync}
               disabled={syncExisting.isPending}
             >
               {syncExisting.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <RefreshCw className="mr-2 h-4 w-4" />
               )}
               Sync
             </Button>
           )}
           <Button
+            size="sm"
             onClick={handleOpenSyncDialog}
             disabled={fetchRemoteRepos.isPending}
           >
             {fetchRemoteRepos.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Download className="w-4 h-4 mr-2" />
+              <Download className="mr-2 h-4 w-4" />
             )}
             Import
           </Button>
@@ -395,7 +393,7 @@ export default function RepositoriesPage() {
           <span className="font-semibold text-foreground">{totalCount}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <CheckCircle2 className="h-4 w-4 text-ok" />
           <span>Active</span>
           <span className="font-semibold text-foreground">{activeCount}</span>
         </div>
@@ -409,8 +407,8 @@ export default function RepositoriesPage() {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-          <span className="text-sm font-medium">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-inset p-2.5">
+          <span className="px-1 text-sm font-medium text-foreground">
             {selectedIds.length} selected
           </span>
           <Button
@@ -448,9 +446,9 @@ export default function RepositoriesPage() {
                 size="sm"
                 variant="outline"
                 disabled={bulkDelete.isPending}
-                className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
                 Delete
               </Button>
             </AlertDialogTrigger>
@@ -467,7 +465,7 @@ export default function RepositoriesPage() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleBulkDelete}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-destructive text-white hover:bg-destructive/90"
                 >
                   Delete
                 </AlertDialogAction>
@@ -480,36 +478,40 @@ export default function RepositoriesPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Repositories</CardTitle>
-          <CardDescription>
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-sm font-medium text-foreground">All repositories</h2>
+          <p className="text-xs text-muted-foreground">
             Enable repositories to use them in workflows. Only enabled
             repositories can be selected for projects.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           {isLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : repositories.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <GitBranch className="w-12 h-12 mx-auto mb-4" />
-              <p className="mb-4">No repositories found. Import repositories from your Git providers.</p>
-              <Button
-                variant="outline"
-                onClick={handleOpenSyncDialog}
-                disabled={fetchRemoteRepos.isPending}
-              >
-                {fetchRemoteRepos.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4 mr-2" />
-                )}
-                Import Repositories
-              </Button>
-            </div>
+            <EmptyState
+              icon={<GitBranch />}
+              title="No repositories found"
+              description="Import repositories from your Git providers to get started."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenSyncDialog}
+                  disabled={fetchRemoteRepos.isPending}
+                >
+                  {fetchRemoteRepos.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Import repositories
+                </Button>
+              }
+            />
           ) : (
             <>
               {/* Mobile: card list (the table has 6 columns — unusable on a phone) */}
@@ -517,7 +519,7 @@ export default function RepositoriesPage() {
                 {paginatedRepos.map((repo) => (
                   <div
                     key={repo.id}
-                    className="rounded-lg border p-3 space-y-3"
+                    className="space-y-3 rounded-md border border-border bg-surface-card p-3"
                   >
                     <div className="flex items-start gap-2">
                       <Checkbox
@@ -549,14 +551,14 @@ export default function RepositoriesPage() {
                       >
                         {providerConfig[repo.provider].name}
                       </Badge>
-                      <code className="text-xs bg-muted px-2 py-0.5 rounded">
+                      <code className="rounded-sm border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {repo.defaultBranch}
                       </code>
                       <Badge
                         variant={repo.isActive ? "default" : "secondary"}
                         className={
                           repo.isActive
-                            ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                            ? "border-ok/20 bg-ok/10 text-ok"
                             : ""
                         }
                       >
@@ -599,7 +601,7 @@ export default function RepositoriesPage() {
                             size="sm"
                             variant="ghost"
                             disabled={deleteRepository.isPending}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -618,7 +620,7 @@ export default function RepositoriesPage() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDelete(repo)}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-destructive text-white hover:bg-destructive/90"
                             >
                               Delete
                             </AlertDialogAction>
@@ -685,7 +687,7 @@ export default function RepositoriesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">
+                        <code className="rounded-sm border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                           {repo.defaultBranch}
                         </code>
                       </TableCell>
@@ -694,7 +696,7 @@ export default function RepositoriesPage() {
                           variant={repo.isActive ? "default" : "secondary"}
                           className={
                             repo.isActive
-                              ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                              ? "border-ok/20 bg-ok/10 text-ok"
                               : ""
                           }
                         >
@@ -749,7 +751,7 @@ export default function RepositoriesPage() {
                                 size="sm"
                                 variant="ghost"
                                 disabled={deleteRepository.isPending}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -770,7 +772,7 @@ export default function RepositoriesPage() {
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => handleDelete(repo)}
-                                  className="bg-red-600 hover:bg-red-700"
+                                  className="bg-destructive text-white hover:bg-destructive/90"
                                 >
                                   Delete
                                 </AlertDialogAction>
@@ -793,8 +795,8 @@ export default function RepositoriesPage() {
               />
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent>

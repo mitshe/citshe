@@ -2,23 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogBody,
@@ -275,27 +260,27 @@ function SelfhostedTeamPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Team</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Manage team members and their permissions
+          <h1 className="text-xl font-semibold tracking-tight">Team</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manage team members and their permissions.
           </p>
         </div>
         {isAdmin && (
           <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
-              <Button size="sm" className="sm:h-10">
-                <Plus className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">Add Member</span>
+              <Button size="sm">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add member</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -308,7 +293,7 @@ function SelfhostedTeamPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <DialogBody className="space-y-4 py-4">
-                    <div className="rounded-md border bg-muted/50 p-4 space-y-2 font-mono text-sm">
+                    <div className="space-y-2 rounded-md border border-border bg-surface-inset p-4 font-mono text-sm">
                       <div><span className="text-muted-foreground">Email:</span> {createdUser.email}</div>
                       <div><span className="text-muted-foreground">Password:</span> {createdUser.password}</div>
                     </div>
@@ -428,7 +413,7 @@ function SelfhostedTeamPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground sm:gap-6">
         <div className="flex items-center gap-1.5">
           <Users className="h-4 w-4" />
           <span>Members</span>
@@ -443,101 +428,92 @@ function SelfhostedTeamPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Team Members</CardTitle>
-          <CardDescription>
-            People who have access to this organization
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => {
-                const name = getName(member);
-                const isCurrentUser = member.userId === userId;
-                const config = roleLabels[member.role] || roleLabels.MEMBER;
+      <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+        {members.map((member, i) => {
+          const name = getName(member);
+          const isCurrentUser = member.userId === userId;
+          const config = roleLabels[member.role] || roleLabels.MEMBER;
 
-                return (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={member.user.imageUrl || undefined} />
-                          <AvatarFallback>{getInitials(member)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">
-                            {name}
-                            {isCurrentUser && (
-                              <span className="ml-2 text-xs text-muted-foreground">(you)</span>
-                            )}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{member.user.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={config.variant}>{config.label}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {formatDistanceToNow(new Date(member.joinedAt))}
-                    </TableCell>
-                    <TableCell>
-                      {isAdmin && !isCurrentUser && member.role !== "OWNER" && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={removingId === member.userId || changingRoleId === member.userId}
-                            >
-                              {removingId === member.userId || changingRoleId === member.userId ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <MoreVertical className="w-4 h-4" />
-                              )}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleChangeRole(
-                                  member.userId,
-                                  member.role === "ADMIN" ? "MEMBER" : "ADMIN",
-                                )
-                              }
-                            >
-                              <Shield className="w-4 h-4 mr-2" />
-                              {member.role === "ADMIN" ? "Remove Admin" : "Make Admin"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => setConfirmRemove({ userId: member.userId, name })}
-                            >
-                              <UserMinus className="w-4 h-4 mr-2" />
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          return (
+            <div
+              key={member.id}
+              className={`flex items-center gap-3 px-3.5 py-3 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarImage src={member.user.imageUrl || undefined} />
+                <AvatarFallback>{getInitials(member)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <span className="truncate">{name}</span>
+                  {isCurrentUser && (
+                    <span className="text-xs font-normal text-text-subtle">
+                      (you)
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {member.user.email}
+                </p>
+              </div>
+              <Badge variant={config.variant} className="shrink-0">
+                {config.label}
+              </Badge>
+              <span className="hidden shrink-0 text-xs text-text-subtle sm:inline">
+                {formatDistanceToNow(new Date(member.joinedAt))}
+              </span>
+              <div className="w-8 shrink-0">
+                {isAdmin && !isCurrentUser && member.role !== "OWNER" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={
+                          removingId === member.userId ||
+                          changingRoleId === member.userId
+                        }
+                      >
+                        {removingId === member.userId ||
+                        changingRoleId === member.userId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MoreVertical className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleChangeRole(
+                            member.userId,
+                            member.role === "ADMIN" ? "MEMBER" : "ADMIN",
+                          )
+                        }
+                      >
+                        <Shield className="mr-2 h-4 w-4" />
+                        {member.role === "ADMIN" ? "Remove admin" : "Make admin"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() =>
+                          setConfirmRemove({ userId: member.userId, name })
+                        }
+                      >
+                        <UserMinus className="mr-2 h-4 w-4" />
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       <AlertDialog open={!!confirmRemove} onOpenChange={(open) => !open && setConfirmRemove(null)}>
         <AlertDialogContent>
@@ -552,7 +528,7 @@ function SelfhostedTeamPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => confirmRemove && handleRemove(confirmRemove.userId)}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive text-white hover:bg-destructive/90"
             >
               Remove
             </AlertDialogAction>
