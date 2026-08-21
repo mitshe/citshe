@@ -57,8 +57,6 @@ export class TasksService {
         description: dto.description,
         priority: dto.priority,
         labels: dto.labels ?? [],
-        externalIssueId: dto.externalIssueId,
-        externalIssueUrl: dto.externalIssueUrl,
         createdBy: userId,
         agentLogs: [],
       },
@@ -71,7 +69,7 @@ export class TasksService {
         organizationId,
         task.repositoryId,
         task.title,
-        task.externalIssueId,
+        null,
       ),
     );
 
@@ -91,9 +89,6 @@ export class TasksService {
     }
     if (filter?.repositoryId) {
       where.repositoryId = filter.repositoryId;
-    }
-    if (filter?.externalIssueId) {
-      where.externalIssueId = filter.externalIssueId;
     }
 
     // Get total count and paginated data in parallel

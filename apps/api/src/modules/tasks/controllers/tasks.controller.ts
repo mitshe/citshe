@@ -102,11 +102,6 @@ export class TasksController {
     description: 'Filter by status',
   })
   @ApiQuery({
-    name: 'externalIssueId',
-    required: false,
-    description: 'Filter by external issue ID',
-  })
-  @ApiQuery({
     name: 'page',
     required: false,
     description: 'Page number (default: 1)',

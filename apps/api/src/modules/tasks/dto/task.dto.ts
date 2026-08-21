@@ -7,7 +7,6 @@ import {
   ArrayMaxSize,
   MinLength,
   MaxLength,
-  IsUrl,
   IsInt,
   Min,
   Max,
@@ -43,17 +42,6 @@ export class CreateTaskDto {
   @IsOptional()
   @MaxLength(100)
   repositoryId?: string;
-
-  @IsString()
-  @IsOptional()
-  @MaxLength(200)
-  externalIssueId?: string;
-
-  @IsString()
-  @IsOptional()
-  @IsUrl()
-  @MaxLength(2000)
-  externalIssueUrl?: string;
 }
 
 export class UpdateTaskDto {
@@ -113,10 +101,6 @@ export class TaskFilterDto {
   @IsOptional()
   repositoryId?: string;
 
-  @IsString()
-  @IsOptional()
-  externalIssueId?: string;
-
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -155,15 +139,6 @@ export class TaskResponseDto {
 
   @ApiProperty({ description: 'Free-form labels', type: [String] })
   labels: string[];
-
-  @ApiPropertyOptional({
-    description: 'External issue ID (e.g., JIRA-123)',
-    nullable: true,
-  })
-  externalIssueId: string | null;
-
-  @ApiPropertyOptional({ description: 'External issue URL', nullable: true })
-  externalIssueUrl: string | null;
 
   @ApiPropertyOptional({ description: 'Task result data', nullable: true })
   result: Record<string, unknown> | null;

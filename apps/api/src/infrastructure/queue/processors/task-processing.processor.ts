@@ -98,8 +98,6 @@ export class TaskProcessingProcessor extends WorkerHost {
 
 **Description:** ${task.description || 'No description provided'}
 
-${task.externalIssueUrl ? `**External Issue:** ${task.externalIssueUrl}` : ''}
-
 Please provide:
 1. A brief summary of the task requirements
 2. Whether this task can be automated
@@ -316,7 +314,6 @@ Provide concise, actionable responses. When implementing, provide actual code or
     task: {
       title: string;
       description: string | null;
-      externalIssueUrl: string | null;
     },
     previousResult: string,
     payload?: Record<string, unknown>,
@@ -324,7 +321,6 @@ Provide concise, actionable responses. When implementing, provide actual code or
     const taskContext = `
 Task: ${task.title}
 Description: ${task.description || 'No description'}
-${task.externalIssueUrl ? `External Issue: ${task.externalIssueUrl}` : ''}
 ${payload ? `Additional Context: ${JSON.stringify(payload)}` : ''}
 `;
 

@@ -21,9 +21,6 @@ import type {
   ApiKey,
   CreateApiKeyDto,
   CreateApiKeyResponse,
-  JiraImportPreview,
-  ImportPreviewDto,
-  ImportConfirmDto,
   AICredential,
   CreateAICredentialDto,
   UpdateAICredentialDto,
@@ -169,39 +166,6 @@ export const api = {
 
     reopen: (id: string, token: string) =>
       request<{ task: Task; message: string }>(`/tasks/${id}/reopen`, {
-        method: "POST",
-        token,
-      }),
-
-    importPreview: (data: ImportPreviewDto, token: string) =>
-      request<{ preview: JiraImportPreview }>("/tasks/import/preview", {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    importConfirm: (data: ImportConfirmDto, token: string) =>
-      request<{ task: Task; message: string }>("/tasks/import/confirm", {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    refreshAll: (token: string) =>
-      request<{ refreshed: number; failed: number }>("/tasks/refresh-all", {
-        method: "POST",
-        token,
-      }),
-
-    importAssigned: (data: { source: 'JIRA' | 'YOUTRACK'; projectId?: string }, token: string) =>
-      request<{ imported: number; skipped: number; total: number }>("/tasks/import/assigned", {
-        method: "POST",
-        body: JSON.stringify(data),
-        token,
-      }),
-
-    refreshExternalData: (id: string, token: string) =>
-      request<{ task: Task; message: string }>(`/tasks/${id}/refresh`, {
         method: "POST",
         token,
       }),

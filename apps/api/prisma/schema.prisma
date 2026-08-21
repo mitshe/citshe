@@ -161,13 +161,6 @@ model Task {
   // Worker thread that executes this task (orchestrator dispatch)
   sessionId String? @map("session_id")
 
-  // External issue reference (Jira, GitLab, etc.)
-  externalSource   String? @map("external_source") // JIRA, GITLAB, GITHUB, etc.
-  externalIssueId  String? @map("external_issue_id")
-  externalIssueUrl String? @map("external_issue_url")
-  externalData     Json?   @map("external_data") // Full external issue data
-  externalStatus   String? @map("external_status") // Status from external system (e.g., "To Do", "In Progress")
-
   // Result
   result    Json? // TaskResult
   agentLogs Json? @map("agent_logs") // TaskAgentLog[]
@@ -187,7 +180,6 @@ model Task {
   @@index([repositoryId])
   @@index([status])
   @@index([sessionId])
-  @@index([externalIssueId])
   @@map("tasks")
 }
 

@@ -29,11 +29,6 @@ export interface Task {
   updatedAt: string;
   closedAt?: string | null;
   repository?: { id: string; name: string };
-  externalSource?: string | null;
-  externalIssueId?: string | null;
-  externalIssueUrl?: string | null;
-  externalData?: Record<string, unknown> | null;
-  externalStatus?: string | null;
   result?: Record<string, unknown> | null;
   agentLogs?: Record<string, unknown>[] | null;
 }
@@ -87,34 +82,4 @@ export interface UpdateTaskDto {
   repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
-}
-
-export interface JiraImportPreview {
-  source: "JIRA";
-  issueKey: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string | null;
-  issueType: string;
-  assignee: string | null;
-  reporter: string | null;
-  labels: string[];
-  components: { id: string; name: string }[];
-  project: {
-    key: string;
-    name: string;
-  };
-  url: string;
-  created: string;
-  updated: string;
-}
-
-export interface ImportPreviewDto {
-  url: string;
-}
-
-export interface ImportConfirmDto {
-  url: string;
-  projectId?: string;
 }
