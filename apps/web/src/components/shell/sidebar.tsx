@@ -21,7 +21,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Kbd } from "@/components/ui/kbd";
-import { StatusDot } from "@/components/ui/status-dot";
 import { OrgSwitcher } from "./org-switcher";
 import { OPEN_COMMAND_EVENT } from "./command-palette";
 import { useSessions, usePlugins } from "@/lib/api/hooks";
@@ -173,7 +172,7 @@ function StackNav({
             active={isActive(href)}
             collapsed={collapsed}
             onNavigate={onNavigate}
-            icon={<span className={def.accent}>{def.icon}</span>}
+            icon={def.icon}
           />
         );
       })}
@@ -214,24 +213,17 @@ function RunningSessions({
   return (
     <div className="mt-5 space-y-0.5 border-t border-border pt-5">
       {!collapsed && <SectionHeading>Running</SectionHeading>}
-      {shown.map((s) => {
-        const state = s.status === "CREATING" ? "creating" : "running";
-        return (
-          <NavRow
-            key={s.id}
-            href={`/sessions/${s.id}`}
-            label={s.name}
-            active={false}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-            icon={
-              <span className="flex h-[18px] w-[18px] items-center justify-center">
-                <StatusDot state={state} size={8} />
-              </span>
-            }
-          />
-        );
-      })}
+      {shown.map((s) => (
+        <NavRow
+          key={s.id}
+          href={`/sessions/${s.id}`}
+          label={s.name}
+          active={false}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+          icon={<SquareTerminal className="h-[18px] w-[18px]" />}
+        />
+      ))}
       {overflow > 0 && !collapsed && (
         <Link
           href="/sessions"
