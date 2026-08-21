@@ -669,6 +669,14 @@ function ResourceGroupSection({
   group: PluginResourceGroup;
   selectedCount?: number;
 }) {
+  const isDeployments = group.kind === "deployments";
+  // Pin the live/active deployment to the top; keep the rest chronological.
+  const items = isDeployments
+    ? [...group.items].sort(
+        (a, b) => Number(b.active ?? false) - Number(a.active ?? false),
+      )
+    : group.items;
+
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-1.5">
@@ -687,17 +695,76 @@ function ResourceGroupSection({
         />
       ) : (
         <Panel>
-          {group.items.map((it) => (
-            <ResourceRow
-              key={it.id}
-              name={it.name}
-              state={it.state ?? "idle"}
-              meta={it.meta}
-            />
-          ))}
+          {items.map((it) =>
+            isDeployments ? (
+              <DeploymentRow key={it.id} item={it} />
+            ) : (
+              <ResourceRow
+                key={it.id}
+                name={it.name}
+                state={it.state ?? "idle"}
+                meta={it.meta}
+              />
+            ),
+          )}
         </Panel>
       )}
     </section>
+  );
+}
+
+/**
+ * A rich deployment row (Cloudflare + Vercel). Leads with the commit message,
+ * conveys state via the StatusDot (green = ready — we don't repeat "success"),
+ * and shows env · branch · #sha · time on the right. The live/active
+ * deployment gets a primary-tinted row, a left accent bar and a "Live" badge.
+ */
+function DeploymentRow({ item }: { item: PluginResourceItem }) {
+  const active = !!item.active;
+  const metaParts = [
+    item.environment,
+    item.branch,
+    item.sha ? `#${item.sha}` : undefined,
+    item.when,
+  ].filter(Boolean) as string[];
+  // Fall back to the plugin's prebuilt meta line if structured fields are absent.
+  const meta = metaParts.length ? metaParts.join(" · ") : item.meta;
+
+  return (
+    <div
+      className={cn(
+        "relative flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0",
+        active && "bg-primary/5",
+      )}
+    >
+      {active && (
+        <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" aria-hidden />
+      )}
+      <span className="flex min-w-0 items-center gap-2.5">
+        <StatusDot state={item.state ?? "idle"} size={7} />
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-foreground">{item.name}</span>
+            {active && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                <StatusDot state="ok" size={5} />
+                Live
+              </span>
+            )}
+          </span>
+          {item.author && (
+            <span className="mt-0.5 block truncate text-xs text-text-subtle">
+              {item.author}
+            </span>
+          )}
+        </span>
+      </span>
+      {meta && (
+        <span className="shrink-0 font-mono text-xs text-text-subtle">
+          {meta}
+        </span>
+      )}
+    </div>
   );
 }
 

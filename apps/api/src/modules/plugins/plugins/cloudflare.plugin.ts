@@ -201,57 +201,108 @@ class CloudflarePlugin implements StackPlugin {
       }
     };
 
-    // Pages: each project annotated with its latest deploy state + when.
-    const pages = await safeList(
-      `/accounts/${accountId}/pages/projects`,
-      (p) => {
-        const dep = (p.latest_deployment ?? {}) as Record<string, unknown>;
-        const stage = (dep.latest_stage as { status?: string })?.status;
-        const when = dep.created_on as string | undefined;
-        const ok = stage === 'success' || stage === 'active';
-        const building = stage === 'building' || stage === 'queued';
-        return {
-          id: p.name as string,
-          name: p.name as string,
-          state: stage ? (ok ? 'ok' : building ? 'warn' : 'down') : 'idle',
-          meta: when ? timeAgo(when) : undefined,
-        };
-      },
-      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
-    );
+    // Pages: each project annotated with its latest deploy state + when. Keep
+    // the raw project objects too — we need canonical_deployment below to mark
+    // the live production deploy.
+    let pagesRaw: Array<Record<string, unknown>> = [];
+    try {
+      const pj = await this.get(apiToken, `/accounts/${accountId}/pages/projects`);
+      pagesRaw = (pj?.result as Array<Record<string, unknown>>) ?? [];
+    } catch {
+      pagesRaw = [];
+    }
+    const pages: PluginResourceItem[] = pagesRaw.map((p) => {
+      const dep = (p.latest_deployment ?? {}) as Record<string, unknown>;
+      const stage = (dep.latest_stage as { status?: string })?.status;
+      const when = dep.created_on as string | undefined;
+      const ok = stage === 'success' || stage === 'active';
+      const building = stage === 'building' || stage === 'queued';
+      return {
+        id: p.name as string,
+        name: p.name as string,
+        state: (stage
+          ? ok
+            ? 'ok'
+            : building
+              ? 'warn'
+              : 'down'
+          : 'idle') as HealthState,
+        meta: when ? timeAgo(when) : undefined,
+      };
+    });
     if (pages.length) groups.push({ kind: 'pages', label: 'Pages', items: pages });
 
     // Recent deployments across the freshest Pages project (rich: state +
-    // commit + relative time). Best-effort — omitted if it errors.
+    // commit message + branch + author + relative time). The live production
+    // deploy — the project's canonical/latest deployment, or failing that the
+    // newest production+success one — is marked `active`. Best-effort.
     try {
+      const projObj = pagesRaw.find(
+        (p) => (p.name as string) === pages[0]?.name,
+      );
       const proj = pages[0]?.name;
       if (proj) {
+        // Cloudflare exposes the currently-served production deploy as the
+        // project's canonical_deployment (fallback: latest_deployment).
+        const canonical =
+          (projObj?.canonical_deployment as Record<string, unknown>)?.id ??
+          (projObj?.latest_deployment as Record<string, unknown>)?.id;
         const dj = await this.get(
           apiToken,
           `/accounts/${accountId}/pages/projects/${proj}/deployments?per_page=15`,
         );
         const deploys: Array<Record<string, unknown>> = dj?.result ?? [];
+        // Fallback active id: newest production+success deployment.
+        let fallbackActiveId: string | undefined;
+        if (!canonical) {
+          const liveProd = deploys.find(
+            (d) =>
+              ((d.environment as string) || 'production') === 'production' &&
+              (d.latest_stage as { status?: string })?.status === 'success',
+          );
+          fallbackActiveId = liveProd?.id as string | undefined;
+        }
+        const activeId = (canonical as string) || fallbackActiveId;
         const items: PluginResourceItem[] = deploys.map((d) => {
           const stage = (d.latest_stage as { status?: string })?.status;
           const ok = stage === 'success';
           const building = stage === 'building' || stage === 'queued';
           const trig = (d.deployment_trigger as Record<string, unknown>) ?? {};
           const meta = (trig.metadata as Record<string, unknown>) ?? {};
-          const commit = (meta.commit_hash as string)?.slice(0, 7);
+          const sha = (meta.commit_hash as string)?.slice(0, 7);
+          const branch = (meta.branch as string) || undefined;
+          const author = (meta.author as string) || undefined;
+          const message = (meta.commit_message as string)?.split('\n')[0].trim();
           const env = (d.environment as string) || 'production';
-          const when = d.created_on as string | undefined;
-          const metaLine = [
-            env,
-            commit,
-            when ? timeAgo(when) : undefined,
-          ]
+          const whenIso = d.created_on as string | undefined;
+          const when = whenIso ? timeAgo(whenIso) : undefined;
+          const id = (d.id as string) || '';
+          const metaLine = [env, branch, sha ? `#${sha}` : undefined, when]
             .filter(Boolean)
             .join(' · ');
+          const health: HealthState = stage
+            ? ok
+              ? 'ok'
+              : building
+                ? 'warn'
+                : 'down'
+            : 'idle';
+          // Lead with the commit message; annotate only non-success states.
+          const baseName = message || proj;
+          const name = ok
+            ? baseName
+            : `${baseName} — ${building ? 'Building…' : (stage || 'Failed')}`;
           return {
-            id: (d.id as string) || '',
-            name: `${proj} (${stage || env})`,
-            state: stage ? (ok ? 'ok' : building ? 'warn' : 'down') : 'idle',
+            id,
+            name,
+            state: health,
             meta: metaLine || undefined,
+            active: !!id && !!activeId && id === activeId,
+            environment: env,
+            branch,
+            sha,
+            author,
+            when,
           };
         });
         if (items.length)

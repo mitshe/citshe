@@ -110,6 +110,18 @@ function gitMeta(meta: Record<string, unknown> | undefined | null): {
   };
 }
 
+/** Commit author name from a deployment's meta (git) or its creator. */
+function commitAuthor(d: Record<string, unknown>): string | undefined {
+  const m = (d.meta ?? {}) as Record<string, string>;
+  const fromGit =
+    m.githubCommitAuthorName ||
+    m.gitlabCommitAuthorName ||
+    m.bitbucketCommitAuthorName;
+  if (fromGit) return fromGit;
+  const creator = d.creator as Record<string, unknown> | undefined;
+  return (creator?.username as string) || (creator?.email as string) || undefined;
+}
+
 /** Describe a project's connected git repo, e.g. "github:acme/site". */
 function repoLabel(link: Record<string, unknown> | undefined | null): string | undefined {
   if (!link) return undefined;
@@ -351,6 +363,43 @@ class VercelPlugin implements StackPlugin {
     return { ok: false, message: `Unknown action: ${actionId}` };
   }
 
+  /**
+   * The deployment ids currently SERVING production, one per project. Vercel
+   * exposes this as project.targets.production.id; we also accept a READY
+   * production entry in latestDeployments as a fallback. Resilient: returns an
+   * empty set if projects can't be read (so nothing gets falsely marked live).
+   */
+  private async activeProductionIds(c: VercelConfig): Promise<Set<string>> {
+    const ids = new Set<string>();
+    try {
+      const json = await this.get(c, '/v9/projects?limit=100');
+      const projects: Array<Record<string, unknown>> = json?.projects ?? [];
+      for (const p of projects) {
+        const targets = p.targets as Record<string, unknown> | undefined;
+        const prod = targets?.production as Record<string, unknown> | undefined;
+        const id = prod?.id as string | undefined;
+        if (id) {
+          ids.add(id);
+          continue;
+        }
+        // Fallback: newest READY production deployment on the project.
+        const latest = (p.latestDeployments as Array<Record<string, unknown>>) ?? [];
+        const ready = latest
+          .filter(
+            (d) => d.target === 'production' && d.readyState === 'READY',
+          )
+          .sort(
+            (a, b) => ((b.createdAt as number) || 0) - ((a.createdAt as number) || 0),
+          )[0];
+        const uid = ready?.uid as string | undefined;
+        if (uid) ids.add(uid);
+      }
+    } catch {
+      // projects unreadable — no active markers rather than wrong ones
+    }
+    return ids;
+  }
+
   /** Everything the token can see, grouped — projects, deployments, domains. */
   async listResources(config: PluginConfig): Promise<PluginResourceGroup[]> {
     const c = this.cfg(config);
@@ -383,32 +432,54 @@ class VercelPlugin implements StackPlugin {
       // projects listing optional — skip quietly
     }
 
-    // --- Deployments (target · commit msg + sha · branch · when) ---
+    // --- Deployments (commit msg · target · branch · sha · when) ---
+    // The currently-serving production deployment per project is marked
+    // `active` so the UI can pin/badge it as Live. We resolve the active ids
+    // from /v9/projects (targets.production.id / a READY production
+    // latestDeployment) — resilient: no active flag if projects are unreadable.
     try {
+      const activeProdIds = await this.activeProductionIds(c);
       const json = await this.get(c, '/v6/deployments?limit=20');
       const deployments: Array<Record<string, unknown>> =
         json?.deployments ?? [];
       const items = deployments.map((d) => {
         const git = gitMeta(d.meta as Record<string, unknown>);
+        const author = commitAuthor(d);
+        const env = targetLabel(d.target);
         const when =
           typeof d.createdAt === 'number'
             ? timeAgo(d.createdAt as number)
             : undefined;
+        const uid = (d.uid as string) || (d.url as string);
+        // Only non-READY states get called out in the meta line — a green dot
+        // already says "ready", so we don't repeat it 15 times.
+        const stateName = stateLabel(d.readyState as string);
         const metaParts = [
-          targetLabel(d.target),
-          stateLabel(d.readyState as string),
+          env,
           git.branch,
           git.sha ? `#${git.sha}` : undefined,
           when,
         ].filter(Boolean) as string[];
-        const label = git.message
-          ? `${(d.name as string) || 'deployment'} — ${git.message.split('\n')[0].slice(0, 60)}`
-          : (d.name as string) || 'deployment';
+        // Lead with the commit message; annotate only non-success states.
+        const commit = git.message?.split('\n')[0].trim();
+        const health = deployHealth(d.readyState as string).state;
+        const baseName =
+          commit || (d.name as string) || 'deployment';
+        const label =
+          health === 'ok'
+            ? baseName
+            : `${baseName} — ${stateName === 'BUILDING' ? 'Building…' : stateName}`;
         return {
-          id: (d.uid as string) || (d.url as string),
+          id: uid,
           name: label,
-          state: deployHealth(d.readyState as string).state,
-          meta: metaParts.join(' · '),
+          state: health,
+          meta: metaParts.join(' · ') || undefined,
+          active: !!uid && activeProdIds.has(uid),
+          environment: env,
+          branch: git.branch,
+          sha: git.sha,
+          author,
+          when,
         };
       });
       if (items.length)

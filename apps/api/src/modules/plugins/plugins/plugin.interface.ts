@@ -85,6 +85,22 @@ export interface PluginResourceItem {
   /** Optional right-aligned meta line. */
   meta?: string;
   /**
+   * Deployment groups only: true for the deployment currently SERVING
+   * production traffic (Vercel project's production target / Cloudflare Pages'
+   * latest successful production deploy).
+   */
+  active?: boolean;
+  /** Deployment groups only: the deploy environment ("production"/"preview"). */
+  environment?: string;
+  /** Deployment groups only: git branch the deploy was built from. */
+  branch?: string;
+  /** Deployment groups only: short (7-char) commit sha. */
+  sha?: string;
+  /** Deployment groups only: commit author name. */
+  author?: string;
+  /** Deployment groups only: relative time of the deploy (e.g. "20d ago"). */
+  when?: string;
+  /**
    * Optional structured stats rendered as an expandable panel under the row
    * (e.g. a VPS server's uptime / load / RAM / disk / CPU / OS).
    */

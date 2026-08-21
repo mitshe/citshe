@@ -107,6 +107,26 @@ export interface PluginResourceItem {
   /** Optional right-aligned meta line (e.g. "load 0.4 · disk 30% · ram 42%"). */
   meta?: string;
   /**
+   * Deployment groups only: true for the deployment currently SERVING
+   * production traffic (Vercel project's production target / Cloudflare Pages'
+   * latest successful production deploy). Rendered with a "Live" badge and a
+   * highlighted row so you can see at a glance what's live right now.
+   */
+  active?: boolean;
+  /**
+   * Deployment groups only: the deploy environment ("production" / "preview").
+   * Lets the UI badge previews and highlight production without re-parsing meta.
+   */
+  environment?: string;
+  /** Deployment groups only: git branch the deploy was built from. */
+  branch?: string;
+  /** Deployment groups only: short (7-char) commit sha. */
+  sha?: string;
+  /** Deployment groups only: commit author name, shown as a subtle secondary. */
+  author?: string;
+  /** Deployment groups only: relative time of the deploy (e.g. "20d ago"). */
+  when?: string;
+  /**
    * Optional structured stats rendered as an expandable panel under the row
    * (e.g. a VPS server's uptime / load / RAM / disk / CPU / OS). Cleaner than
    * cramming everything into `meta`.
