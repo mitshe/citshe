@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Docker from 'dockerode';
 import * as tar from 'tar-fs';
@@ -139,8 +144,14 @@ export class SessionContainerService implements OnModuleInit {
         },
       });
     } catch (err) {
+      const message = (err as Error).message || '';
+      if (message.includes('No such image') || message.includes('not found')) {
+        throw new BadRequestException(
+          'Executor image not built. Run `just executor-build` on the server.',
+        );
+      }
       throw new Error(
-        `Failed to create session container. Make sure Docker is running. (${(err as Error).message})`,
+        `Failed to create session container. Make sure Docker is running. (${message})`,
       );
     }
 

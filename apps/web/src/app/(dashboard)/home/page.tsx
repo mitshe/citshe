@@ -4,9 +4,6 @@ import { useMemo } from "react";
 import Link from "next/link";
 import {
   Loader2,
-  CheckCircle2,
-  XCircle,
-  Clock,
   Terminal,
   Pause,
   Play,
@@ -17,8 +14,10 @@ import {
   FolderGit2,
   ArrowRight,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getTaskStatus } from "@/lib/status-config";
 import { useAuthContext } from "@/lib/auth";
 import {
   useTasks,
@@ -43,6 +42,21 @@ import type {
 
 const ACTIVE_STATUSES: TaskStatus[] = ["PENDING", "QUEUED", "ANALYZING", "IN_PROGRESS", "REVIEW"];
 const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
+
+// A task that should be moving but isn't: a worker status with no live session,
+// untouched for a while. Usually means nothing picked it up (e.g. the executor
+// image isn't built).
+const STUCK_STATUSES: TaskStatus[] = ["QUEUED", "ANALYZING", "IN_PROGRESS"];
+const STUCK_AFTER_MS = 5 * 60 * 1000;
+
+/** No worker picked this up and it's gone quiet — likely the executor. */
+function isStuck(task: Task): boolean {
+  return (
+    STUCK_STATUSES.includes(task.status) &&
+    !task.sessionId &&
+    Date.now() - new Date(task.updatedAt).getTime() > STUCK_AFTER_MS
+  );
+}
 
 export default function HomePage() {
   const { currentOrg } = useAuthContext();
@@ -517,39 +531,37 @@ function WorkersStrip({ queue }: { queue: QueueOverview }) {
   );
 }
 
-const STATUS_META: Record<
-  TaskStatus,
-  { label: string; icon: React.ReactNode; className: string }
-> = {
-  PENDING: { label: "Open", icon: <Clock className="h-3.5 w-3.5" />, className: "text-muted-foreground" },
-  QUEUED: { label: "Queued", icon: <Clock className="h-3.5 w-3.5" />, className: "text-amber-500" },
-  ANALYZING: { label: "Analyzing", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-blue-500" },
-  IN_PROGRESS: { label: "Working", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-emerald-500" },
-  REVIEW: { label: "In review", icon: <Clock className="h-3.5 w-3.5" />, className: "text-amber-500" },
-  COMPLETED: { label: "Closed", icon: <CheckCircle2 className="h-3.5 w-3.5" />, className: "text-emerald-500" },
-  FAILED: { label: "Failed", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-destructive" },
-  CANCELLED: { label: "Cancelled", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-muted-foreground" },
-};
-
 function TaskRow({ task }: { task: Task }) {
-  const meta = STATUS_META[task.status];
+  // Shared source of truth for status icon/label/color — matches the board.
+  const meta = getTaskStatus(task.status);
+  const textColor = meta.color.split(" ")[1];
   const liveWorker =
     !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
+  const stuck = isStuck(task);
   const href = liveWorker ? `/sessions/${task.sessionId}` : `/tasks/${task.id}`;
   return (
     <Link
       href={href}
       className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
     >
-      <span className={cn("shrink-0", meta.className)}>{meta.icon}</span>
+      <span className={cn("shrink-0", textColor)}>{meta.icon}</span>
       <span className="flex-1 truncate text-sm">{task.title}</span>
+      {stuck && (
+        <span
+          title="No worker picked this up. Is the executor image built? Run `just executor-build`."
+          className="flex items-center gap-1 shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          Stuck — executor?
+        </span>
+      )}
       {liveWorker && (
         <span className="flex items-center gap-1 shrink-0 text-[11px] font-medium text-emerald-500">
           <Terminal className="h-3.5 w-3.5" />
           Watch
         </span>
       )}
-      <span className={cn("shrink-0 text-[11px] font-medium", meta.className)}>
+      <span className={cn("shrink-0 text-[11px] font-medium", textColor)}>
         {meta.label}
       </span>
     </Link>

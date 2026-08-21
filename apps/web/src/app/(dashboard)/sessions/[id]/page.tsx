@@ -17,6 +17,7 @@ import {
   Trash2,
   GitPullRequest,
   Globe,
+  AlertCircle,
 } from "lucide-react";
 import {
   Tooltip,
@@ -42,6 +43,7 @@ import {
   useResumeSession,
   useStopSession,
   useDeleteSession,
+  useRecreateSession,
   useSessionFiles,
   useSessionGitStatus,
   useReadSessionFile,
@@ -84,6 +86,7 @@ export default function SessionDetailPage() {
   const resumeSession = useResumeSession();
   const stopSession = useStopSession();
   const deleteSession = useDeleteSession();
+  const recreateSession = useRecreateSession();
   const closeTerminalMutation = useCloseTerminal();
   const readFile = useReadSessionFile();
   const deleteFile = useDeleteSessionFile();
@@ -607,6 +610,18 @@ export default function SessionDetailPage() {
     }
   };
 
+  const handleRetry = async () => {
+    try {
+      await recreateSession.mutateAsync({ id: sessionId, data: {} });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      await refetch();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to recreate thread",
+      );
+    }
+  };
+
   // ─── Render ────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -630,7 +645,11 @@ export default function SessionDetailPage() {
   const isPaused = sessionStatus === "PAUSED";
   const isCompleted = sessionStatus === "COMPLETED";
   const isCreating = sessionStatus === "CREATING";
+  const isFailed = sessionStatus === "FAILED";
   const isActive = isRunning || isPaused;
+  const sessionErrorMessage =
+    (session as { errorMessage?: string | null }).errorMessage ||
+    "The terminal failed to start.";
 
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden">
@@ -879,7 +898,48 @@ export default function SessionDetailPage() {
                     display: activeTabId === tab.id ? "block" : "none",
                   }}
                 >
-                  {isActive ? (
+                  {isFailed ? (
+                    <div className="flex items-center justify-center h-full p-6 text-muted-foreground">
+                      <div className="text-center max-w-md">
+                        <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+                        <p className="text-sm font-medium text-foreground">
+                          {sessionErrorMessage}
+                        </p>
+                        <p className="text-xs mt-2">
+                          If this says the executor image is missing, build it
+                          with{" "}
+                          <code className="bg-muted text-foreground px-1 py-0.5 rounded font-mono">
+                            just executor-build
+                          </code>
+                          .
+                        </p>
+                        <div className="flex items-center justify-center gap-2 mt-5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRetry}
+                            disabled={recreateSession.isPending}
+                          >
+                            {recreateSession.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <Play className="w-4 h-4 mr-1" />
+                            )}
+                            Retry
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleDelete}
+                            disabled={deleteSession.isPending}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : isActive ? (
                     <TerminalView
                       sessionId={sessionId}
                       terminalId={tab.terminalId!}
@@ -891,7 +951,7 @@ export default function SessionDetailPage() {
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
                         <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin" />
-                        <p className="text-sm font-medium">Starting thread...</p>
+                        <p className="text-sm font-medium">Starting container…</p>
                         <p className="text-xs mt-1">Preparing the container environment</p>
                       </div>
                     </div>
