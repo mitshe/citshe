@@ -1,17 +1,14 @@
 import {
-  Workflow,
   Plug,
   Code,
   Home,
   Sparkles,
   GitBranch,
-  MessageSquare,
   MessageSquareCode,
   SlidersHorizontal,
   Terminal,
   Zap,
   Box,
-  SquareKanban,
   Gitlab,
   BookOpen,
 } from "lucide-react";
@@ -33,24 +30,6 @@ export const docsNav: DocNavSection[] = [
     items: [
       { title: "Introduction", slug: "", icon: Home },
       { title: "Quick Start", slug: "quickstart", icon: Zap },
-    ],
-  },
-  {
-    title: "Core Concepts",
-    items: [
-      { title: "What are Workflows?", slug: "workflows", icon: Workflow },
-      { title: "Nodes & Connections", slug: "workflows/nodes", icon: Box },
-      { title: "AI Nodes", slug: "workflows/ai-nodes", icon: Sparkles },
-      {
-        title: "Variables & Expressions",
-        slug: "workflows/expressions",
-        icon: Code,
-      },
-      {
-        title: "Thread Nodes",
-        slug: "workflows/session-nodes",
-        icon: MessageSquareCode,
-      },
     ],
   },
   {
@@ -84,9 +63,6 @@ export const docsNav: DocNavSection[] = [
       { title: "Overview", slug: "integrations", icon: Plug },
       { title: "GitHub", slug: "integrations/github", icon: GitBranch },
       { title: "GitLab", slug: "integrations/gitlab", icon: Gitlab },
-      { title: "Jira", slug: "integrations/jira", icon: SquareKanban },
-      { title: "YouTrack", slug: "integrations/youtrack", icon: SquareKanban },
-      { title: "Slack", slug: "integrations/slack", icon: MessageSquare },
       { title: "Obsidian", slug: "integrations/obsidian", icon: BookOpen },
       {
         title: "Claude Code",

@@ -1,520 +1,91 @@
 /**
  * Documentation content for all pages.
- * The key is the slug (e.g., "" for intro, "workflows" for workflows page).
+ * The key is the slug (e.g., "" for intro, "quickstart" for the quick start page).
  */
 export const docsContent: Record<string, string> = {
   "": `# Welcome to citshe
 
-Build powerful automations with AI. Connect your development tools, create visual workflows, and automate repetitive tasks.
+Manage your projects with AI from the browser — even from your phone. citshe runs Claude Code inside isolated Docker containers, connected to your GitHub repositories, with a terminal you can drive from anywhere.
 
 :::info
-**New here?** Create your first workflow in 5 minutes with the [Quick Start Guide](/docs/quickstart).
+**New here?** Get up and running in 5 minutes with the [Quick Start Guide](/docs/quickstart).
 :::
 
-## What can you build?
+## What can you do?
 
 <cards>
-<card title="Automated Code Reviews" icon="sparkles" href="/docs/workflows/ai-nodes">
-Let AI review every pull request, catch bugs, and suggest improvements before human review.
+<card title="AI-Assisted Development" icon="sparkles" href="/docs/integrations/claude-code">
+Run Claude Code in isolated containers to review code, fix bugs, and implement changes.
 </card>
-<card title="Issue to Code" icon="workflow" href="/docs/workflows">
-Automatically turn Jira issues into Git branches, code implementations, and merge requests.
+<card title="Browser Terminal" icon="book" href="/docs/workspace/sessions">
+Launch threads with a full terminal, usable from desktop or mobile.
 </card>
-<card title="Smart Notifications" icon="message" href="/docs/integrations/slack">
-Send intelligent Slack updates when important events happen in your projects.
-</card>
-<card title="Auto Documentation" icon="book" href="/docs/workflows/ai-nodes">
-Generate and update documentation automatically when code changes.
+<card title="GitHub Integration" icon="git" href="/docs/integrations/github">
+Connect your repositories — branches, commits, and pull requests.
 </card>
 </cards>
-
-## How it works
-
-Connect nodes in a visual editor to build automations:
-
-<diagram>
-trigger -> action -> action -> result
-Jira Issue Created -> AI Analyzes Issue -> Creates Git Branch -> Sends Slack Message
-</diagram>
-
-Every workflow has three parts:
-- **Trigger** — What starts it (webhook, schedule, Jira event)
-- **Actions** — What it does (AI prompts, Git operations, notifications)
-- **Connections** — How data flows between nodes using \`{{expressions}}\`
 
 ## Next steps
 
 :::steps
 ### Connect your tools
-Go to [Settings → Integrations](/settings/integrations) and connect GitHub, Jira, or Slack.
+Go to [Settings → Integrations](/settings/integrations) and connect GitHub.
 
-### Create your first workflow
-Follow the [Quick Start Guide](/docs/quickstart) to build a simple automation.
+### Start your first thread
+Follow the [Quick Start Guide](/docs/quickstart) to launch a Workspace thread.
 
-### Explore AI capabilities
-Learn how to use [AI Nodes](/docs/workflows/ai-nodes) to add intelligence to your workflows.
+### Explore Claude Code
+Learn how to use [Claude Code](/docs/integrations/claude-code) inside your threads.
 :::
 `,
 
   quickstart: `# Quick Start Guide
 
-Build your first workflow in 5 minutes.
+Launch your first Workspace thread in 5 minutes.
 
 :::info
-**Prerequisites:** Connect Slack first at [Settings → Integrations](/settings/integrations).
+**Prerequisites:** Connect GitHub first at [Settings → Integrations](/settings/integrations).
 :::
 
-## Step 1: Create a workflow
+## Step 1: Connect a repository
 
-1. Go to **Workflows** in the sidebar
-2. Click **Create Workflow**
-3. Name it "My First Workflow"
+1. Go to [Settings → Integrations](/settings/integrations) and connect GitHub
+2. Go to [Settings → Repositories](/settings/repositories) and sync your repos
+3. Toggle on the repository you want to work with
 
-## Step 2: Add a trigger
+## Step 2: Start a thread
 
-Every workflow starts with a trigger — the event that kicks it off.
+Threads run Claude Code inside an isolated Docker container.
 
-1. Click **+ Add Trigger**
-2. Select **Manual Trigger**
+1. Go to **Threads** in the sidebar
+2. Click **New Thread** (or use the one-tap launcher on Home)
+3. Pick your repository and start the session
 
 :::tip
-Use Manual triggers while learning. Switch to webhooks or schedules for production.
+The one-tap launcher on Home creates a thread with sensible defaults and drops you straight into the terminal.
 :::
 
-## Step 3: Add an action
+## Step 3: Give the agent a task
 
-1. Click **+ Add Node** below the trigger
-2. Select **Slack → Send Message**
-3. Configure it:
+1. Type an instruction in the thread, e.g. \`Fix the failing login test\`
+2. Claude Code runs in the container and streams its output
+3. Review the changes and let it open a pull request
 
-<example>
-| Field | Value |
-|-------|-------|
-| **Channel** | \`#general\` |
-| **Message** | \`Hello from citshe! Triggered at {{trigger.timestamp}}\` |
-</example>
+## Step 4: Review on GitHub
 
-## Step 4: Save and run
-
-1. Click **Save**
-2. Click **Run** to test
-3. Check Slack for your message
+1. Open the pull request the agent created
+2. Review the diff and merge when ready
 
 ## Next steps
 
-- [Nodes & Connections](/docs/workflows/nodes) — Build complex workflows
-- [AI Nodes](/docs/workflows/ai-nodes) — Add intelligence
-- [GitHub Integration](/docs/integrations/github) — Automate Git
-`,
-
-  workflows: `# What are Workflows?
-
-A workflow is a series of automated steps. When something happens (trigger), do these things (actions), in order.
-
-## Example: Automated code reviews
-
-Without citshe:
-1. See a pull request notification
-2. Open the PR, read changes
-3. Write review comments
-4. Post them on GitHub
-
-With citshe:
-
-<diagram>
-trigger -> action -> action -> result
-New PR Created -> AI Reviews Code -> Posts Comments -> Done!
-</diagram>
-
-## Workflow structure
-
-Every workflow has three parts:
-
-### 1. Trigger (What starts it)
-
-| Trigger | When it runs |
-|---------|--------------|
-| **Manual** | Click "Run" in the UI |
-| **Webhook** | HTTP request to your endpoint |
-| **Schedule** | Cron schedule (e.g., daily at 9am) |
-| **Jira Issue** | Issue created or updated |
-| **Git Push** | Code pushed to a branch |
-| **Pull Request** | PR opened or updated |
-
-### 2. Actions (What it does)
-
-| Category | Examples |
-|----------|----------|
-| **AI** | Generate text, analyze code, extract data |
-| **Git** | Create branches, commit files, open PRs |
-| **Jira** | Update issues, add comments, change status |
-| **Slack** | Send messages to channels |
-| **HTTP** | Call any API |
-
-### 3. Connections (How data flows)
-
-Data flows between nodes using **expressions**:
-
-<example>
-**Node 1: AI Prompt**
-\`Summarize this code: {{trigger.diff}}\`
-
-**Node 2: Slack Message**
-\`Code summary: {{nodes.ai_prompt.content}}\`
-</example>
-
-The \`{{...}}\` syntax references data from triggers and previous nodes.
-
-## Creating a workflow
-
-:::steps
-### Go to Workflows
-Click **Workflows** in the sidebar, then **Create Workflow**.
-
-### Add a trigger
-Choose what starts your workflow. Use **Manual Trigger** for testing.
-
-### Add actions
-Click **+ Add Node** and choose your actions. Connect nodes by dragging handles.
-
-### Activate
-Click **Save**, then toggle **Active** to enable.
-:::
-
-## Next steps
-
-- [Nodes & Connections](/docs/workflows/nodes) — Deep dive into node types
-- [AI Nodes](/docs/workflows/ai-nodes) — Add intelligence
-- [Expressions](/docs/workflows/expressions) — Master data flow
-`,
-
-  "workflows/nodes": `# Nodes & Connections
-
-Nodes are individual steps in a workflow. Connect them to form a pipeline where data flows from one step to the next.
-
-## Node types
-
-### Triggers
-
-Every workflow starts with one trigger:
-
-<nodelist>
-<node type="trigger" name="Manual" desc="Run on-demand from the UI or API" />
-<node type="trigger" name="Webhook" desc="Triggered by HTTP POST requests" />
-<node type="trigger" name="Schedule" desc="Run on a cron schedule" />
-<node type="trigger" name="Jira Issue" desc="When issues are created or updated" />
-<node type="trigger" name="Git Push" desc="When code is pushed to branches" />
-<node type="trigger" name="Pull Request" desc="When PRs are opened or updated" />
-</nodelist>
-
-### Actions
-
-Actions do the actual work:
-
-<nodelist>
-<node type="ai" name="AI Prompt" desc="Send a prompt, get a response" />
-<node type="ai" name="AI Analyze" desc="Extract structured data from text" />
-<node type="ai" name="AI Code Review" desc="Specialized code review with issues list" />
-<node type="git" name="Create Branch" desc="Create a new Git branch" />
-<node type="git" name="Commit Files" desc="Commit changes to a branch" />
-<node type="git" name="Create PR" desc="Open a pull request" />
-<node type="jira" name="Update Issue" desc="Modify Jira issue fields" />
-<node type="jira" name="Add Comment" desc="Post a comment on an issue" />
-<node type="slack" name="Send Message" desc="Post to a Slack channel" />
-<node type="http" name="HTTP Request" desc="Call any REST API" />
-</nodelist>
-
-### Control flow
-
-Control execution order:
-
-<nodelist>
-<node type="control" name="Condition" desc="Branch based on if/else logic" />
-<node type="control" name="Loop" desc="Iterate over arrays" />
-<node type="control" name="Parallel" desc="Run multiple branches simultaneously" />
-</nodelist>
-
-## Connecting nodes
-
-Drag from an output handle to an input handle. Data flows through connections automatically.
-
-<diagram>
-trigger -> action -> action -> result
-Trigger → AI Prompt → Condition → Slack or Email
-</diagram>
-
-When Node A connects to Node B:
-- Node A runs first
-- Its output is available to Node B via \`{{nodes.nodeA.field}}\`
-
-## Configuration
-
-Click a node to open its configuration panel:
-
-<example>
-**AI Prompt Node**
-
-| Field | Value |
-|-------|-------|
-| **Prompt** | \`Summarize: {{trigger.content}}\` |
-| **System Prompt** | \`You are a helpful assistant\` |
-| **Model** | \`claude-sonnet-4\` |
-| **Max Tokens** | \`1000\` |
-</example>
-
-## Accessing node outputs
-
-Every node produces output that subsequent nodes can use:
-
-| Node Type | Output Fields |
-|-----------|---------------|
-| **AI Prompt** | \`content\` (the response text) |
-| **AI Analyze** | \`result\` (structured data object) |
-| **AI Code Review** | \`summary\`, \`issues[]\`, \`score\` |
-| **Create Branch** | \`branchName\`, \`url\` |
-| **Create PR** | \`prNumber\`, \`url\`, \`title\` |
-| **HTTP Request** | \`status\`, \`body\`, \`headers\` |
-
-Access these with: \`{{nodes.nodeId.fieldName}}\`
-
-:::tip
-Hover over any node in the editor to see its available output fields.
-:::
-`,
-
-  "workflows/ai-nodes": `# AI Nodes
-
-Add AI to your workflows. Generate content, analyze code, extract structured data.
-
-## AI providers
-
-Configure in [Settings → AI Providers](/settings/ai):
-
-| Provider | Best for | Models |
-|----------|----------|--------|
-| **Claude** | Complex reasoning, code | Sonnet 4.5, Opus 4, Haiku |
-| **OpenAI** | General tasks | GPT-4.1, o3, o4-mini |
-| **Gemini** | Multimodal | 2.5 Pro, 2.5 Flash |
-| **Groq** | Speed | LLaMA 4, Mixtral |
-
-## AI Prompt
-
-Send a prompt, get a response. The most common AI node.
-
-<example>
-| Field | Value |
-|-------|-------|
-| **Prompt** | \`Review this code for bugs: {{trigger.diff}}\` |
-| **System Prompt** | \`You are a senior engineer. Be concise.\` |
-| **Model** | \`claude-sonnet-4-5\` |
-
-**Output:** \`{ "content": "I found 2 potential issues..." }\`
-</example>
-
-**Output:**
-
-<outputref>
-{{nodes.ai_prompt_1.content}} → Full text response from AI
-</outputref>
-
-## AI Analyze
-
-Extract **structured data** from text. Define a schema and get organized data instead of free-form text.
-
-<example>
-| Field | Value |
-|-------|-------|
-| **Content** | \`{{trigger.issueDescription}}\` |
-| **Instruction** | \`Extract task type, priority, and components\` |
-| **Schema** | \`{ type: string, priority: "high"/"medium"/"low", components: string[] }\` |
-
-**Output:** \`{ "result": { "type": "bug", "priority": "high", "components": ["auth", "api"] } }\`
-</example>
-
-**Output:**
-
-<outputref>
-{{nodes.ai_analyze_1.result.type}} → "bug"
-{{nodes.ai_analyze_1.result.priority}} → "high"
-{{nodes.ai_analyze_1.result.components}} → ["auth", "api"]
-</outputref>
-
-## AI Code Review
-
-Specialized for code reviews. Returns structured feedback with issues list.
-
-<example>
-| Field | Value |
-|-------|-------|
-| **Diff** | \`{{trigger.pullRequest.diff}}\` |
-| **Focus Areas** | \`security, performance, readability\` |
-
-**Output:**
-\`\`\`json
-{
-  "summary": "Good code with 2 minor issues",
-  "score": 8,
-  "issues": [
-    { "severity": "warning", "line": 42, "message": "Use const instead of let" },
-    { "severity": "info", "line": 67, "message": "Function could be simplified" }
-  ]
-}
-\`\`\`
-</example>
-
-**Output:**
-
-<outputref>
-{{nodes.ai_review_1.summary}} → "Good code with 2 minor issues"
-{{nodes.ai_review_1.score}} → 8
-{{nodes.ai_review_1.issues.length}} → 2
-</outputref>
-
-## Best practices
-
-:::tip
-**Be specific.** Instead of "review this code", say "check for SQL injection and XSS vulnerabilities in this Python code".
-:::
-
-:::warning
-**Validate outputs.** AI responses can vary. Always validate before destructive actions like deleting files.
-:::
-
-:::info
-**Use system prompts** to set the AI's persona and constraints. Improves consistency across runs.
-:::
-`,
-
-  "workflows/expressions": `# Variables & Expressions
-
-Pass data between nodes using expressions with \`{{...}}\` syntax.
-
-## Data sources
-
-### Trigger data
-
-The trigger provides initial data:
-
-<outputref>
-{{trigger.issueKey}}        → "PROJ-123"
-{{trigger.branch}}          → "feature/new-login"
-{{trigger.user.name}}       → "John Doe"
-{{trigger.pullRequest.url}} → "https://github.com/..."
-</outputref>
-
-Available data depends on trigger type:
-
-| Trigger | Available Data |
-|---------|----------------|
-| **Webhook** | \`body\`, \`headers\`, \`query\` |
-| **Jira Issue** | \`issueKey\`, \`summary\`, \`description\`, \`status\` |
-| **Git Push** | \`branch\`, \`commits[]\`, \`repository\` |
-| **Pull Request** | \`prNumber\`, \`title\`, \`diff\`, \`author\` |
-
-### Context variables (ctx.*)
-
-Workflow context is shared state that flows through all nodes. Use \`ctx.*\` for commonly accessed values:
-
-<outputref>
-{{ctx.branch}}           → Current Git branch name
-{{ctx.mrUrl}}            → Merge request / Pull request URL
-{{ctx.prUrl}}            → Alias for mrUrl
-{{ctx.repositoryFullPath}} → "owner/repo"
-{{ctx.defaultBranch}}    → "main" or "develop"
-{{ctx.issueKey}}         → Current issue key (from script output)
-{{ctx.issueUrl}}         → Current issue URL
-{{ctx.files}}            → Files generated by AI (array)
-</outputref>
-
-Context is automatically populated by:
-- **Script nodes** — All output fields are added to ctx
-- **Git Clone** — Sets \`repositoryFullPath\`, \`defaultBranch\`, \`branch\`
-- **Git Branch** — Sets \`branch\`
-- **Git Create MR/PR** — Sets \`mrUrl\`, \`prUrl\`, \`mrId\`, \`prId\`
-- **AI Code Task** — Sets \`files\` array
-
-:::tip
-Use \`ctx.*\` for workflow-level values. Use \`nodes.*\` for specific node outputs.
-:::
-
-### Node outputs
-
-Each node produces output for later nodes:
-
-<outputref>
-{{nodes.ai_prompt_1.content}} → AI response text
-{{nodes.create_branch.name}} → "feature/PROJ-123"
-{{nodes.http_request.body.data}} → Response JSON
-</outputref>
-
-Format: \`{{nodes.<nodeId>.<field>}}\`
-
-:::tip
-Click a node in the editor to see its ID and available outputs.
-:::
-
-## Common patterns
-
-### Dynamic prompts
-
-Combine trigger data with text:
-
-<example>
-**AI Prompt:**
-\`\`\`
-Analyze this issue and suggest implementation:
-
-**Issue:** {{trigger.issueKey}} - {{trigger.summary}}
-**Description:** {{trigger.description}}
-
-Provide: 1. Technical approach  2. Complexity (low/medium/high)  3. Risks
-\`\`\`
-</example>
-
-### Chaining nodes
-
-Use output from one node in the next:
-
-<example>
-**Node 1: AI Analyze**
-\`Input: {{trigger.description}}\`
-\`Output: { complexity: "high", components: ["auth", "api"] }\`
-
-**Node 2: Slack Message**
-\`Issue {{trigger.issueKey}}: {{nodes.ai_analyze.result.complexity}} complexity\`
-</example>
-
-### Conditions
-
-Branch based on values:
-
-<example>
-**Condition node:**
-\`If {{nodes.ai_review.score}} >= 8 → Auto-approve\`
-\`Else → Request human review\`
-</example>
-
-## Shortcuts
-
-| Shortcut | Full expression |
-|----------|-----------------|
-| \`{{branch}}\` | \`{{ctx.branch}}\` |
-| \`{{repo}}\` | \`{{ctx.repository.path}}\` |
-| \`{{issue}}\` | \`{{trigger.issueKey}}\` |
-
-## Debugging
-
-Expression not working?
-
-1. **Check node ID** — Must match exactly
-2. **Check field name** — Case-sensitive
-3. **Check order** — Can only reference nodes that ran before
-4. **Use debugger** — Click "Debug" on an execution to see all values
+- [Threads](/docs/workspace/sessions) — Work in the browser terminal
+- [Claude Code](/docs/integrations/claude-code) — AI-assisted development
+- [GitHub Integration](/docs/integrations/github) — Connect your repositories
 `,
 
   integrations: `# Integrations
 
-Connect your tools to citshe. Automate across Git providers, issue trackers, and communication platforms.
+Connect your tools to citshe. Automate across Git providers and your knowledge base.
 
 ## Git Providers
 
@@ -524,25 +95,6 @@ Branches, commits, PRs. Trigger on push, PR, release events.
 </card>
 <card title="GitLab" icon="git" href="/docs/integrations/gitlab">
 Branches, MRs, pipelines. Self-hosted supported.
-</card>
-</cards>
-
-## Issue Trackers
-
-<cards>
-<card title="Jira" icon="box" href="/docs/integrations/jira">
-Sync issues, automate transitions, JQL queries.
-</card>
-<card title="YouTrack" icon="box" href="/docs/integrations/youtrack">
-JetBrains issue tracker. Cloud & Server supported.
-</card>
-</cards>
-
-## Communication
-
-<cards>
-<card title="Slack" icon="message" href="/docs/integrations/slack">
-Send messages, alerts, rich Block Kit notifications.
 </card>
 </cards>
 
@@ -588,10 +140,8 @@ Click **Test Connection** to verify, then **Save**.
 
 ## Coming Soon
 
-- **Linear** — Modern issue tracking
 - **Notion** — Docs and databases
 - **Discord** — Team communication
-- **Microsoft Teams** — Enterprise chat
 `,
 
   "integrations/github": `# GitHub
@@ -658,16 +208,14 @@ Automate Git operations — branches, commits, pull requests.
 
 ## Examples
 
-### Auto-create branch from Jira
+### Auto-create a feature branch
 
 <example>
-**Trigger:** Jira Issue Created
-
 **Create Branch:**
 | Field | Value |
 |-------|-------|
 | **Repository** | \`{{project.repository}}\` |
-| **Branch Name** | \`feature/{{trigger.issueKey}}-{{trigger.summary | slugify}}\` |
+| **Branch Name** | \`feature/{{issueKey}}-{{summary | slugify}}\` |
 | **Base** | \`main\` |
 
 → Creates \`feature/PROJ-123-add-login-page\`
@@ -703,314 +251,6 @@ Automate Git operations — branches, commits, pull requests.
 {{nodes.create_pr.number}} → 42
 {{nodes.create_pr.url}} → "https://github.com/org/repo/pull/42"
 {{nodes.get_diff.content}} → "diff --git a/file.ts..."
-</outputref>
-`,
-
-  "integrations/jira": `# Jira
-
-Sync issues, automate transitions, and trigger workflows from Jira events.
-
-## Setup
-
-:::steps
-### Create API Token
-
-1. Go to [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. Click **Create API token**
-3. Label: \`citshe\`
-4. Copy the token
-
-### Connect to citshe
-
-1. Go to [Settings → Integrations](/settings/integrations)
-2. Click **Connect** on Jira
-3. Enter your Jira URL, email, and API token
-4. Click **Test Connection** → **Save**
-
-### Configure Webhook
-
-1. In Jira: **Settings → System → WebHooks**
-2. Click **Create a WebHook**
-3. URL: \`https://api.ai-tasks.app/webhooks/jira/YOUR_ORG_ID\`
-4. Select issue events (created, updated, etc.)
-5. Save
-:::
-
-### Connection Fields
-
-| Field | Example |
-|-------|---------|
-| **Jira URL** | \`https://your-company.atlassian.net\` |
-| **Email** | Your Atlassian account email |
-| **API Token** | Token from Atlassian |
-
-:::info
-**Permissions:** The API token inherits your Jira permissions. Make sure you have access to the projects you want to automate.
-:::
-
-## Available Nodes
-
-### Triggers
-
-<nodelist>
-<node type="trigger" name="Issue Created" desc="When a new issue is created" />
-<node type="trigger" name="Issue Updated" desc="When issue fields change" />
-<node type="trigger" name="Issue Transitioned" desc="When status changes" />
-<node type="trigger" name="Comment Added" desc="When someone comments" />
-</nodelist>
-
-### Actions
-
-<nodelist>
-<node type="jira" name="Get Issue" desc="Fetch issue details by key" />
-<node type="jira" name="Update Issue" desc="Modify issue fields" />
-<node type="jira" name="Add Comment" desc="Post a comment on an issue" />
-<node type="jira" name="Transition Issue" desc="Move issue to different status" />
-<node type="jira" name="Assign Issue" desc="Change assignee" />
-<node type="jira" name="Add Label" desc="Add labels to an issue" />
-<node type="jira" name="Create Issue" desc="Create a new issue" />
-<node type="jira" name="Search Issues" desc="JQL query for issues" />
-</nodelist>
-
-## Trigger Filters
-
-Filter which issues trigger your workflow:
-
-<example>
-**Jira Issue Created Trigger:**
-| Field | Value |
-|-------|-------|
-| **Project** | \`PROJ\` |
-| **Issue Type** | \`Bug, Task\` |
-| **Labels** | \`ai-ready\` |
-| **JQL** | \`priority = High AND component = Backend\` |
-</example>
-
-## Examples
-
-### AI-Powered Issue Triage
-
-<example>
-**Trigger:** Issue Created (project = PROJ)
-
-**AI Analyze:**
-| Field | Value |
-|-------|-------|
-| **Content** | \`{{trigger.summary}}\\n{{trigger.description}}\` |
-| **Instruction** | \`Analyze and return: priority (P1-P4), component, estimated_hours\` |
-
-**Update Issue:**
-| Field | Value |
-|-------|-------|
-| **Issue** | \`{{trigger.issueKey}}\` |
-| **Priority** | \`{{nodes.ai_analyze.result.priority}}\` |
-| **Components** | \`{{nodes.ai_analyze.result.component}}\` |
-
-**Add Comment:**
-| Field | Value |
-|-------|-------|
-| **Body** | \`AI Triage: {{nodes.ai_analyze.result.estimated_hours}}h estimated\` |
-</example>
-
-### Auto-transition on PR Merge
-
-<example>
-**Trigger:** GitHub PR Merged
-
-**Search Issues:**
-| Field | Value |
-|-------|-------|
-| **JQL** | \`key = {{trigger.branch | extractIssueKey}}\` |
-
-**Transition Issue:**
-| Field | Value |
-|-------|-------|
-| **Issue** | \`{{nodes.search.issues[0].key}}\` |
-| **To Status** | \`Done\` |
-</example>
-
-## Node Outputs
-
-<outputref>
-{{trigger.issueKey}} → "PROJ-123"
-{{trigger.summary}} → "Add login page"
-{{trigger.description}} → "As a user, I want..."
-{{trigger.status}} → "In Progress"
-{{trigger.assignee.displayName}} → "John Doe"
-{{nodes.search.issues}} → Array of issue objects
-{{nodes.get_issue.fields.customfield_10001}} → Custom field value
-</outputref>
-`,
-
-  "integrations/slack": `# Slack
-
-Send notifications, alerts, and interactive messages to your team.
-
-## Setup
-
-:::steps
-### Create Slack App
-
-1. Go to [Slack API → Your Apps](https://api.slack.com/apps)
-2. Click **Create New App** → **From scratch**
-3. Name: \`citshe\`
-4. Select your workspace
-
-### Add Bot Permissions
-
-1. Go to **OAuth & Permissions**
-2. Scroll to **Bot Token Scopes**
-3. Add the scopes listed below
-
-### Install to Workspace
-
-1. Click **Install to Workspace** → **Allow**
-2. Copy the **Bot User OAuth Token** (starts with \`xoxb-\`)
-
-### Connect in citshe
-
-1. Go to [Settings → Integrations](/settings/integrations)
-2. Click **Connect** on Slack
-3. Paste your Bot Token
-4. Click **Test Connection** → **Save**
-:::
-
-### Required Scopes
-
-| Scope | Purpose |
-|-------|---------|
-| \`chat:write\` | Send messages to channels |
-| \`chat:write.public\` | Post to public channels without joining |
-| \`channels:read\` | List available channels |
-| \`users:read\` | Look up user information |
-
-:::tip
-**Private channels:** Invite the bot first with \`/invite @AI-Tasks\`
-:::
-
-## Available Nodes
-
-### Actions
-
-<nodelist>
-<node type="slack" name="Send Message" desc="Post a message to a channel" />
-<node type="slack" name="Send DM" desc="Send a direct message to a user" />
-<node type="slack" name="Update Message" desc="Edit an existing message" />
-<node type="slack" name="Add Reaction" desc="Add emoji reaction to a message" />
-<node type="slack" name="Upload File" desc="Upload a file to a channel" />
-</nodelist>
-
-## Message Formatting
-
-Slack uses [mrkdwn](https://api.slack.com/reference/surfaces/formatting) syntax:
-
-| Syntax | Result |
-|--------|--------|
-| \`*bold*\` | **bold** |
-| \`_italic_\` | _italic_ |
-| \`~strike~\` | ~~strike~~ |
-| \`\\\`code\\\`\` | \`code\` |
-| \`\\\`\\\`\\\`code block\\\`\\\`\\\`\` | Code block |
-| \`>quote\` | Block quote |
-| \`<url|text>\` | Hyperlink |
-| \`:emoji:\` | Emoji |
-| \`<@U123>\` | Mention user |
-| \`<#C123>\` | Mention channel |
-
-## Examples
-
-### Deployment Notification
-
-<example>
-**Trigger:** GitHub Push to \`main\`
-
-**Slack Send Message:**
-| Field | Value |
-|-------|-------|
-| **Channel** | \`#deployments\` |
-| **Message** | See below |
-
-\`\`\`
-:rocket: *Deployment Started*
-
-*Branch:* {{trigger.branch}}
-*Commit:* \`{{trigger.commit.sha | truncate:7}}\`
-*Author:* {{trigger.commit.author}}
-
-<{{trigger.commit.url}}|View Commit>
-\`\`\`
-</example>
-
-### AI Summary Alert
-
-<example>
-**Trigger:** Jira Issue Created
-
-**AI Analyze:**
-| Field | Value |
-|-------|-------|
-| **Content** | \`{{trigger.description}}\` |
-| **Instruction** | \`Summarize in one sentence, identify urgency (low/medium/high)\` |
-
-**Slack Send Message:**
-| Field | Value |
-|-------|-------|
-| **Channel** | \`#engineering\` |
-| **Message** | \`:ticket: *{{trigger.issueKey}}* — {{nodes.ai_analyze.result.summary}}\\n:warning: Urgency: {{nodes.ai_analyze.result.urgency}}\` |
-</example>
-
-### Error Alert with Mention
-
-<example>
-**Trigger:** Workflow Failed
-
-**Slack Send Message:**
-| Field | Value |
-|-------|-------|
-| **Channel** | \`#alerts\` |
-| **Message** | \`:red_circle: *Workflow Failed*\\n\\nWorkflow: {{trigger.workflowName}}\\nError: {{trigger.error.message}}\\n\\ncc <@{{project.slackOwnerId}}>\` |
-</example>
-
-## Block Kit (Advanced)
-
-For rich messages, use [Block Kit](https://api.slack.com/block-kit):
-
-<example>
-**Slack Send Message:**
-| Field | Value |
-|-------|-------|
-| **Channel** | \`#reviews\` |
-| **Blocks** | JSON block kit payload |
-
-\`\`\`json
-[
-  {
-    "type": "section",
-    "text": { "type": "mrkdwn", "text": "*PR Ready for Review*" }
-  },
-  {
-    "type": "section",
-    "fields": [
-      { "type": "mrkdwn", "text": "*Title:* {{trigger.pr.title}}" },
-      { "type": "mrkdwn", "text": "*Author:* {{trigger.pr.author}}" }
-    ]
-  },
-  {
-    "type": "actions",
-    "elements": [
-      { "type": "button", "text": { "type": "plain_text", "text": "View PR" }, "url": "{{trigger.pr.url}}" }
-    ]
-  }
-]
-\`\`\`
-</example>
-
-## Node Outputs
-
-<outputref>
-{{nodes.send_message.ts}} → "1234567890.123456"
-{{nodes.send_message.channel}} → "C0123456789"
-{{nodes.send_message.permalink}} → "https://workspace.slack.com/archives/..."
 </outputref>
 `,
 
@@ -1080,25 +320,23 @@ Automate Git operations with GitLab — branches, merge requests, pipelines.
 
 ## Examples
 
-### Auto-create Branch from Issue
+### Auto-create Branch and Draft MR
 
 <example>
-**Trigger:** Jira Issue Created
-
 **Create Branch:**
 | Field | Value |
 |-------|-------|
 | **Project** | \`{{project.gitlabPath}}\` |
-| **Branch Name** | \`feature/{{trigger.issueKey}}\` |
+| **Branch Name** | \`feature/{{issueKey}}\` |
 | **Ref** | \`main\` |
 
 **Create MR (Draft):**
 | Field | Value |
 |-------|-------|
-| **Source Branch** | \`feature/{{trigger.issueKey}}\` |
+| **Source Branch** | \`feature/{{issueKey}}\` |
 | **Target Branch** | \`main\` |
-| **Title** | \`Draft: {{trigger.summary}}\` |
-| **Description** | \`Closes {{trigger.issueKey}}\\n\\n{{trigger.description}}\` |
+| **Title** | \`Draft: {{summary}}\` |
+| **Description** | \`Closes {{issueKey}}\` |
 </example>
 
 ### AI Code Review on MR
@@ -1152,142 +390,6 @@ Automate Git operations with GitLab — branches, merge requests, pipelines.
 </outputref>
 `,
 
-  "integrations/youtrack": `# YouTrack
-
-Sync issues and automate project management with JetBrains YouTrack.
-
-## Setup
-
-:::steps
-### Create Permanent Token
-
-1. Go to YouTrack → **Profile → Account Security**
-2. Or: \`https://your-youtrack.myjetbrains.com/users/me\`
-3. Under **Tokens**, click **New token**
-4. Name: \`citshe\`
-5. Scope: **YouTrack**
-6. Copy the token
-
-### Connect to citshe
-
-1. Go to [Settings → Integrations](/settings/integrations)
-2. Click **Connect** on YouTrack
-3. Enter your YouTrack URL and token
-4. Click **Test Connection** → **Save**
-
-### Configure Webhook (for triggers)
-
-1. In YouTrack: **Administration → Integrations → Webhooks**
-2. Click **New webhook**
-3. URL: \`https://api.ai-tasks.app/webhooks/youtrack/YOUR_ORG_ID\`
-4. Select events (issue created, updated, etc.)
-5. Save
-:::
-
-:::info
-**Cloud & Self-hosted:** Both YouTrack Cloud and YouTrack Server are supported.
-:::
-
-## Available Nodes
-
-### Triggers
-
-<nodelist>
-<node type="trigger" name="Issue Created" desc="When a new issue is created" />
-<node type="trigger" name="Issue Updated" desc="When issue fields change" />
-<node type="trigger" name="State Changed" desc="When issue state changes" />
-<node type="trigger" name="Comment Added" desc="When someone comments" />
-</nodelist>
-
-### Actions
-
-<nodelist>
-<node type="jira" name="Get Issue" desc="Fetch issue details by ID" />
-<node type="jira" name="Update Issue" desc="Modify issue fields" />
-<node type="jira" name="Add Comment" desc="Post a comment" />
-<node type="jira" name="Change State" desc="Update issue state" />
-<node type="jira" name="Create Issue" desc="Create a new issue" />
-<node type="jira" name="Search Issues" desc="Query issues" />
-<node type="jira" name="Add Tag" desc="Add tags to an issue" />
-</nodelist>
-
-## Examples
-
-### AI Issue Analysis
-
-<example>
-**Trigger:** Issue Created (project = PROJ)
-
-**AI Analyze:**
-| Field | Value |
-|-------|-------|
-| **Content** | \`{{trigger.summary}}\\n{{trigger.description}}\` |
-| **Instruction** | \`Classify: bug/feature/task. Estimate: hours. Suggest assignee team.\` |
-
-**Update Issue:**
-| Field | Value |
-|-------|-------|
-| **Issue ID** | \`{{trigger.issueId}}\` |
-| **Type** | \`{{nodes.ai_analyze.result.type}}\` |
-| **Estimation** | \`{{nodes.ai_analyze.result.hours}}h\` |
-
-**Add Comment:**
-| Field | Value |
-|-------|-------|
-| **Body** | \`Suggested team: {{nodes.ai_analyze.result.team}}\` |
-</example>
-
-### Link Issue to Git Branch
-
-<example>
-**Trigger:** GitHub Branch Created (pattern: \`*-PROJ-*\`)
-
-**Search Issues:**
-| Field | Value |
-|-------|-------|
-| **Query** | \`issue id: {{trigger.branch | extractIssueId}}\` |
-
-**Update Issue:**
-| Field | Value |
-|-------|-------|
-| **Issue ID** | \`{{nodes.search.issues[0].id}}\` |
-| **State** | \`In Progress\` |
-
-**Add Comment:**
-| Field | Value |
-|-------|-------|
-| **Body** | \`Branch created: \`{{trigger.branch}}\`\` |
-</example>
-
-## Node Outputs
-
-<outputref>
-{{trigger.issueId}} → "PROJ-123"
-{{trigger.summary}} → "Fix login bug"
-{{trigger.description}} → "Users cannot login when..."
-{{trigger.reporter.fullName}} → "John Doe"
-{{trigger.state.name}} → "Open"
-{{nodes.search.issues}} → Array of issue objects
-{{nodes.create_issue.id}} → "PROJ-456"
-</outputref>
-
-## Query Syntax
-
-YouTrack uses its own query language:
-
-<example>
-**Search Issues:**
-| Query | Description |
-|-------|-------------|
-| \`project: PROJ\` | Issues in project |
-| \`state: Open\` | Open issues |
-| \`assignee: me\` | Assigned to token owner |
-| \`created: today\` | Created today |
-| \`tag: urgent\` | Has urgent tag |
-| \`#unresolved\` | All unresolved |
-</example>
-`,
-
   "integrations/obsidian": `# Obsidian
 
 Connect your Obsidian vault to automate note-taking and knowledge management.
@@ -1297,7 +399,7 @@ Connect your Obsidian vault to automate note-taking and knowledge management.
 [Obsidian](https://obsidian.md) is a powerful knowledge base that works on top of local Markdown files. With citshe, you can:
 
 - **Search your notes** and use them as context for AI
-- **Create notes** automatically from workflow outputs
+- **Create notes** automatically from agent outputs
 - **Update existing notes** with new information
 - **Build knowledge bases** that grow with your work
 
@@ -1345,31 +447,25 @@ The plugin only works when Obsidian is running. Keep it open or running in backg
 ### Save AI Summary to Obsidian
 
 <example>
-**Trigger:** Jira Issue Closed
-
 **AI Analyze:**
 | Field | Value |
 |-------|-------|
-| **Content** | \`{{trigger.description}}\\n{{trigger.comments}}\` |
-| **Instruction** | \`Summarize the issue resolution in 2-3 sentences\` |
+| **Content** | \`{{description}}\` |
+| **Instruction** | \`Summarize the resolution in 2-3 sentences\` |
 
 **Obsidian Create Note:**
 | Field | Value |
 |-------|-------|
-| **Path** | \`Projects/{{trigger.projectKey}}/{{trigger.issueKey}}.md\` |
+| **Path** | \`Projects/{{projectKey}}/{{issueKey}}.md\` |
 | **Content** | See below |
 
 \`\`\`markdown
-# {{trigger.issueKey}}: {{trigger.summary}}
+# {{issueKey}}: {{summary}}
 
 **Status:** Resolved
-**Date:** {{trigger.resolvedDate}}
 
 ## Summary
 {{nodes.ai_analyze.result.summary}}
-
-## Original Description
-{{trigger.description}}
 \`\`\`
 </example>
 
@@ -1393,25 +489,17 @@ The plugin only works when Obsidian is running. Keep it open or running in backg
 ### Search Knowledge Base for Context
 
 <example>
-**Trigger:** Slack Message (mentions bot)
-
 **Obsidian Search:**
 | Field | Value |
 |-------|-------|
-| **Query** | \`{{trigger.message.text}}\` |
+| **Query** | \`{{question}}\` |
 | **Limit** | \`5\` |
 
 **AI Prompt:**
 | Field | Value |
 |-------|-------|
 | **System** | \`You are a helpful assistant with access to a knowledge base.\` |
-| **Prompt** | \`Question: {{trigger.message.text}}\\n\\nRelevant notes:\\n{{nodes.search.notes | map:'content' | join:'\\n---\\n'}}\` |
-
-**Slack Reply:**
-| Field | Value |
-|-------|-------|
-| **Thread** | \`{{trigger.message.ts}}\` |
-| **Message** | \`{{nodes.ai_prompt.content}}\` |
+| **Prompt** | \`Question: {{question}}\\n\\nRelevant notes:\\n{{nodes.search.notes | map:'content' | join:'\\n---\\n'}}\` |
 </example>
 
 ## Node Outputs
@@ -1514,7 +602,7 @@ All data is stored in a single volume:
 | \`/app/data/redis/\` | Redis persistence |
 
 :::warning
-**Backup your volume.** The \`citshe-data\` volume contains all your workflows, executions, and settings.
+**Backup your volume.** The \`citshe-data\` volume contains all your threads, tasks, and settings.
 :::
 
 ## Configuration
@@ -1772,8 +860,8 @@ The first user to register becomes the **organization owner**.
 | Role | Permissions |
 |------|-------------|
 | **Owner** | Full access, manage billing, delete org |
-| **Admin** | Manage members, all workflows |
-| **Member** | Create and edit own workflows |
+| **Admin** | Manage members, all threads and tasks |
+| **Member** | Create and edit own threads and tasks |
 | **Viewer** | View-only access |
 
 ## Environment Variables
@@ -1932,17 +1020,6 @@ Keep your API key secret. Never commit to version control.
 | \`DELETE\` | \`/api/v1/tasks/:id\` | Delete task |
 | \`POST\` | \`/api/v1/tasks/:id/process\` | Start AI processing |
 
-### Workflows
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| \`GET\` | \`/api/v1/workflows\` | List workflows |
-| \`POST\` | \`/api/v1/workflows\` | Create workflow |
-| \`GET\` | \`/api/v1/workflows/:id\` | Get workflow |
-| \`PUT\` | \`/api/v1/workflows/:id\` | Update workflow |
-| \`DELETE\` | \`/api/v1/workflows/:id\` | Delete workflow |
-| \`POST\` | \`/api/v1/workflows/:id/run\` | Execute workflow |
-
 ### Sessions
 
 | Method | Endpoint | Description |
@@ -2027,7 +1104,6 @@ Keep your API key secret. Never commit to version control.
 | Type | Limit |
 |------|-------|
 | Standard | 100/min |
-| Workflow runs | 10/min |
 | AI processing | 20/min |
 
 ## Examples
@@ -2042,7 +1118,7 @@ curl -X POST http://localhost:3001/api/v1/sessions \\
     "name": "Fix login bug",
     "repositoryIds": ["repo_123"],
     "aiCredentialId": "cred_456",
-    "instructions": "Fix the login bug described in JIRA-789"
+    "instructions": "Fix the login bug in the auth flow"
   }'
 \`\`\`
 
@@ -2053,15 +1129,6 @@ curl -X POST http://localhost:3001/api/v1/sessions/sess_123/exec \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"command": "git diff --stat"}'
-\`\`\`
-
-### Run a workflow
-
-\`\`\`bash
-curl -X POST http://localhost:3001/api/v1/workflows/wf_123/run \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"input": {"issueKey": "PROJ-456"}}'
 \`\`\`
 `,
 
@@ -2226,56 +1293,6 @@ Variables are passed to the container as standard environment variables. Mark se
 Select an environment when creating a thread. Resource limits and env vars are applied to the Docker container automatically.
 `,
 
-  // ─── Workflow Thread Nodes ──────────────────────────────────────
-  "workflows/session-nodes": `# Thread Nodes
-
-Thread nodes allow workflows to create and interact with threads programmatically. This bridges automation (Workflows) with interactive agent work (Workspace).
-
-## Use Cases
-
-- **JIRA ticket -> Agent thread** - automatically create a thread when a ticket is assigned, run the agent, and post results back
-- **Scheduled code review** - daily workflow creates a thread, agent reviews code, sends diff to Slack
-- **GitLab MR -> Analysis** - webhook triggers thread, agent analyzes changes, comments on MR
-
-## Available Nodes
-
-### Actions
-
-<nodelist>
-<node type="action" name="Create Thread" desc="Create and start a new agent thread with repositories. Stores sessionId in workflow context." />
-<node type="action" name="Run Command" desc="Execute a shell command in a thread container. Returns stdout and exit code." />
-<node type="action" name="Run Agent Task" desc="Start AI agent (Claude/OpenClaw) with a prompt in print mode. Waits for completion." />
-<node type="action" name="Stop Thread" desc="Stop and optionally delete a thread." />
-<node type="action" name="Read File" desc="Read file content from a thread container." />
-<node type="action" name="Write File" desc="Write content to a file in a thread container." />
-</nodelist>
-
-### Data
-
-<nodelist>
-<node type="data" name="Get Git Diff" desc="Get git diff from thread workspace with additions/deletions count." />
-<node type="data" name="List Files" desc="List all files in thread workspace." />
-</nodelist>
-
-## Example Workflow
-
-\`\`\`
-Manual Trigger
-  -> Create Thread (repos: my-app, instructions: "Fix bugs")
-  -> Run Agent Task (prompt: "Find and fix the login bug described in JIRA-123")
-  -> Get Git Diff
-  -> Stop Thread
-  -> Slack Message (send diff summary)
-\`\`\`
-
-## Context Variables
-
-The **Create Thread** node automatically stores \`sessionId\` in the workflow context. Subsequent thread nodes use it via \`{{ctx.sessionId}}\`.
-
-You can also pass a specific \`sessionId\` in the node config to target a different thread.
-`,
-
-  // ─── AI Agent Integrations ──────────────────────────────────────
   "integrations/claude-code": `# Claude Code
 
 Claude Code is Anthropic's official CLI for AI-assisted development. In citshe, it runs inside isolated Docker containers as part of Workspace threads.
@@ -2308,10 +1325,6 @@ Pass CLI flags via the Start Arguments field in thread creation:
 ### Instructions
 
 Instructions are written as \`CLAUDE.md\` in the workspace root. Claude Code reads this file automatically as project context.
-
-## In Workflows
-
-Use the **Run Agent Task** workflow node with \`provider: claude\` to run Claude Code in print mode (\`claude -p "prompt"\`). The agent executes the task and returns the output.
 `,
 
   "integrations/openclaw": `# OpenClaw
@@ -2351,9 +1364,5 @@ Pass flags via Start Arguments in thread creation. Refer to the [OpenClaw CLI Re
 ### Instructions
 
 Instructions are written as \`SOUL.md\` in the workspace root. OpenClaw reads this file as the agent personality/instructions.
-
-## In Workflows
-
-Use the **Run Agent Task** workflow node with \`provider: openclaw\` to run OpenClaw in task mode. The agent executes the task and returns the output.
 `,
 };

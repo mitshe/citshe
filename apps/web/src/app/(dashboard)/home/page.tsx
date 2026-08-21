@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Check,
   AlertTriangle,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTaskStatus } from "@/lib/status-config";
@@ -30,6 +31,7 @@ import {
   usePluginStatus,
 } from "@/lib/api/hooks";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
+import { OPEN_COMMAND_EVENT } from "@/components/command-palette";
 import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import type {
@@ -102,7 +104,7 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 space-y-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-10 space-y-8">
       {/* Portal selector — mobile only; desktop has it in the sidebar */}
       <div className="sm:hidden">
         <OrgSwitcher />
@@ -118,7 +120,8 @@ export default function HomePage() {
           <StatusLine />
         ) : isSetUp ? (
           <p className="text-sm text-muted-foreground">
-            Everything wired up. Delegate a task or open a terminal.
+            {repos.length} repo{repos.length === 1 ? "" : "s"} connected
+            {" · not deployed"}
           </p>
         ) : null}
       </header>
@@ -131,6 +134,9 @@ export default function HomePage() {
         />
       ) : (
         <>
+          {/* Quick-search — opens the global ⌘K command palette */}
+          <QuickSearch />
+
           {/* Quick actions */}
           <div className="grid grid-cols-3 gap-3">
             <ActionCard
@@ -159,11 +165,80 @@ export default function HomePage() {
             />
           </div>
 
+          {/* Columns — Repos / Live terminals / Recent tasks (stack on mobile) */}
+          <div className="grid gap-5 md:grid-cols-3">
+            {/* Repos */}
+            <section className="space-y-2.5">
+              <SectionHeader label="Repos" href="/repos" cta="All" />
+              <div className="space-y-2">
+                {repos.slice(0, 5).map((repo) => (
+                  <Link
+                    key={repo.id}
+                    href="/repos"
+                    className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
+                  >
+                    <FolderGit2 className="h-4 w-4 shrink-0 text-violet-500" />
+                    <span className="flex-1 truncate text-sm">{repo.name}</span>
+                  </Link>
+                ))}
+                {repos.length === 0 && <EmptyCell label="No repos yet" />}
+              </div>
+            </section>
+
+            {/* Live terminals */}
+            <section className="space-y-2.5">
+              <SectionHeader
+                label="Live terminals"
+                href="/sessions"
+                cta="All"
+              />
+              <div className="space-y-2">
+                {runningThreads.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/sessions/${s.id}`}
+                    className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
+                  >
+                    <Terminal className="h-4 w-4 shrink-0 text-emerald-500" />
+                    <span className="flex-1 truncate text-sm">{s.name}</span>
+                    <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-emerald-500">
+                      {s.status === "CREATING" ? (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Starting
+                        </>
+                      ) : (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Live
+                        </>
+                      )}
+                    </span>
+                  </Link>
+                ))}
+                {runningThreads.length === 0 && (
+                  <EmptyCell label="No live terminals" />
+                )}
+              </div>
+            </section>
+
+            {/* Recent tasks */}
+            <section className="space-y-2.5">
+              <SectionHeader label="Recent tasks" href="/tasks" cta="All" />
+              <div className="space-y-2">
+                {active.slice(0, 5).map((t) => (
+                  <TaskRow key={t.id} task={t} />
+                ))}
+                {active.length === 0 && <EmptyCell label="No active tasks" />}
+              </div>
+            </section>
+          </div>
+
           {/* Stack — compact shortcuts; full view lives on each tool's page */}
           {hasPlugin && (
             <section className="space-y-2.5">
               <SectionHeader label="Stack" href="/stack" cta="Manage" />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {pluginCatalog
                   .filter((def) => connectedTypes.has(def.type))
                   .map((def) => (
@@ -188,58 +263,40 @@ export default function HomePage() {
             </Link>
           )}
 
-          {/* Work */}
+          {/* Workers strip (queue) */}
           {queue && <WorkersStrip queue={queue} />}
-
-          {runningThreads.length > 0 && (
-            <section className="space-y-2.5">
-              <SectionHeader label="Live terminals" href="/sessions" cta="All" />
-              <div className="space-y-2">
-                {runningThreads.map((s) => (
-                  <Link
-                    key={s.id}
-                    href={`/sessions/${s.id}`}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-background/50 px-3.5 py-3 hover:bg-muted/40"
-                  >
-                    <Terminal className="h-4 w-4 shrink-0 text-emerald-500" />
-                    <span className="flex-1 truncate text-sm">{s.name}</span>
-                    <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-emerald-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {s.status === "CREATING" ? "Starting" : "Live"}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {active.length > 0 && (
-            <section className="space-y-2.5">
-              <SectionHeader label="In progress" href="/tasks" cta="All tasks" />
-              <div className="space-y-2">
-                {active.slice(0, 5).map((t) => (
-                  <TaskRow key={t.id} task={t} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {active.length === 0 && runningThreads.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border bg-muted/10 py-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                All quiet. Delegate a task and a worker will pick it up.
-              </p>
-              <Link
-                href="/tasks"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                <ListPlus className="h-4 w-4" />
-                New task
-              </Link>
-            </div>
-          )}
         </>
       )}
+    </div>
+  );
+}
+
+/** Cloudflare-style full-width search field — a button that opens the ⌘K palette. */
+function QuickSearch() {
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        window.dispatchEvent(new Event(OPEN_COMMAND_EVENT))
+      }
+      className="flex w-full items-center gap-3 rounded-xl border border-border bg-background/50 px-4 py-3 text-left transition-colors hover:bg-muted/40 hover:border-primary/30"
+    >
+      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1 text-sm text-muted-foreground">
+        Search tasks, repos, terminals…
+      </span>
+      <kbd className="hidden shrink-0 items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-flex">
+        ⌘K
+      </kbd>
+    </button>
+  );
+}
+
+/** Small muted placeholder row for empty columns. */
+function EmptyCell({ label }: { label: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-muted/10 px-3.5 py-3 text-center text-xs text-muted-foreground">
+      {label}
     </div>
   );
 }

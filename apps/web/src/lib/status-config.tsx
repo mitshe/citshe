@@ -93,10 +93,7 @@ export function getTaskStatus(status: string) {
 
 export const providerLabels: Record<string, string> = {
   CLAUDE: "Claude",
-  OPENAI: "OpenAI",
   OPENROUTER: "OpenRouter",
-  GEMINI: "Gemini",
-  GROQ: "Groq",
   CLAUDE_CODE_LOCAL: "Claude Code",
   OPENCLAW: "OpenClaw",
 };
@@ -111,9 +108,6 @@ export const triggerTypeLabels: Record<string, { label: string; color: string }>
   schedule: { label: "Scheduled", color: "bg-purple-500/10 text-purple-600" },
   webhook: { label: "Webhook", color: "bg-orange-500/10 text-orange-600" },
   event: { label: "Event", color: "bg-green-500/10 text-green-600" },
-  jira_issue: { label: "JIRA Issue", color: "bg-blue-500/10 text-blue-600" },
-  jira_component_added: { label: "JIRA Component", color: "bg-blue-500/10 text-blue-600" },
-  jira_label_added: { label: "JIRA Label", color: "bg-blue-500/10 text-blue-600" },
   git_push: { label: "Git Push", color: "bg-orange-500/10 text-orange-600" },
   git_mr: { label: "Merge Request", color: "bg-orange-500/10 text-orange-600" },
 };
