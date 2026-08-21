@@ -20,22 +20,6 @@ import {
 import { StatusDot } from "@/components/ui/status-dot";
 import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
 
-/** Deterministic accent color per portal, from its id. */
-function orgColor(id: string): string {
-  const colors = [
-    "bg-emerald-500",
-    "bg-blue-500",
-    "bg-purple-500",
-    "bg-amber-500",
-    "bg-rose-500",
-    "bg-cyan-500",
-    "bg-indigo-500",
-  ];
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return colors[hash % colors.length];
-}
-
 function initials(name: string): string {
   const clean = name.replace(/\.(com|pl|org|net|io)$/i, "");
   return clean.slice(0, 2).toUpperCase();
@@ -54,8 +38,8 @@ function OrgSquare({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white",
-        id ? orgColor(id) : "bg-surface-hover text-muted-foreground",
+        "flex shrink-0 items-center justify-center rounded-md text-[10px] font-bold",
+        id ? "bg-primary/15 text-primary" : "bg-surface-hover text-muted-foreground",
       )}
       style={{ width: size, height: size }}
     >

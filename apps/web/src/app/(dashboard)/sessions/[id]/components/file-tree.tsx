@@ -27,12 +27,12 @@ export type GitFileStatus =
   | "changed";
 
 const gitStatusColors: Record<GitFileStatus, string> = {
-  modified: "text-yellow-500",
-  added: "text-green-500",
-  deleted: "text-red-500",
-  renamed: "text-blue-400",
-  untracked: "text-green-400",
-  changed: "text-yellow-400",
+  modified: "text-warn",
+  added: "text-ok",
+  deleted: "text-danger",
+  renamed: "text-info",
+  untracked: "text-ok",
+  changed: "text-warn",
 };
 
 const gitStatusLetters: Record<GitFileStatus, string> = {
@@ -228,7 +228,7 @@ function FileTreeItem({
       <div
         className={cn(
           "flex items-center gap-1 py-0.5 px-2 text-xs font-medium hover:bg-surface-hover rounded-sm cursor-pointer transition-linear",
-          hasChangedChildren && "text-yellow-500",
+          hasChangedChildren && "text-warn",
         )}
         data-file-item
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -241,9 +241,9 @@ function FileTreeItem({
           <ChevronRight className="w-3.5 h-3.5 shrink-0" />
         )}
         {isOpen ? (
-          <FolderOpen className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+          <FolderOpen className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
         ) : (
-          <Folder className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+          <Folder className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
         )}
         <span className="truncate">{node.name}</span>
       </div>

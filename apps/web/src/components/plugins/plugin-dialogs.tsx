@@ -211,8 +211,8 @@ export function ConnectDialog({
               className={cn(
                 "flex items-center gap-2 rounded-lg px-3 py-2 text-xs",
                 testState.status === "ok"
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : "bg-red-500/10 text-red-600",
+                  ? "bg-ok/10 text-ok"
+                  : "bg-danger/10 text-danger",
               )}
             >
               {testState.status === "ok" ? (
@@ -326,7 +326,7 @@ export function ResourcePicker({
                         key={it.id}
                         onClick={() => toggle(g.kind, it.id)}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                          "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-linear",
                           checked
                             ? "border-primary/40 bg-primary/5"
                             : "border-border hover:bg-muted/40",

@@ -31,7 +31,7 @@ export const pluginCatalog: PluginDef[] = [
     name: "Cloudflare",
     tagline: "Deploys, Pages & R2 — is it live?",
     icon: <Cloud className="h-5 w-5" />,
-    accent: "text-orange-500",
+    accent: "text-muted-foreground",
     configurable: true,
     docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
     fields: [
@@ -82,7 +82,7 @@ export const pluginCatalog: PluginDef[] = [
     name: "Neon",
     tagline: "Postgres — size, branch, activity",
     icon: <Database className="h-5 w-5" />,
-    accent: "text-emerald-500",
+    accent: "text-muted-foreground",
     docsUrl: "https://console.neon.tech/app/settings/api-keys",
     fields: [
       {
@@ -105,7 +105,7 @@ export const pluginCatalog: PluginDef[] = [
     name: "Google Ads",
     tagline: "Campaigns, spend & conversions",
     icon: <Megaphone className="h-5 w-5" />,
-    accent: "text-blue-500",
+    accent: "text-muted-foreground",
     docsUrl: "https://developers.google.com/google-ads/api/docs/get-started/dev-token",
     fields: [
       {
@@ -138,7 +138,7 @@ export const pluginCatalog: PluginDef[] = [
     name: "VPS",
     tagline: "Server fleet health — up, load, disk, RAM",
     icon: <Server className="h-5 w-5" />,
-    accent: "text-sky-500",
+    accent: "text-muted-foreground",
     docsUrl:
       "https://www.digitalocean.com/community/tutorials/how-to-set-up-ssh-keys-2",
     fields: [

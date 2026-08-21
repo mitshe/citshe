@@ -270,7 +270,7 @@ function SelfhostedTeamPage() {
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Team</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Manage team members and their permissions.
           </p>

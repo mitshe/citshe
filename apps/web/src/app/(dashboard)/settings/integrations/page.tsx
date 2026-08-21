@@ -230,7 +230,7 @@ export default function IntegrationsPage() {
   return (
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Integrations</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Connect GitHub so agents can clone repos, push branches, and open pull
           requests.

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { StatusDot } from "@/components/ui/status-dot";
 import {
   DropdownMenu,
@@ -124,7 +125,7 @@ export function StatusPill({
   );
 }
 
-/** Label chip — bordered pill, xs, subtle hover. */
+/** Label chip — bordered pill, xs, subtle hover. Uses the shared Chip. */
 export function LabelChip({
   label,
   onClick,
@@ -132,18 +133,7 @@ export function LabelChip({
   label: string;
   onClick?: (label: string) => void;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.(label);
-      }}
-      className="inline-flex items-center rounded-full border border-border bg-surface-inset/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-linear hover:border-border-strong hover:text-foreground"
-    >
-      {label}
-    </button>
-  );
+  return <Chip onClick={onClick ? () => onClick(label) : undefined}>{label}</Chip>;
 }
 
 // ============================================================================

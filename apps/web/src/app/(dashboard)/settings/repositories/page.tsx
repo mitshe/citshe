@@ -324,7 +324,7 @@ export default function RepositoriesPage() {
     return (
       <div className="w-full space-y-6 p-4 sm:p-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Repositories</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Manage Git repositories for your workflows.
           </p>
@@ -350,7 +350,7 @@ export default function RepositoriesPage() {
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Repositories</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Manage Git repositories for your workflows.
           </p>

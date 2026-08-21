@@ -50,7 +50,7 @@ export function showContextMenu(
     const btn = document.createElement("button");
     btn.className = [
       "w-full text-left px-3 py-1.5 hover:bg-muted text-popover-foreground",
-      item.destructive ? "text-red-500 hover:text-red-600" : "",
+      item.destructive ? "text-danger" : "",
     ]
       .filter(Boolean)
       .join(" ");

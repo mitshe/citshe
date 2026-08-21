@@ -31,7 +31,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  SectionHeader,
+  Eyebrow,
+  SectionCount,
+} from "@/components/ui/section-header";
 import {
   usePlugins,
   useDeletePlugin,
@@ -90,7 +96,7 @@ export default function StackToolPage({
 
   if (!def) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
+      <div className="w-full max-w-[1400px] px-6 py-6 sm:py-8">
         <p className="text-muted-foreground">Unknown tool.</p>
         <Link href="/stack" className="text-primary hover:underline">
           ← Back to stack
@@ -104,7 +110,7 @@ export default function StackToolPage({
   const extraLinks = status?.links?.slice(1) ?? [];
 
   return (
-    <div className="w-full max-w-6xl space-y-8 px-4 py-6 sm:py-10">
+    <div className="w-full max-w-[1400px] space-y-8 px-6 py-6 sm:py-8">
       {/* Header: brand + name + health · Open in provider + ⋯ menu */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -135,24 +141,22 @@ export default function StackToolPage({
         {connected && (
           <div className="flex items-center gap-2">
             {primaryLink && (
-              <a
-                href={primaryLink.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 px-3 py-1.5 text-sm font-medium text-primary transition-linear hover:bg-primary/10"
-              >
-                {primaryLink.label}
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
+              <Button variant="outline" asChild>
+                <a href={primaryLink.url} target="_blank" rel="noreferrer">
+                  {primaryLink.label}
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
+              </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   aria-label="More actions"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
                 >
                   <MoreHorizontal className="h-4 w-4" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 {extraLinks.map((l, i) => (
@@ -414,23 +418,16 @@ function VpsServersSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-foreground">Servers</h2>
-          {items.length > 0 && (
-            <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-              {items.length}
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 px-2.5 py-1.5 text-xs font-medium text-primary transition-linear hover:bg-primary/10"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add VPS
-        </button>
-      </div>
+      <SectionHeader
+        label="Servers"
+        count={items.length}
+        action={
+          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Add VPS
+          </Button>
+        }
+      />
 
       {loading ? (
         <Panel>
@@ -651,15 +648,7 @@ function Section({
 }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        {icon && <span className="text-text-subtle">{icon}</span>}
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {count != null && count > 0 && (
-          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-            {count}
-          </span>
-        )}
-      </div>
+      <SectionHeader label={title} icon={icon} count={count} />
       {children}
     </section>
   );
@@ -682,17 +671,13 @@ function ResourceGroupSection({
 }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-foreground">
-            {group.label}
-          </h2>
-          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-            {selectedCount
-              ? `${selectedCount} / ${group.items.length}`
-              : group.items.length}
-          </span>
-        </div>
+      <div className="flex items-center gap-1.5">
+        <Eyebrow>{group.label}</Eyebrow>
+        <SectionCount className="normal-case tracking-normal">
+          {selectedCount
+            ? `${selectedCount} / ${group.items.length}`
+            : group.items.length}
+        </SectionCount>
       </div>
       {group.items.length === 0 ? (
         <EmptyState

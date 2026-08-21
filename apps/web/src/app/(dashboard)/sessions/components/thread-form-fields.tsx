@@ -157,7 +157,7 @@ export function ThreadFormFields({
       )}
 
       <Collapsible>
-        <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1 group w-full">
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-linear py-1 group w-full">
           <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
           Advanced options
         </CollapsibleTrigger>
@@ -382,7 +382,7 @@ export function ThreadFormFields({
                             : [...form.skillIds, skill.id],
                         });
                       }}
-                      className={`text-left px-3 py-2 rounded-md border text-sm transition-colors ${
+                      className={`text-left px-3 py-2 rounded-md border text-sm transition-linear ${
                         selected
                           ? "border-primary bg-primary/10 text-foreground"
                           : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"

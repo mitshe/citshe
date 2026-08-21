@@ -589,9 +589,9 @@ export default function SessionDetailPage() {
       await resumeSession.mutateAsync(sessionId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to resume thread";
+      const msg = err instanceof Error ? err.message : "Failed to resume terminal";
       if (msg.includes("no longer exists") || msg.includes("cannot be recovered")) {
-        toast.error("Container was deleted. Create a new thread instead.");
+        toast.error("Container was deleted. Create a new terminal instead.");
       } else {
         toast.error(msg);
       }
@@ -603,7 +603,7 @@ export default function SessionDetailPage() {
       await stopSession.mutateAsync(sessionId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
     } catch {
-      toast.error("Failed to stop thread");
+      toast.error("Failed to stop terminal");
     }
   };
 
@@ -640,7 +640,7 @@ export default function SessionDetailPage() {
     try {
       await updateSession.mutateAsync({ id: sessionId, data: { name: next } });
     } catch {
-      toast.error("Failed to rename thread");
+      toast.error("Failed to rename terminal");
     }
   };
 
@@ -648,10 +648,10 @@ export default function SessionDetailPage() {
     try {
       await deleteSession.mutateAsync(sessionId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      toast.success("Thread deleted");
+      toast.success("Terminal deleted");
       router.push("/sessions");
     } catch {
-      toast.error("Failed to delete thread");
+      toast.error("Failed to delete terminal");
     }
   };
 
@@ -662,7 +662,7 @@ export default function SessionDetailPage() {
       await refetch();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to recreate thread",
+        err instanceof Error ? err.message : "Failed to recreate terminal",
       );
     }
   };
@@ -680,7 +680,7 @@ export default function SessionDetailPage() {
   if (!session) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Thread not found</p>
+        <p className="text-muted-foreground">Terminal not found</p>
       </div>
     );
   }
@@ -828,7 +828,7 @@ export default function SessionDetailPage() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Thread</AlertDialogTitle>
+                <AlertDialogTitle>Delete terminal</AlertDialogTitle>
                 <AlertDialogDescription>
                   Are you sure you want to delete &quot;{session.name}&quot;? The
                   container and all data will be permanently removed.
@@ -1020,7 +1020,7 @@ export default function SessionDetailPage() {
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
                         <TerminalIcon className="w-10 h-10 mx-auto mb-4 opacity-40" />
-                        <p className="mb-3 text-sm">Thread stopped</p>
+                        <p className="mb-3 text-sm">Terminal stopped</p>
                         <Button
                           variant="outline"
                           size="sm"
@@ -1078,15 +1078,15 @@ export default function SessionDetailPage() {
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
                         <StatusDot state="creating" size={22} className="mx-auto mb-4" />
-                        <p className="text-sm font-medium text-foreground">Starting thread…</p>
-                        <p className="text-xs mt-1">Browser will be available once the thread is running</p>
+                        <p className="text-sm font-medium text-foreground">Starting terminal…</p>
+                        <p className="text-xs mt-1">Browser will be available once the terminal is running</p>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center space-y-2">
                         <Globe className="w-10 h-10 mx-auto opacity-30" />
-                        <p className="text-sm">Thread must be running to use browser</p>
+                        <p className="text-sm">Terminal must be running to use browser</p>
                       </div>
                     </div>
                   )}

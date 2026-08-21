@@ -88,7 +88,7 @@ export default function AICredentialsPage() {
   return (
     <div className="w-full space-y-8 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">AI</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">AI</h1>
         <p className="text-sm text-muted-foreground">
           How citshe runs work and helps you in the panel.
         </p>

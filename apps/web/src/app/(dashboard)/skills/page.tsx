@@ -9,6 +9,7 @@ import {
   useImportGitHubSkills,
 } from "@/lib/api/hooks";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2, Loader2, Zap, Pencil, Github, Download, MoreHorizontal, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import type { Skill } from "@citshe/types";
@@ -188,7 +190,7 @@ export default function SkillsPage() {
     <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Skills</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
           <p className="text-sm text-muted-foreground">
             Reusable instructions installed as Claude Code slash commands in threads.
           </p>
@@ -239,7 +241,7 @@ export default function SkillsPage() {
               </DropdownMenu>
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Skill
+                Create skill
               </Button>
             </>
           )}
@@ -247,8 +249,17 @@ export default function SkillsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3"
+            >
+              <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+              <Skeleton className="h-4 flex-1 max-w-[45%]" />
+              <Skeleton className="ml-auto h-4 w-12 shrink-0" />
+            </div>
+          ))}
         </div>
       ) : skills.length === 0 ? (
         <EmptyState
@@ -263,7 +274,7 @@ export default function SkillsPage() {
               </Button>
               <Button size="sm" onClick={openCreate}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                Create Skill
+                Create skill
               </Button>
             </div>
           }
@@ -272,11 +283,10 @@ export default function SkillsPage() {
         <div className="space-y-2">
           {selectMode && (
             <div className="flex items-center gap-3 px-4 py-1">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selectedIds.size === skills.length && skills.length > 0}
-                onChange={toggleSelectAll}
-                className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                onCheckedChange={toggleSelectAll}
+                className="cursor-pointer"
               />
               <span className="text-xs text-muted-foreground">
                 {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
@@ -290,12 +300,11 @@ export default function SkillsPage() {
               onClick={() => selectMode ? toggleSelect(skill.id) : !skill.isSystem && openEdit(skill)}
             >
               {selectMode ? (
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selectedIds.has(skill.id)}
-                  onChange={() => toggleSelect(skill.id)}
+                  onCheckedChange={() => toggleSelect(skill.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer shrink-0"
+                  className="cursor-pointer shrink-0"
                 />
               ) : (
                 <Zap className="h-4 w-4 text-primary shrink-0" />
@@ -349,7 +358,7 @@ export default function SkillsPage() {
         <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingSkill ? "Edit Skill" : "Create Skill"}
+              {editingSkill ? "Edit skill" : "Create skill"}
             </DialogTitle>
             <DialogDescription>
               Instructions that Claude Code will follow in threads using this
@@ -414,7 +423,7 @@ export default function SkillsPage() {
               {createSkill.isPending || updateSkill.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {editingSkill ? "Save Changes" : "Create Skill"}
+              {editingSkill ? "Save changes" : "Create skill"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -424,7 +433,7 @@ export default function SkillsPage() {
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import Skills from GitHub</DialogTitle>
+            <DialogTitle>Import skills from GitHub</DialogTitle>
             <DialogDescription>
               Import .md files from a public GitHub repository as skills. Each markdown file becomes a slash command in Claude Code.
             </DialogDescription>
@@ -460,14 +469,14 @@ export default function SkillsPage() {
               <p className="font-medium text-foreground">Popular repositories:</p>
               <button
                 type="button"
-                className="block hover:text-foreground transition-colors text-left"
+                className="block hover:text-foreground transition-linear text-left"
                 onClick={() => setImportRepo("anthropics/claude-code")}
               >
                 anthropics/claude-code — official Claude Code commands
               </button>
               <button
                 type="button"
-                className="block hover:text-foreground transition-colors text-left"
+                className="block hover:text-foreground transition-linear text-left"
                 onClick={() => setImportRepo("forrestchang/andrej-karpathy-skills")}
               >
                 forrestchang/andrej-karpathy-skills — Karpathy coding guidelines
@@ -484,7 +493,7 @@ export default function SkillsPage() {
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Import Skills
+              Import skills
             </Button>
           </DialogFooter>
         </DialogContent>

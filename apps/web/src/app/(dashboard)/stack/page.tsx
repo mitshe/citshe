@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, ChevronRight, Check, Boxes } from "lucide-react";
+import { Plus, ChevronRight, Check, Boxes } from "lucide-react";
 import { usePlugins } from "@/lib/api/hooks";
 import { pluginCatalog, type PluginDef } from "@/lib/plugin-catalog";
 import { ConnectDialog } from "@/components/plugins/plugin-dialogs";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StackPage() {
   const { data: plugins = [], isLoading } = usePlugins();
@@ -15,9 +16,9 @@ export default function StackPage() {
   const connectedTypes = new Set(plugins.map((p) => p.type));
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Add a tool</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Add a tool</h1>
         <p className="text-sm text-muted-foreground">
           Plug citshe into your stack. Each connected tool gets its own place in
           the sidebar.
@@ -25,8 +26,19 @@ export default function StackPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="space-y-2.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex w-full items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5"
+            >
+              <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-3/5" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : pluginCatalog.length === 0 ? (
         <EmptyState

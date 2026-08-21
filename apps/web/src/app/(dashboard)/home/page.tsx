@@ -25,9 +25,11 @@ import {
   usePlugins,
   usePluginStatus,
 } from "@/lib/api/hooks";
-import { OrgSwitcher } from "@/components/layout/org-switcher";
+import { OrgSwitcher } from "@/components/shell/org-switcher";
+import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SectionHeader as UiSectionHeader } from "@/components/ui/section-header";
 import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import type {
   Task,
@@ -99,7 +101,7 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="w-full max-w-[1600px] px-6 py-6 sm:py-10 space-y-10">
+    <div className="w-full max-w-[1400px] px-6 py-6 sm:py-8 space-y-10">
       {/* Portal selector — mobile only; desktop has it in the sidebar */}
       <div className="sm:hidden">
         <OrgSwitcher />
@@ -110,7 +112,7 @@ export default function HomePage() {
         <p className="text-xs font-medium uppercase tracking-wider text-text-subtle">
           {greeting}
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {currentOrg?.name ?? "Your portal"}
         </h1>
         {isSetUp && connectedTypes.has("CLOUDFLARE") ? (
@@ -198,12 +200,12 @@ export default function HomePage() {
                       <span className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground">
                         {s.status === "CREATING" ? (
                           <>
-                            <StatusDot state="creating" size={8} />
+                            <StatusDot state="creating" size={7} />
                             Starting
                           </>
                         ) : (
                           <>
-                            <StatusDot state="running" size={8} />
+                            <StatusDot state="running" size={7} />
                             Live
                           </>
                         )}
@@ -533,13 +535,12 @@ function SetupChecklist({
               )}
             </div>
             {!step.done && (
-              <Link
-                href={step.href}
-                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-[0_0_0_1px_var(--accent-glow),0_0_16px_-4px_var(--accent-glow)] transition-linear hover:brightness-110"
-              >
-                {step.cta}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              <Button asChild size="sm" className="shrink-0">
+                <Link href={step.href}>
+                  {step.cta}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
             )}
           </div>
         ))}
@@ -647,22 +648,12 @@ function SectionHeader({
   count?: number;
 }) {
   return (
-    <div className="flex items-center justify-between">
-      <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-        {label}
-        {count != null && count > 0 && (
-          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] tabular-nums normal-case tracking-normal text-muted-foreground">
-            {count}
-          </span>
-        )}
-      </h2>
-      <Link
-        href={href}
-        className="text-xs text-muted-foreground transition-linear hover:text-foreground"
-      >
-        {cta} →
-      </Link>
-    </div>
+    <UiSectionHeader
+      label={label}
+      count={count}
+      actionHref={href}
+      actionLabel={cta}
+    />
   );
 }
 
@@ -686,7 +677,7 @@ function TaskRow({ task }: { task: Task }) {
           title="No worker picked this up. Is the executor image built? Run `just executor-build`."
           className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground"
         >
-          <StatusDot state="warn" size={8} />
+          <StatusDot state="warn" size={7} />
           Stuck
         </span>
       )}

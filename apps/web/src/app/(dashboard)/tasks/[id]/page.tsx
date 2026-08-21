@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import {
   Select,
   SelectContent,
@@ -40,7 +41,6 @@ import {
   Sparkles,
   AlertCircle,
   Terminal,
-  X,
   Plus,
   Bot,
   CheckCircle2,
@@ -241,7 +241,7 @@ export default function TaskDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
-        <p className="text-red-500 mb-2">Task not found</p>
+        <p className="text-danger mb-2">Task not found</p>
         <Link href="/tasks">
           <Button variant="outline">Back to Tasks</Button>
         </Link>
@@ -261,7 +261,7 @@ export default function TaskDetailPage() {
     (task.status === "ANALYZING" || task.status === "IN_PROGRESS");
 
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-6 py-4 sm:py-6">
+    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -336,7 +336,7 @@ export default function TaskDetailPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => setIsDeleteOpen(true)}
-                className="text-red-600"
+                className="text-danger"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Task
@@ -562,20 +562,13 @@ export default function TaskDetailPage() {
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
               {labels.map((label) => (
-                <span
+                <Chip
                   key={label}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-inset/60 py-0.5 pl-2 pr-1 text-[11px] font-medium text-muted-foreground"
+                  onRemove={() => removeLabel(label)}
+                  removeLabel={`Remove ${label}`}
                 >
                   {label}
-                  <button
-                    type="button"
-                    onClick={() => removeLabel(label)}
-                    className="rounded-full p-0.5 transition-linear hover:bg-surface-hover hover:text-foreground"
-                    aria-label={`Remove ${label}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
+                </Chip>
               ))}
               <div className="flex items-center gap-1">
                 <Plus className="h-3.5 w-3.5 text-muted-foreground" />

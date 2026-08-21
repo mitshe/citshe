@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useUpdateTask } from "@/lib/api/hooks";
 import type { Task } from "@/lib/api/types";
+import { SectionHeader } from "@/components/ui/section-header";
 import {
   COLUMNS,
   CLOSED_COLUMN,
@@ -107,14 +108,11 @@ export function TaskBoardView({
                 : "border-border",
             )}
           >
-            <div className="flex items-center gap-2 rounded-t-lg border-b border-border px-3 py-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {col.name}
-              </h2>
-              <span className="rounded-full bg-surface-inset px-1.5 text-[11px] font-medium text-text-subtle">
-                {byColumn[col.id].length}
-              </span>
-            </div>
+            <SectionHeader
+              label={col.name}
+              count={byColumn[col.id].length}
+              className="justify-start rounded-t-lg border-b border-border px-3 py-2"
+            />
             <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto p-2">
               {byColumn[col.id].length === 0 ? (
                 <p className="px-1 py-6 text-center text-xs text-text-subtle">

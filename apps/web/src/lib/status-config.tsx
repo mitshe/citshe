@@ -29,49 +29,49 @@ export const taskStatusConfig: Record<
     label: "Open",
     icon: <Clock className="w-4 h-4" />,
     variant: "outline",
-    color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+    color: "bg-warn/10 text-warn border-border",
   },
   QUEUED: {
     label: "Queued",
     icon: <Clock className="w-4 h-4" />,
     variant: "outline",
-    color: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    color: "bg-warn/10 text-warn border-border",
   },
   ANALYZING: {
     label: "Analyzing",
-    icon: <Search className="w-4 h-4 animate-pulse" />,
+    icon: <Search className="w-4 h-4" />,
     variant: "secondary",
-    color: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+    color: "bg-info/10 text-info border-border",
   },
   IN_PROGRESS: {
     label: "In Progress",
-    icon: <Loader2 className="w-4 h-4 animate-spin" />,
+    icon: <Loader2 className="w-4 h-4" />,
     variant: "secondary",
-    color: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    color: "bg-info/10 text-info border-border",
   },
   REVIEW: {
     label: "Review",
     icon: <Eye className="w-4 h-4" />,
     variant: "default",
-    color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
+    color: "bg-primary/10 text-primary border-border",
   },
   COMPLETED: {
     label: "Closed",
     icon: <CheckCircle2 className="w-4 h-4" />,
     variant: "default",
-    color: "bg-green-500/10 text-green-600 border-green-500/20",
+    color: "bg-ok/10 text-ok border-border",
   },
   FAILED: {
     label: "Failed",
     icon: <XCircle className="w-4 h-4" />,
     variant: "destructive",
-    color: "bg-red-500/10 text-red-600 border-red-500/20",
+    color: "bg-danger/10 text-danger border-border",
   },
   CANCELLED: {
     label: "Cancelled",
     icon: <Ban className="w-4 h-4" />,
     variant: "outline",
-    color: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+    color: "bg-muted text-muted-foreground border-border",
   },
 };
 
@@ -82,7 +82,7 @@ export function getTaskStatus(status: string) {
       label: status,
       icon: <AlertCircle className="w-4 h-4" />,
       variant: "outline" as const,
-      color: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+      color: "bg-muted text-muted-foreground border-border",
     }
   );
 }
@@ -103,13 +103,13 @@ export const providerLabels: Record<string, string> = {
 // ============================================================================
 
 export const triggerTypeLabels: Record<string, { label: string; color: string }> = {
-  manual: { label: "Manual", color: "bg-blue-500/10 text-blue-600" },
-  task: { label: "Task", color: "bg-amber-500/10 text-amber-600" },
-  schedule: { label: "Scheduled", color: "bg-purple-500/10 text-purple-600" },
-  webhook: { label: "Webhook", color: "bg-orange-500/10 text-orange-600" },
-  event: { label: "Event", color: "bg-green-500/10 text-green-600" },
-  git_push: { label: "Git Push", color: "bg-orange-500/10 text-orange-600" },
-  git_mr: { label: "Merge Request", color: "bg-orange-500/10 text-orange-600" },
+  manual: { label: "Manual", color: "bg-info/10 text-info" },
+  task: { label: "Task", color: "bg-warn/10 text-warn" },
+  schedule: { label: "Scheduled", color: "bg-primary/10 text-primary" },
+  webhook: { label: "Webhook", color: "bg-muted text-muted-foreground" },
+  event: { label: "Event", color: "bg-ok/10 text-ok" },
+  git_push: { label: "Git Push", color: "bg-muted text-muted-foreground" },
+  git_mr: { label: "Merge Request", color: "bg-muted text-muted-foreground" },
 };
 
 // ============================================================================
@@ -129,22 +129,22 @@ export const priorityConfig: Record<
   low: {
     label: "Low",
     variant: "outline",
-    color: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+    color: "bg-muted text-muted-foreground border-border",
   },
   medium: {
     label: "Medium",
     variant: "secondary",
-    color: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    color: "bg-info/10 text-info border-border",
   },
   high: {
     label: "High",
     variant: "default",
-    color: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+    color: "bg-warn/10 text-warn border-border",
   },
   urgent: {
     label: "Urgent",
     variant: "destructive",
-    color: "bg-red-500/10 text-red-600 border-red-500/20",
+    color: "bg-danger/10 text-danger border-border",
   },
 };
 
@@ -154,7 +154,7 @@ export function getPriority(priority: string) {
     priorityConfig[priority as Priority] || {
       label: priority,
       variant: "outline" as const,
-      color: "bg-gray-500/10 text-gray-600 border-gray-500/20",
+      color: "bg-muted text-muted-foreground border-border",
     }
   );
 }

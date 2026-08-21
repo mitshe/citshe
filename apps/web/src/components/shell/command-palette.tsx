@@ -99,7 +99,7 @@ export function CommandPalette() {
                 value={`task ${t.title} ${t.id}`}
                 onSelect={() => go(`/tasks/${t.id}`)}
               >
-                <ListTodo className="text-amber-500" />
+                <ListTodo className="text-muted-foreground" />
                 <span className="flex-1 truncate">{t.title}</span>
                 <span className="font-mono text-[11px] text-text-subtle">
                   {t.id.slice(0, 6)}
@@ -117,7 +117,7 @@ export function CommandPalette() {
                 value={`repo ${r.name} ${r.fullPath}`}
                 onSelect={() => go("/repos")}
               >
-                <FolderGit2 className="text-violet-500" />
+                <FolderGit2 className="text-muted-foreground" />
                 <span className="flex-1 truncate">{r.name}</span>
                 <span className="truncate font-mono text-[11px] text-text-subtle">
                   {r.fullPath}
@@ -141,7 +141,7 @@ export function CommandPalette() {
                   {isRunning || isCreating ? (
                     <StatusDot state={isCreating ? "creating" : "running"} />
                   ) : (
-                    <SquareTerminal className="text-emerald-500" />
+                    <SquareTerminal className="text-muted-foreground" />
                   )}
                   <span className="flex-1 truncate">{s.name}</span>
                   <span className="font-mono text-[11px] text-text-subtle">

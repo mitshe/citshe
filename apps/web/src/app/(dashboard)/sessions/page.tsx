@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { StatusDot, type StatusDotState } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SectionHeader } from "@/components/ui/section-header";
 import {
   Dialog,
   DialogBody,
@@ -321,13 +323,13 @@ export default function SessionsPage() {
     (configChanged && configLocked);
   const submitLabel = editingId
     ? configChanged
-      ? "Save & Restart"
+      ? "Save & restart"
       : "Save"
-    : "Start Thread";
+    : "Start terminal";
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
-      toast.error("Please enter a thread name");
+      toast.error("Please enter a terminal name");
       return;
     }
 
@@ -348,7 +350,7 @@ export default function SessionsPage() {
           branch: form.branch || undefined,
           localPath: form.localPath || undefined,
         });
-        toast.success("Thread created");
+        toast.success("Terminal created");
         setIsDialogOpen(false);
         setForm({
           ...emptyForm,
@@ -357,7 +359,7 @@ export default function SessionsPage() {
         router.push(`/sessions/${session.id}`);
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Failed to create thread";
+          error instanceof Error ? error.message : "Failed to create terminal";
         toast.error(message);
       }
       return;
@@ -371,7 +373,7 @@ export default function SessionsPage() {
 
     if (configChanged && configLocked) {
       toast.error(
-        "Stop the thread first to reconfigure container settings",
+        "Stop the terminal first to reconfigure container settings",
       );
       return;
     }
@@ -390,7 +392,7 @@ export default function SessionsPage() {
             instructions: form.instructions,
           },
         });
-        toast.success("Thread reconfigured — restarting container");
+        toast.success("Terminal reconfigured — restarting container");
       } else {
         await updateSession.mutateAsync({
           id: editingId,
@@ -399,7 +401,7 @@ export default function SessionsPage() {
             instructions: form.instructions,
           },
         });
-        toast.success("Thread updated");
+        toast.success("Terminal updated");
       }
       setIsDialogOpen(false);
       setEditingId(null);
@@ -407,7 +409,7 @@ export default function SessionsPage() {
       setOriginalForm(null);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to save thread";
+        error instanceof Error ? error.message : "Failed to save terminal";
       toast.error(message);
     }
   };
@@ -422,9 +424,9 @@ export default function SessionsPage() {
     setDeletingId(deleteTarget.id);
     try {
       await deleteSession.mutateAsync(deleteTarget.id);
-      toast.success("Thread deleted");
+      toast.success("Terminal deleted");
     } catch {
-      toast.error("Failed to delete thread");
+      toast.error("Failed to delete terminal");
     } finally {
       setDeletingId(null);
       setDeleteTarget(null);
@@ -435,9 +437,9 @@ export default function SessionsPage() {
     e.stopPropagation();
     try {
       await stopSession.mutateAsync(id);
-      toast.success("Thread stopped");
+      toast.success("Terminal stopped");
     } catch {
-      toast.error("Failed to stop thread");
+      toast.error("Failed to stop terminal");
     }
   };
 
@@ -464,7 +466,7 @@ export default function SessionsPage() {
     for (const id of selectedIds) {
       try { await deleteSession.mutateAsync(id); } catch { /* continue */ }
     }
-    toast.success(`Deleted ${count} thread(s)`);
+    toast.success(`Deleted ${count} terminal(s)`);
     setSelectedIds(new Set());
     setBulkDeleting(false);
     setBulkDeleteConfirm(false);
@@ -511,12 +513,11 @@ export default function SessionsPage() {
         }
       >
         {selectMode && (
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selectedIds.has(session.id)}
-            onChange={() => toggleSelect(session.id)}
+            onCheckedChange={() => toggleSelect(session.id)}
             onClick={(e) => e.stopPropagation()}
-            className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer shrink-0"
+            className="cursor-pointer shrink-0"
           />
         )}
         <div className="flex-1 min-w-0">
@@ -627,10 +628,10 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="w-full max-w-[1600px] space-y-5 px-6 py-4 sm:py-6">
+    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Threads</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Terminals</h1>
           <p className="text-sm text-muted-foreground">
             Isolated environments for AI coding agents
           </p>
@@ -658,7 +659,7 @@ export default function SessionsPage() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setSelectMode(true)}>
                       <CheckSquare className="h-4 w-4 mr-2" />
-                      Select threads
+                      Select terminals
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -690,18 +691,18 @@ export default function SessionsPage() {
           <DialogTrigger asChild>
             <Button onClick={openCreate}>
               <Plus className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">New Thread</span>
+              <span className="hidden sm:inline">New terminal</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>
-                {editingId ? "Edit Thread" : "New Thread"}
+                {editingId ? "Edit terminal" : "New terminal"}
               </DialogTitle>
               <DialogDescription>
                 {editingId
                   ? configLocked
-                    ? "Stop the thread first to reconfigure container settings."
+                    ? "Stop the terminal first to reconfigure container settings."
                     : "Configuration changes will restart the container."
                   : "Give it a name, pick an AI provider, and go."}
               </DialogDescription>
@@ -749,7 +750,7 @@ export default function SessionsPage() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search threads..."
+            placeholder="Search terminals..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -779,12 +780,12 @@ export default function SessionsPage() {
           ) : filteredSessions.length === 0 ? (
             <EmptyState
               icon={<MessageSquareCode />}
-              title="No threads yet"
-              description="Threads are isolated containers where AI agents work on your code. Create your first thread to get started."
+              title="No terminals yet"
+              description="Terminals are isolated containers where AI agents work on your code. Create your first terminal to get started."
               action={
                 <Button onClick={openCreate}>
                   <Plus className="w-4 h-4 mr-2" />
-                  New Thread
+                  New terminal
                 </Button>
               }
             />
@@ -792,21 +793,18 @@ export default function SessionsPage() {
             <div className="space-y-6">
               {selectMode && (
                 <div className="flex items-center gap-3 px-1 py-1">
-                  <input type="checkbox" checked={selectedIds.size === filteredSessions.length && filteredSessions.length > 0} onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer" />
+                  <Checkbox checked={selectedIds.size === filteredSessions.length && filteredSessions.length > 0} onCheckedChange={toggleSelectAll} className="cursor-pointer" />
                   <span className="text-xs text-muted-foreground">{selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}</span>
                 </div>
               )}
               {groupedSessions.map(({ key, label, sessions: groupSessions }) =>
                 groupSessions.length === 0 ? null : (
                   <div key={key}>
-                    <div className="flex items-center gap-2 px-1 pb-2">
-                      <span className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-                        {label}
-                      </span>
-                      <span className="text-[11px] text-text-subtle">
-                        {groupSessions.length}
-                      </span>
-                    </div>
+                    <SectionHeader
+                      label={label}
+                      count={groupSessions.length}
+                      className="px-1 pb-2"
+                    />
                     <div className="overflow-hidden rounded-lg border border-border divide-y divide-border">
                       {groupSessions.map((session) => renderSessionRow(session))}
                     </div>
@@ -820,7 +818,7 @@ export default function SessionsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete thread?</AlertDialogTitle>
+            <AlertDialogTitle>Delete terminal?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete &ldquo;{deleteTarget?.name}&rdquo; and its container. This action cannot be undone.
             </AlertDialogDescription>
@@ -843,9 +841,9 @@ export default function SessionsPage() {
       <AlertDialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedIds.size} thread(s)?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {selectedIds.size} terminal(s)?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the selected threads and their containers. This action cannot be undone.
+              This will permanently delete the selected terminals and their containers. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

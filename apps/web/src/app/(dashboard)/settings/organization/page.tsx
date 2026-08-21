@@ -77,7 +77,7 @@ export default function OrganizationSettingsPage() {
   return (
     <div className="w-full space-y-8 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Organization</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Manage your portal name and regional settings.
         </p>

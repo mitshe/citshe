@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Loader2,
   ListTodo,
@@ -126,10 +128,10 @@ export default function TasksPage() {
   const isEmpty = !isLoading && tasks.length === 0;
 
   return (
-    <div className="w-full max-w-[1600px] px-6 py-6 sm:py-8 space-y-5">
+    <div className="w-full max-w-[1400px] px-6 py-6 sm:py-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Tasks</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground">
             Delegate work — AI plans, workers build.
           </p>
@@ -218,9 +220,7 @@ export default function TasksPage() {
 
       {/* Views */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton />
       ) : isEmpty ? (
         <EmptyState
           icon={<ListTodo />}
@@ -291,6 +291,23 @@ export default function TasksPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5"
+        >
+          <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+          <Skeleton className="h-4 flex-1 max-w-[40%]" />
+          <Skeleton className="ml-auto h-4 w-16 shrink-0" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -404,15 +421,13 @@ function NewTaskDialog({
           {/* Labels */}
           <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
             {labels.map((l) => (
-              <span
+              <Chip
                 key={l}
-                className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                onRemove={() => setLabels(labels.filter((x) => x !== l))}
+                removeLabel={`Remove ${l}`}
               >
                 {l}
-                <button onClick={() => setLabels(labels.filter((x) => x !== l))}>
-                  ×
-                </button>
-              </span>
+              </Chip>
             ))}
             <input
               value={labelDraft}
@@ -451,7 +466,7 @@ function NewTaskDialog({
 
           {/* AI suggestion */}
           {suggestion && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2 text-sm">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2 text-sm">
               <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
                 <Sparkles className="h-3.5 w-3.5" />
                 AI suggestion

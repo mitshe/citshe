@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { StatusDotState } from "@/components/ui/status-dot";
 import {
   Dialog,
@@ -126,7 +128,7 @@ export default function ReposPage() {
     <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Repos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Repos</h1>
           <p className="text-sm text-muted-foreground">
             The repositories in this portal. Connect one and AI analyzes it.
           </p>
@@ -193,8 +195,19 @@ export default function ReposPage() {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-md border border-border bg-surface-card p-4"
+            >
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 rounded-full" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+              <Skeleton className="mt-3 h-3 w-3/5" />
+            </div>
+          ))}
         </div>
       ) : repos.length === 0 ? (
         <EmptyState
@@ -433,7 +446,7 @@ function RepoPreviews({ repoName }: { repoName: string }) {
           rel="noreferrer"
           className="flex items-center gap-2 text-xs transition-linear hover:underline"
         >
-          <StatusDot state={dotState[p.state] ?? "idle"} size={6} />
+          <StatusDot state={dotState[p.state] ?? "idle"} size={7} />
           <span className="min-w-0 flex-1 truncate text-foreground">
             {p.branch || p.url.replace(/^https?:\/\//, "")}
           </span>
@@ -445,14 +458,6 @@ function RepoPreviews({ repoName }: { repoName: string }) {
         </a>
       ))}
     </div>
-  );
-}
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-md bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {children}
-    </span>
   );
 }
 
