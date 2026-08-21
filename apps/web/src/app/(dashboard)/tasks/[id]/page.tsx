@@ -1,21 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -31,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -45,20 +34,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft,
-  Edit,
   Trash2,
   Loader2,
   ExternalLink,
-  Calendar,
-  User,
   FolderOpen,
   Clock,
   MoreVertical,
   Sparkles,
-  RefreshCw,
   AlertCircle,
   Terminal,
   Eye,
+  X,
+  Plus,
+  Bot,
+  CheckCircle2,
+  RotateCcw,
+  GitPullRequest,
 } from "lucide-react";
 import { formatDistanceToNow } from "@/lib/utils";
 import {
@@ -66,85 +57,101 @@ import {
   useUpdateTask,
   useDeleteTask,
   useProcessTask,
-  useRefreshExternalData,
+  useCloseTask,
+  useReopenTask,
   useCreateSession,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
-import { TaskStatus, TaskPriority } from "@/lib/api/types";
-import {
-  taskStatusConfig,
-  getTaskStatus,
-  priorityConfig,
-  getPriority,
-} from "@/lib/status-config";
+import type { Task, TaskStatus, TaskPriority } from "@/lib/api/types";
+import { getTaskStatus, getPriority } from "@/lib/status-config";
 
-function ExternalDataDisplay({
-  data,
-  issueId,
-  externalStatus,
-}: {
-  data: Record<string, unknown>;
-  issueId?: string | null;
-  externalStatus?: string | null;
-}) {
-  const issueType = typeof data.issueType === "string" ? data.issueType : null;
-  const labels = Array.isArray(data.labels)
-    ? data.labels.filter((l): l is string => typeof l === "string")
-    : [];
-  const components = Array.isArray(data.components)
-    ? data.components.filter(
-        (c): c is { name: string } =>
-          typeof c === "object" && c !== null && "name" in c,
-      )
-    : [];
+// ---------------------------------------------------------------------------
+// Helpers — defensive narrowing of loosely-typed JSON (result / agentLogs)
+// ---------------------------------------------------------------------------
 
-  return (
-    <div className="space-y-3">
-      {issueId && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium w-24">Issue ID:</span>
-          <Badge variant="outline">{issueId}</Badge>
-        </div>
-      )}
-      {externalStatus && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium w-24">Status:</span>
-          <Badge variant="secondary">{externalStatus}</Badge>
-        </div>
-      )}
-      {issueType && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium w-24">Type:</span>
-          <span className="text-sm text-muted-foreground">{issueType}</span>
-        </div>
-      )}
-      {labels.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium w-24">Labels:</span>
-          <div className="flex flex-wrap gap-1">
-            {labels.map((label) => (
-              <Badge key={label} variant="secondary" className="text-xs">
-                {label}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-      {components.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium w-24">Components:</span>
-          <div className="flex flex-wrap gap-1">
-            {components.map((comp) => (
-              <Badge key={comp.name} variant="outline" className="text-xs">
-                {comp.name}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+/** A single normalized activity entry pulled from task.agentLogs. */
+interface AgentLogEntry {
+  agentName: string;
+  action: string;
+  details?: unknown;
+  timestamp?: string;
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** Narrow task.agentLogs (unknown JSON) into a clean array of entries. */
+function normalizeAgentLogs(raw: unknown): AgentLogEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isRecord).map((entry) => ({
+    agentName: asString(entry.agentName) ?? "agent",
+    action: asString(entry.action) ?? "",
+    details: entry.details,
+    timestamp: asString(entry.timestamp),
+  }));
+}
+
+/** Compactly render an entry's `details` payload for the timeline. */
+function formatDetails(details: unknown): string | null {
+  if (details == null) return null;
+  if (typeof details === "string") return details;
+  if (typeof details === "number" || typeof details === "boolean") {
+    return String(details);
+  }
+  if (isRecord(details)) {
+    const lines = Object.entries(details)
+      .map(([key, value]) => {
+        const rendered =
+          typeof value === "object" && value !== null
+            ? JSON.stringify(value)
+            : String(value);
+        return `${key}: ${rendered}`;
+      })
+      .slice(0, 6);
+    return lines.length > 0 ? lines.join("\n") : null;
+  }
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return null;
+  }
+}
+
+/** Pull a human-readable summary out of task.result, if any. */
+function extractResultSummary(result: Task["result"]): string | null {
+  if (!isRecord(result)) return null;
+  for (const key of ["summary", "analysis", "message", "description"]) {
+    const value = result[key];
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return null;
+}
+
+/** Pull a PR/MR url out of task.result, if any. */
+function extractPrUrl(result: Task["result"]): string | null {
+  if (!isRecord(result)) return null;
+  for (const key of ["prUrl", "mergeRequestUrl", "pullRequestUrl"]) {
+    const value = result[key];
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return null;
+}
+
+const CLOSED_STATUSES: TaskStatus[] = ["COMPLETED", "CANCELLED", "FAILED"];
+
+// Statuses the user can pick inline (open/working states only).
+const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: "PENDING", label: "Todo" },
+  { value: "IN_PROGRESS", label: "In Progress" },
+  { value: "REVIEW", label: "Review" },
+];
+
+const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 export default function TaskDetailPage() {
   const params = useParams();
@@ -155,46 +162,65 @@ export default function TaskDetailPage() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const processTask = useProcessTask();
-  const refreshExternalData = useRefreshExternalData();
+  const closeTask = useCloseTask();
+  const reopenTask = useReopenTask();
   const createSession = useCreateSession();
 
-  const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    description: "",
-    status: "PENDING" as TaskStatus,
-    priority: "medium" as TaskPriority,
-  });
 
-  const handleEditOpen = (open: boolean) => {
-    if (open && task) {
-      setEditForm({
-        title: task.title,
-        description: task.description || "",
-        status: task.status,
-        priority: task.priority || "medium",
-      });
+  // Inline title editing
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
+  // Inline description editing
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+
+  // Add-label input
+  const [newLabel, setNewLabel] = useState("");
+
+  useEffect(() => {
+    if (editingDescription) descriptionRef.current?.focus();
+  }, [editingDescription]);
+
+  const save = async (data: Parameters<typeof updateTask.mutateAsync>[0]["data"]) => {
+    try {
+      await updateTask.mutateAsync({ id: taskId, data });
+    } catch {
+      toast.error("Failed to save");
     }
-    setIsEditOpen(open);
   };
 
-  const handleUpdateTask = async () => {
-    try {
-      await updateTask.mutateAsync({
-        id: taskId,
-        data: {
-          title: editForm.title,
-          description: editForm.description || undefined,
-          status: editForm.status,
-          priority: editForm.priority,
-        },
-      });
-      toast.success("Task updated successfully");
-      setIsEditOpen(false);
-    } catch {
-      toast.error("Failed to update task");
+  const commitTitle = () => {
+    setEditingTitle(false);
+    if (task && titleDraft.trim() && titleDraft !== task.title) {
+      void save({ title: titleDraft.trim() });
     }
+  };
+
+  const commitDescription = () => {
+    setEditingDescription(false);
+    if (task && descriptionDraft !== (task.description ?? "")) {
+      void save({ description: descriptionDraft });
+    }
+  };
+
+  const addLabel = () => {
+    const value = newLabel.trim();
+    if (!task || !value) return;
+    const labels = task.labels ?? [];
+    if (labels.includes(value)) {
+      setNewLabel("");
+      return;
+    }
+    setNewLabel("");
+    void save({ labels: [...labels, value] });
+  };
+
+  const removeLabel = (label: string) => {
+    if (!task) return;
+    void save({ labels: (task.labels ?? []).filter((l) => l !== label) });
   };
 
   const handleDeleteTask = async () => {
@@ -227,18 +253,10 @@ export default function TaskDetailPage() {
       });
       toast.success("Thread created");
       router.push(`/sessions/${session.id}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create thread";
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to create thread";
       toast.error(message);
-    }
-  };
-
-  const handleRefreshExternalData = async () => {
-    try {
-      await refreshExternalData.mutateAsync(taskId);
-      toast.success("External data refreshed");
-    } catch {
-      toast.error("Failed to refresh external data");
     }
   };
 
@@ -262,135 +280,79 @@ export default function TaskDetailPage() {
     );
   }
 
+  const isClosed =
+    task.closedAt != null || CLOSED_STATUSES.includes(task.status);
+  const statusConfig = getTaskStatus(task.status);
+  const labels = task.labels ?? [];
+  const agentLogs = normalizeAgentLogs(task.agentLogs);
+  const resultSummary = extractResultSummary(task.result);
+  const prUrl = extractPrUrl(task.result);
+  const saving = updateTask.isPending;
+
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    <div className="space-y-6 p-4 sm:p-6 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2 flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link href="/tasks">
-              <Button variant="ghost" size="icon" className="shrink-0">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Badge variant={getTaskStatus(task.status).variant}>
-              {getTaskStatus(task.status).label}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <Link href="/tasks">
+            <Button variant="ghost" size="icon" className="shrink-0">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+          <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
+          {task.priority && (
+            <Badge variant={getPriority(task.priority).variant}>
+              {getPriority(task.priority).label}
             </Badge>
-            {task.priority && (
-              <Badge variant={getPriority(task.priority).variant}>
-                {getPriority(task.priority).label}
-              </Badge>
+          )}
+          <Badge variant={isClosed ? "secondary" : "outline"} className="gap-1">
+            {isClosed ? (
+              <CheckCircle2 className="w-3 h-3" />
+            ) : (
+              <Clock className="w-3 h-3" />
             )}
-            {task.externalSource && (
-              <Badge variant="outline" className="gap-1">
-                <ExternalLink className="w-3 h-3" />
-                {task.externalSource}
-              </Badge>
-            )}
-            {task.externalStatus && (
-              <Badge variant="secondary" className="gap-1">
-                {task.externalStatus}
-              </Badge>
-            )}
-          </div>
-          <h1 className="text-2xl font-bold break-words">{task.title}</h1>
+            {isClosed ? "Closed" : "Open"}
+          </Badge>
+          {saving && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Saving…
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Dialog open={isEditOpen} onOpenChange={handleEditOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Edit Task</DialogTitle>
-                <DialogDescription>Update task details</DialogDescription>
-              </DialogHeader>
-              <DialogBody className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={editForm.title}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, title: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={editForm.description}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, description: e.target.value })
-                    }
-                    rows={4}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select
-                      value={editForm.status}
-                      onValueChange={(value: TaskStatus) =>
-                        setEditForm({ ...editForm, status: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(taskStatusConfig).map(([value, config]) => (
-                          <SelectItem key={value} value={value}>
-                            {config.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Priority</Label>
-                    <Select
-                      value={editForm.priority}
-                      onValueChange={(value: TaskPriority) =>
-                        setEditForm({ ...editForm, priority: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(priorityConfig).map(
-                          ([value, config]) => (
-                            <SelectItem key={value} value={value}>
-                              {config.label}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </DialogBody>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleUpdateTask}
-                  disabled={updateTask.isPending}
-                >
-                  {updateTask.isPending && (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  )}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {isClosed ? (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await reopenTask.mutateAsync(taskId);
+                } catch {
+                  toast.error("Failed to reopen task");
+                }
+              }}
+              disabled={reopenTask.isPending}
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reopen
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await closeTask.mutateAsync(taskId);
+                } catch {
+                  toast.error("Failed to close task");
+                }
+              }}
+              disabled={closeTask.isPending}
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Close
+            </Button>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -400,20 +362,21 @@ export default function TaskDetailPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => openInThread(
-                  task.title,
-                  task.description || task.title,
-                )}
+                onClick={() =>
+                  openInThread(task.title, task.description || task.title)
+                }
                 disabled={createSession.isPending}
               >
                 <Terminal className="w-4 h-4 mr-2" />
                 Open in Thread
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => openInThread(
-                  `Review: ${task.title}`,
-                  `Review this code for the following task:\n\n${task.title}\n\n${task.description || ""}\n\nCheck for: security issues, performance problems, code quality, test coverage.`,
-                )}
+                onClick={() =>
+                  openInThread(
+                    `Review: ${task.title}`,
+                    `Review this code for the following task:\n\n${task.title}\n\n${task.description || ""}\n\nCheck for: security issues, performance problems, code quality, test coverage.`,
+                  )
+                }
                 disabled={createSession.isPending}
               >
                 <Eye className="w-4 h-4 mr-2" />
@@ -427,15 +390,6 @@ export default function TaskDetailPage() {
                 <Sparkles className="w-4 h-4 mr-2" />
                 Process with AI
               </DropdownMenuItem>
-              {task.externalSource && (
-                <DropdownMenuItem
-                  onClick={handleRefreshExternalData}
-                  disabled={refreshExternalData.isPending}
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh External Data
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setIsDeleteOpen(true)}
@@ -449,6 +403,36 @@ export default function TaskDetailPage() {
         </div>
       </div>
 
+      {/* Title (inline editable) */}
+      {editingTitle ? (
+        <Input
+          autoFocus
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitTitle();
+            } else if (e.key === "Escape") {
+              setEditingTitle(false);
+            }
+          }}
+          className="text-2xl font-bold h-auto py-1.5"
+        />
+      ) : (
+        <h1
+          className="text-2xl font-bold break-words cursor-text rounded-md -mx-2 px-2 py-1 hover:bg-muted/50"
+          onClick={() => {
+            setTitleDraft(task.title);
+            setEditingTitle(true);
+          }}
+        >
+          {task.title}
+        </h1>
+      )}
+
+      {/* Meta row */}
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-b pb-4">
         {task.repository && (
           <Link
@@ -459,97 +443,259 @@ export default function TaskDetailPage() {
             {task.repository.name}
           </Link>
         )}
-        {task.assigneeId && (
-          <div className="flex items-center gap-1.5">
-            <User className="w-4 h-4" />
-            {task.assigneeId}
-          </div>
-        )}
-        {task.dueDate && (
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-4 h-4" />
-            {new Date(task.dueDate).toLocaleDateString()}
-          </div>
-        )}
         <div className="flex items-center gap-1.5">
           <Clock className="w-4 h-4" />
           Created {formatDistanceToNow(new Date(task.createdAt))}
         </div>
-        {task.externalIssueUrl && (
-          <a
-            href={task.externalIssueUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 hover:text-foreground"
-          >
-            <ExternalLink className="w-4 h-4" />
-            {task.externalIssueId || task.externalSource}
-          </a>
+        {task.closedAt && (
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" />
+            Closed {formatDistanceToNow(new Date(task.closedAt))}
+          </div>
         )}
       </div>
 
-      <div className="space-y-3">
+      {/* Status & priority controls */}
+      <div className="flex flex-wrap gap-6">
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Status
+          </span>
+          <Select
+            value={task.status}
+            onValueChange={(value: TaskStatus) => void save({ status: value })}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue>{statusConfig.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+              {/* Preserve non-selectable statuses so the trigger stays valid */}
+              {!STATUS_OPTIONS.some((o) => o.value === task.status) && (
+                <SelectItem value={task.status} disabled>
+                  {statusConfig.label}
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Priority
+          </span>
+          <Select
+            value={task.priority ?? "medium"}
+            onValueChange={(value: TaskPriority) =>
+              void save({ priority: value })
+            }
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITY_OPTIONS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {getPriority(value).label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="space-y-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          Labels
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {labels.map((label) => (
+            <Badge key={label} variant="secondary" className="gap-1 pr-1">
+              {label}
+              <button
+                type="button"
+                onClick={() => removeLabel(label)}
+                className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                aria-label={`Remove ${label}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
+          ))}
+          <div className="flex items-center gap-1">
+            <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addLabel();
+                }
+              }}
+              onBlur={addLabel}
+              placeholder="Add label"
+              className="h-7 w-32 text-xs"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Description (inline editable) */}
+      <div className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground">
           Description
         </h2>
-        {task.description ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <p className="whitespace-pre-wrap text-foreground">
-              {task.description}
-            </p>
-          </div>
+        {editingDescription ? (
+          <Textarea
+            ref={descriptionRef}
+            value={descriptionDraft}
+            onChange={(e) => setDescriptionDraft(e.target.value)}
+            onBlur={commitDescription}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                commitDescription();
+              } else if (e.key === "Escape") {
+                setEditingDescription(false);
+              }
+            }}
+            rows={5}
+            placeholder="Add a description…"
+          />
         ) : (
-          <p className="text-sm text-muted-foreground italic">
-            No description provided
-          </p>
+          <div
+            className="cursor-text rounded-md -mx-2 px-2 py-1.5 hover:bg-muted/50 min-h-9"
+            onClick={() => {
+              setDescriptionDraft(task.description ?? "");
+              setEditingDescription(true);
+            }}
+          >
+            {task.description ? (
+              <p className="whitespace-pre-wrap text-foreground text-sm">
+                {task.description}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                Add a description…
+              </p>
+            )}
+          </div>
         )}
       </div>
 
-      {task.externalSource && task.externalData && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">External Source</CardTitle>
-              {task.externalIssueUrl && (
-                <a
-                  href={task.externalIssueUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button variant="ghost" size="sm">
-                    <ExternalLink className="w-4 h-4 mr-1" />
-                    Open
-                  </Button>
-                </a>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <ExternalDataDisplay
-              data={task.externalData}
-              issueId={task.externalIssueId}
-              externalStatus={task.externalStatus}
-            />
-          </CardContent>
-        </Card>
+      {/* Links */}
+      {(prUrl || task.sessionId) && (
+        <div className="flex flex-wrap gap-2">
+          {prUrl && (
+            <a href={prUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm">
+                <GitPullRequest className="w-4 h-4 mr-2" />
+                View PR
+                <ExternalLink className="w-3 h-3 ml-1.5 opacity-60" />
+              </Button>
+            </a>
+          )}
+          {task.sessionId && (
+            <Link href={`/sessions/${task.sessionId}`}>
+              <Button variant="outline" size="sm">
+                <Terminal className="w-4 h-4 mr-2" />
+                Watch terminal
+              </Button>
+            </Link>
+          )}
+        </div>
       )}
 
+      {/* Activity / AI log */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Activity</h2>
+
+        {resultSummary && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                AI Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {resultSummary}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {agentLogs.length > 0 ? (
+          <ol className="relative space-y-4 border-l pl-6 ml-2">
+            {agentLogs.map((entry, index) => {
+              const details = formatDetails(entry.details);
+              return (
+                <li key={index} className="relative">
+                  <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full bg-muted ring-4 ring-background">
+                    <Bot className="w-3.5 h-3.5 text-muted-foreground" />
+                  </span>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-medium">
+                      {entry.agentName}
+                    </span>
+                    {entry.action && (
+                      <span className="text-sm text-muted-foreground">
+                        {entry.action}
+                      </span>
+                    )}
+                    {entry.timestamp && (
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(entry.timestamp))}
+                      </span>
+                    )}
+                  </div>
+                  {details && (
+                    <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-2 text-xs text-muted-foreground font-mono">
+                      {details}
+                    </pre>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          !resultSummary && (
+            <p className="text-sm text-muted-foreground italic">
+              No activity yet.
+            </p>
+          )
+        )}
+      </div>
+
+      {/* Delete confirm */}
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete task?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete &ldquo;{task.title}&rdquo;. This action cannot be undone.
+              This will permanently delete &ldquo;{task.title}&rdquo;. This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteTask.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteTask.isPending}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteTask}
               disabled={deleteTask.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteTask.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {deleteTask.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
               {deleteTask.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
