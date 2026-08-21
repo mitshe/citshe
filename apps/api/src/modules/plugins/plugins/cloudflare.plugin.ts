@@ -9,6 +9,7 @@ import {
   PluginActionResult,
   PreviewDeployment,
   PluginResourceGroup,
+  PluginResourceItem,
   PluginSelection,
   HealthState,
 } from './plugin.interface';
@@ -48,6 +49,28 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/** Compact a request/record count: 1234 → 1.2k, 3400000 → 3.4M. */
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  return `${(n / 1_000_000_000).toFixed(1)}B`;
+}
+
+/** Bytes → human-readable (KB/MB/GB/TB), matching a bandwidth readout. */
+function humanBytes(n: number): string {
+  if (n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  const v = n / Math.pow(1024, i);
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/** ISO for the start of the last-24h window (GraphQL date/datetime filters). */
+function since24h(): string {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
 /**
  * Cloudflare stack plugin. Connect with just an API token — citshe discovers
  * everything the token can see (Pages projects, R2 buckets, Workers). No manual
@@ -64,6 +87,90 @@ class CloudflarePlugin implements StackPlugin {
     const res = await fetch(`${API}${path}`, { headers: cfHeaders(token) });
     if (!res.ok) throw new Error(`Cloudflare returned ${res.status}`);
     return res.json();
+  }
+
+  /**
+   * Count records without paging them all: the list endpoints return
+   * `result_info.total_count`, so a single `per_page=1` call is enough.
+   */
+  private async countVia(token: string, path: string): Promise<number> {
+    const sep = path.includes('?') ? '&' : '?';
+    const json = await this.get(token, `${path}${sep}per_page=1`);
+    const info = json?.result_info as { total_count?: number } | undefined;
+    if (typeof info?.total_count === 'number') return info.total_count;
+    // Fallback: length of whatever came back (some endpoints omit result_info).
+    const r = json?.result;
+    return Array.isArray(r) ? r.length : 0;
+  }
+
+  /**
+   * Last-24h traffic for a single zone via the GraphQL analytics API
+   * (httpRequests1dGroups). Resilient: returns null if the token lacks the
+   * Analytics scope, the dataset is empty, or the query errors.
+   */
+  private async zoneTraffic(
+    token: string,
+    zoneTag: string,
+  ): Promise<{
+    requests: number;
+    bytes: number;
+    cachedRequests: number;
+    threats: number;
+  } | null> {
+    const query = `query ($zoneTag: String!, $since: String!) {
+      viewer {
+        zones(filter: { zoneTag: $zoneTag }) {
+          httpRequests1dGroups(
+            limit: 7
+            filter: { date_geq: $since }
+            orderBy: [date_ASC]
+          ) {
+            sum { requests bytes cachedRequests threats }
+          }
+        }
+      }
+    }`;
+    try {
+      const res = await fetch(`${API}/graphql`, {
+        method: 'POST',
+        headers: cfHeaders(token),
+        body: JSON.stringify({
+          query,
+          variables: { zoneTag, since: since24h().slice(0, 10) },
+        }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        errors?: unknown[];
+        data?: {
+          viewer?: {
+            zones?: Array<{
+              httpRequests1dGroups?: Array<{
+                sum?: {
+                  requests?: number;
+                  bytes?: number;
+                  cachedRequests?: number;
+                  threats?: number;
+                };
+              }>;
+            }>;
+          };
+        };
+      };
+      if (json.errors?.length) return null;
+      const groups = json.data?.viewer?.zones?.[0]?.httpRequests1dGroups ?? [];
+      if (!groups.length) return null;
+      const acc = { requests: 0, bytes: 0, cachedRequests: 0, threats: 0 };
+      for (const g of groups) {
+        acc.requests += g.sum?.requests ?? 0;
+        acc.bytes += g.sum?.bytes ?? 0;
+        acc.cachedRequests += g.sum?.cachedRequests ?? 0;
+        acc.threats += g.sum?.threats ?? 0;
+      }
+      return acc;
+    } catch {
+      return null;
+    }
   }
 
   /** Resolve the account id — explicit, else the first account the token sees. */
@@ -83,9 +190,9 @@ class CloudflarePlugin implements StackPlugin {
 
     const safeList = async (
       path: string,
-      map: (r: Record<string, unknown>) => { id: string; name: string },
+      map: (r: Record<string, unknown>) => PluginResourceItem,
       pick: (json: Record<string, unknown>) => Array<Record<string, unknown>>,
-    ) => {
+    ): Promise<PluginResourceItem[]> => {
       try {
         const json = await this.get(apiToken, path);
         return pick(json).map(map);
@@ -94,23 +201,108 @@ class CloudflarePlugin implements StackPlugin {
       }
     };
 
+    // Pages: each project annotated with its latest deploy state + when.
     const pages = await safeList(
       `/accounts/${accountId}/pages/projects`,
-      (p) => ({ id: p.name as string, name: p.name as string }),
+      (p) => {
+        const dep = (p.latest_deployment ?? {}) as Record<string, unknown>;
+        const stage = (dep.latest_stage as { status?: string })?.status;
+        const when = dep.created_on as string | undefined;
+        const ok = stage === 'success' || stage === 'active';
+        const building = stage === 'building' || stage === 'queued';
+        return {
+          id: p.name as string,
+          name: p.name as string,
+          state: stage ? (ok ? 'ok' : building ? 'warn' : 'down') : 'idle',
+          meta: when ? timeAgo(when) : undefined,
+        };
+      },
       (j) => (j.result as Array<Record<string, unknown>>) ?? [],
     );
     if (pages.length) groups.push({ kind: 'pages', label: 'Pages', items: pages });
 
-    const zones = await safeList(
-      `/zones?per_page=50`,
-      (z) => ({ id: z.id as string, name: z.name as string }),
-      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
-    );
-    if (zones.length) groups.push({ kind: 'zones', label: 'Domains', items: zones });
+    // Recent deployments across the freshest Pages project (rich: state +
+    // commit + relative time). Best-effort — omitted if it errors.
+    try {
+      const proj = pages[0]?.name;
+      if (proj) {
+        const dj = await this.get(
+          apiToken,
+          `/accounts/${accountId}/pages/projects/${proj}/deployments?per_page=15`,
+        );
+        const deploys: Array<Record<string, unknown>> = dj?.result ?? [];
+        const items: PluginResourceItem[] = deploys.map((d) => {
+          const stage = (d.latest_stage as { status?: string })?.status;
+          const ok = stage === 'success';
+          const building = stage === 'building' || stage === 'queued';
+          const trig = (d.deployment_trigger as Record<string, unknown>) ?? {};
+          const meta = (trig.metadata as Record<string, unknown>) ?? {};
+          const commit = (meta.commit_hash as string)?.slice(0, 7);
+          const env = (d.environment as string) || 'production';
+          const when = d.created_on as string | undefined;
+          const metaLine = [
+            env,
+            commit,
+            when ? timeAgo(when) : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return {
+            id: (d.id as string) || '',
+            name: `${proj} (${stage || env})`,
+            state: stage ? (ok ? 'ok' : building ? 'warn' : 'down') : 'idle',
+            meta: metaLine || undefined,
+          };
+        });
+        if (items.length)
+          groups.push({ kind: 'deployments', label: 'Deployments', items });
+      }
+    } catch {
+      // deployments listing optional — skip quietly
+    }
+
+    // Domains: status dot + DNS record count as meta (one cheap count each).
+    const zonesRaw: Array<Record<string, unknown>> = await (async () => {
+      try {
+        const j = await this.get(apiToken, `/zones?per_page=50`);
+        return (j?.result as Array<Record<string, unknown>>) ?? [];
+      } catch {
+        return [];
+      }
+    })();
+    if (zonesRaw.length) {
+      const zoneItems: PluginResourceItem[] = [];
+      for (const z of zonesRaw) {
+        const status = (z.status as string) || '';
+        let meta: string | undefined;
+        try {
+          const n = await this.countVia(
+            apiToken,
+            `/zones/${z.id as string}/dns_records`,
+          );
+          meta = `${n} DNS`;
+        } catch {
+          // DNS read may be out of scope — leave meta off for this zone
+        }
+        zoneItems.push({
+          id: z.id as string,
+          name: z.name as string,
+          state: status === 'active' ? 'ok' : 'warn',
+          meta,
+        });
+      }
+      groups.push({ kind: 'zones', label: 'Domains', items: zoneItems });
+    }
 
     const workers = await safeList(
       `/accounts/${accountId}/workers/scripts`,
-      (w) => ({ id: w.id as string, name: w.id as string }),
+      (w) => ({
+        id: w.id as string,
+        name: w.id as string,
+        meta: w.modified_on
+          ? timeAgo(w.modified_on as string)
+          : undefined,
+      }),
       (j) => (j.result as Array<Record<string, unknown>>) ?? [],
     );
     if (workers.length)
@@ -118,7 +310,15 @@ class CloudflarePlugin implements StackPlugin {
 
     const r2 = await safeList(
       `/accounts/${accountId}/r2/buckets`,
-      (b) => ({ id: b.name as string, name: b.name as string }),
+      (b) => {
+        const loc = (b.location as string) || '';
+        const cls = (b.storage_class as string) || '';
+        return {
+          id: b.name as string,
+          name: b.name as string,
+          meta: [loc, cls].filter(Boolean).join(' · ') || undefined,
+        };
+      },
       (j) =>
         ((j.result as Record<string, unknown>)?.buckets as Array<
           Record<string, unknown>
@@ -290,24 +490,105 @@ class CloudflarePlugin implements StackPlugin {
       metrics.push({ label: 'Pages', value: 'no access', state: 'warn' });
     }
 
-    // --- Domains (zones): the selected ones + their status/DNS count ---
+    // --- Domains (zones): status + DNS record count, and pick a primary zone
+    // to pull 24h traffic analytics from. When nothing is selected we still
+    // discover zones so the card shows traffic + DNS totals out of the box.
     const selZones = selection?.zones ?? [];
-    if (selZones.length) {
-      for (const zoneId of selZones.slice(0, 8)) {
+    let zoneList: Array<{ id: string; name: string; status: string }> = [];
+    try {
+      if (selZones.length) {
+        for (const zoneId of selZones.slice(0, 8)) {
+          try {
+            const zj = await this.get(apiToken, `/zones/${zoneId}`);
+            const z = zj?.result;
+            if (z?.id)
+              zoneList.push({
+                id: z.id as string,
+                name: (z.name as string) || (zoneId as string),
+                status: (z.status as string) || '',
+              });
+          } catch {
+            // zone unavailable — skip
+          }
+        }
+      } else {
+        const zj = await this.get(apiToken, `/zones?per_page=50`);
+        zoneList = ((zj?.result as Array<Record<string, unknown>>) ?? []).map(
+          (z) => ({
+            id: z.id as string,
+            name: z.name as string,
+            status: (z.status as string) || '',
+          }),
+        );
+      }
+    } catch {
+      // zone listing optional — skip quietly
+    }
+
+    if (zoneList.length) {
+      metrics.push({ label: 'Domains', value: String(zoneList.length) });
+
+      // DNS records across the (up to 8) surfaced zones — one cheap
+      // total_count call each. Resilient: partial totals are fine.
+      let dnsTotal = 0;
+      let dnsCounted = false;
+      for (const z of zoneList.slice(0, 8)) {
         try {
-          const zj = await this.get(apiToken, `/zones/${zoneId}`);
-          const z = zj?.result;
-          const st = (z?.status as string) || '';
-          items.push({
-            label: (z?.name as string) || zoneId,
-            value: st || 'zone',
-            state: st === 'active' ? 'ok' : 'warn',
-          });
+          const n = await this.countVia(apiToken, `/zones/${z.id}/dns_records`);
+          dnsTotal += n;
+          dnsCounted = true;
         } catch {
-          // zone unavailable — skip
+          // token may lack DNS read — skip this zone
         }
       }
-      metrics.push({ label: 'Domains', value: String(selZones.length) });
+      if (dnsCounted) {
+        metrics.push({ label: 'DNS records', value: compact(dnsTotal) });
+      }
+
+      // Per-zone status rows (with DNS count as a compact hint on the value).
+      for (const z of zoneList.slice(0, 6)) {
+        items.push({
+          label: z.name,
+          value: z.status || 'zone',
+          state: z.status === 'active' ? 'ok' : 'warn',
+        });
+      }
+    }
+
+    // --- 24h traffic analytics for the primary (first active) zone ---
+    const primaryZone =
+      zoneList.find((z) => z.status === 'active') ?? zoneList[0];
+    if (primaryZone) {
+      try {
+        const t = await this.zoneTraffic(apiToken, primaryZone.id);
+        if (t) {
+          metrics.push({
+            label: 'Requests 24h',
+            value: compact(t.requests),
+            hint: primaryZone.name,
+          });
+          metrics.push({
+            label: 'Bandwidth 24h',
+            value: humanBytes(t.bytes),
+            hint: primaryZone.name,
+          });
+          if (t.requests > 0) {
+            const cachedPct = Math.round((t.cachedRequests / t.requests) * 100);
+            metrics.push({
+              label: 'Cached',
+              value: `${cachedPct}%`,
+              state: cachedPct >= 50 ? 'ok' : 'warn',
+            });
+          }
+          metrics.push({
+            label: 'Threats 24h',
+            value: compact(t.threats),
+            state: t.threats > 0 ? 'warn' : 'ok',
+          });
+        }
+      } catch {
+        // analytics scope missing — skip the whole block quietly
+      }
     }
 
     // --- R2 buckets (filtered to selection when set) ---
@@ -319,6 +600,17 @@ class CloudflarePlugin implements StackPlugin {
           json?.result?.buckets ?? [];
         if (filtered) buckets = buckets.filter((b) => selR2.has(b.name as string));
         metrics.push({ label: 'R2 buckets', value: String(buckets.length) });
+        // Surface a few buckets with their location/class as the value line.
+        for (const b of buckets.slice(0, 4)) {
+          const loc = (b.location as string) || '';
+          const cls = (b.storage_class as string) || '';
+          const meta = [loc, cls].filter(Boolean).join(' · ');
+          items.push({
+            label: (b.name as string) || 'bucket',
+            value: meta || 'bucket',
+            state: 'ok',
+          });
+        }
       } catch {
         // R2 may be off / token lacks scope — skip quietly.
       }
@@ -336,6 +628,20 @@ class CloudflarePlugin implements StackPlugin {
           scripts = scripts.filter((s) => selWorkers.has(s.id as string));
         if (scripts.length) {
           metrics.push({ label: 'Workers', value: String(scripts.length) });
+          // Show the freshest few workers with their last-modified time.
+          const ranked = [...scripts].sort(
+            (a, b) =>
+              +new Date((b.modified_on as string) || 0) -
+              +new Date((a.modified_on as string) || 0),
+          );
+          for (const s of ranked.slice(0, 4)) {
+            const mod = s.modified_on as string | undefined;
+            items.push({
+              label: (s.id as string) || 'worker',
+              value: mod ? timeAgo(mod) : 'worker',
+              state: 'ok',
+            });
+          }
         }
       } catch {
         // optional

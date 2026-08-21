@@ -50,10 +50,76 @@ function deployHealth(state?: string): { state: HealthState; label: string } {
       return { state: 'warn', label: 'Deploying' };
     case 'ERROR':
     case 'CANCELED':
+    case 'BLOCKED':
       return { state: 'down', label: 'Deploy failed' };
     default:
       return { state: 'idle', label: 'Connected' };
   }
+}
+
+/** Short, human label for a deployment readyState (for meta lines). */
+function stateLabel(state?: string): string {
+  switch (state) {
+    case 'READY':
+      return 'READY';
+    case 'ERROR':
+      return 'ERROR';
+    case 'CANCELED':
+      return 'CANCELED';
+    case 'BLOCKED':
+      return 'BLOCKED';
+    case 'BUILDING':
+    case 'QUEUED':
+    case 'INITIALIZING':
+      return 'BUILDING';
+    default:
+      return state || 'unknown';
+  }
+}
+
+/** production | preview label from a deployment's target field (null = preview). */
+function targetLabel(target: unknown): string {
+  return target === 'production' ? 'production' : 'preview';
+}
+
+/** Pull the git commit info out of a deployment/latestDeployment meta blob. */
+function gitMeta(meta: Record<string, unknown> | undefined | null): {
+  message?: string;
+  sha?: string;
+  branch?: string;
+} {
+  const m = (meta ?? {}) as Record<string, string>;
+  return {
+    message:
+      m.githubCommitMessage ||
+      m.gitlabCommitMessage ||
+      m.bitbucketCommitMessage ||
+      undefined,
+    sha: (
+      m.githubCommitSha ||
+      m.gitlabCommitSha ||
+      m.bitbucketCommitSha ||
+      ''
+    ).slice(0, 7) || undefined,
+    branch:
+      m.githubCommitRef ||
+      m.gitlabCommitRef ||
+      m.bitbucketCommitRef ||
+      m.gitBranch ||
+      undefined,
+  };
+}
+
+/** Describe a project's connected git repo, e.g. "github:acme/site". */
+function repoLabel(link: Record<string, unknown> | undefined | null): string | undefined {
+  if (!link) return undefined;
+  const l = link as Record<string, string>;
+  const type = l.type; // github | gitlab | bitbucket
+  const repo = l.repo; // "acme/site" or slug depending on provider
+  const org = l.org || l.owner;
+  if (repo) return type ? `${type}:${repo}` : repo;
+  if (org && l.repoId) return `${type || 'git'}:${org}`;
+  return type || undefined;
 }
 
 /**
@@ -109,6 +175,40 @@ class VercelPlugin implements StackPlugin {
       state: 'ok',
     };
 
+    // --- Account / team + plan (resilient: omit on failure) ---
+    try {
+      if (c.teamId) {
+        const json = await this.get(c, '/v2/team');
+        const team = (json?.team ?? json) as Record<string, unknown>;
+        const name = (team?.name as string) || (team?.slug as string);
+        const plan = team?.billing
+          ? ((team.billing as Record<string, unknown>).plan as string)
+          : undefined;
+        if (name) {
+          metrics.push({ label: 'Team', value: name, hint: plan || undefined });
+        }
+      } else {
+        const json = await this.get(c, '/v2/user');
+        const user = (json?.user ?? {}) as Record<string, unknown>;
+        const name =
+          (user?.username as string) ||
+          (user?.name as string) ||
+          (user?.email as string);
+        const plan = user?.billing
+          ? ((user.billing as Record<string, unknown>).plan as string)
+          : undefined;
+        if (name) {
+          metrics.push({
+            label: 'Account',
+            value: name,
+            hint: plan || undefined,
+          });
+        }
+      }
+    } catch {
+      // account/team optional — skip quietly
+    }
+
     // --- Projects + freshest deployment per project (the "is it live") ---
     try {
       const json = await this.get(c, '/v9/projects?limit=100');
@@ -124,6 +224,7 @@ class VercelPlugin implements StackPlugin {
             name: p.name as string,
             when: (dep?.createdAt as number) || 0,
             state: dep?.readyState as string | undefined,
+            target: dep?.target,
             deploymentId: dep?.uid as string | undefined,
           };
         })
@@ -136,7 +237,7 @@ class VercelPlugin implements StackPlugin {
         headline = { label: h.label, state: h.state };
         metrics.push({
           label: 'Last deploy',
-          value: timeAgo(latest.when),
+          value: `${timeAgo(latest.when)} · ${stateLabel(latest.state)}`,
           hint: latest.name,
           state: h.state,
         });
@@ -158,21 +259,43 @@ class VercelPlugin implements StackPlugin {
       metrics.push({ label: 'Projects', value: 'no access', state: 'warn' });
     }
 
-    // --- Recent deployments count (resilient: omit on failure) ---
+    // --- Recent deployments: total + production count + failure signal ---
     try {
       const json = await this.get(c, '/v6/deployments?limit=20');
       const deployments: Array<Record<string, unknown>> =
         json?.deployments ?? [];
       metrics.push({ label: 'Deployments', value: String(deployments.length) });
+
+      const prod = deployments.filter((d) => d.target === 'production').length;
+      if (prod) {
+        metrics.push({ label: 'Production deploys', value: String(prod) });
+      }
+
+      const failing = deployments.filter(
+        (d) => deployHealth(d.readyState as string).state === 'down',
+      ).length;
+      if (failing) {
+        metrics.push({
+          label: 'Failed (recent)',
+          value: String(failing),
+          state: 'down',
+        });
+      }
     } catch {
       // deployments listing optional — skip quietly
     }
 
-    // --- Domains count (resilient: omit on failure) ---
+    // --- Domains count + verification signal (resilient: omit on failure) ---
     try {
       const json = await this.get(c, '/v5/domains?limit=100');
       const domains: Array<Record<string, unknown>> = json?.domains ?? [];
-      metrics.push({ label: 'Domains', value: String(domains.length) });
+      const unverified = domains.filter((d) => d.verified === false).length;
+      metrics.push({
+        label: 'Domains',
+        value: String(domains.length),
+        hint: unverified ? `${unverified} unverified` : undefined,
+        state: unverified ? 'warn' : undefined,
+      });
     } catch {
       // domains listing optional — skip quietly
     }
@@ -233,51 +356,89 @@ class VercelPlugin implements StackPlugin {
     const c = this.cfg(config);
     const groups: PluginResourceGroup[] = [];
 
-    const safeList = async (
-      path: string,
-      pick: (json: Record<string, unknown>) => Array<Record<string, unknown>>,
-      map: (r: Record<string, unknown>) => { id: string; name: string },
-    ) => {
-      try {
-        const json = await this.get(c, path);
-        return pick(json).map(map);
-      } catch {
-        return [];
-      }
-    };
-
-    const projects = await safeList(
-      '/v9/projects?limit=100',
-      (j) => (j.projects as Array<Record<string, unknown>>) ?? [],
-      (p) => ({ id: (p.id as string) || (p.name as string), name: p.name as string }),
-    );
-    if (projects.length)
-      groups.push({ kind: 'projects', label: 'Projects', items: projects });
-
-    const deployments = await safeList(
-      '/v6/deployments?limit=20',
-      (j) => (j.deployments as Array<Record<string, unknown>>) ?? [],
-      (d) => ({
-        id: (d.uid as string) || (d.url as string),
-        name: `${(d.name as string) || 'deployment'} (${
-          (d.target as string) || 'preview'
-        })`,
-      }),
-    );
-    if (deployments.length)
-      groups.push({
-        kind: 'deployments',
-        label: 'Deployments',
-        items: deployments,
+    // --- Projects (framework · last deploy state · git repo) ---
+    try {
+      const json = await this.get(c, '/v9/projects?limit=100');
+      const projects: Array<Record<string, unknown>> = json?.projects ?? [];
+      const items = projects.map((p) => {
+        const dep = ((p.latestDeployments as Array<Record<string, unknown>>) ??
+          [])[0];
+        const framework = (p.framework as string) || undefined;
+        const repo = repoLabel(p.link as Record<string, unknown>);
+        const metaParts = [
+          framework,
+          repo,
+          dep?.createdAt ? timeAgo(dep.createdAt as number) : undefined,
+        ].filter(Boolean) as string[];
+        return {
+          id: (p.id as string) || (p.name as string),
+          name: p.name as string,
+          state: dep ? deployHealth(dep.readyState as string).state : 'idle',
+          meta: metaParts.length ? metaParts.join(' · ') : undefined,
+        };
       });
+      if (items.length)
+        groups.push({ kind: 'projects', label: 'Projects', items });
+    } catch {
+      // projects listing optional — skip quietly
+    }
 
-    const domains = await safeList(
-      '/v5/domains?limit=100',
-      (j) => (j.domains as Array<Record<string, unknown>>) ?? [],
-      (d) => ({ id: (d.name as string), name: d.name as string }),
-    );
-    if (domains.length)
-      groups.push({ kind: 'domains', label: 'Domains', items: domains });
+    // --- Deployments (target · commit msg + sha · branch · when) ---
+    try {
+      const json = await this.get(c, '/v6/deployments?limit=20');
+      const deployments: Array<Record<string, unknown>> =
+        json?.deployments ?? [];
+      const items = deployments.map((d) => {
+        const git = gitMeta(d.meta as Record<string, unknown>);
+        const when =
+          typeof d.createdAt === 'number'
+            ? timeAgo(d.createdAt as number)
+            : undefined;
+        const metaParts = [
+          targetLabel(d.target),
+          stateLabel(d.readyState as string),
+          git.branch,
+          git.sha ? `#${git.sha}` : undefined,
+          when,
+        ].filter(Boolean) as string[];
+        const label = git.message
+          ? `${(d.name as string) || 'deployment'} — ${git.message.split('\n')[0].slice(0, 60)}`
+          : (d.name as string) || 'deployment';
+        return {
+          id: (d.uid as string) || (d.url as string),
+          name: label,
+          state: deployHealth(d.readyState as string).state,
+          meta: metaParts.join(' · '),
+        };
+      });
+      if (items.length)
+        groups.push({ kind: 'deployments', label: 'Deployments', items });
+    } catch {
+      // deployments listing optional — skip quietly
+    }
+
+    // --- Domains (verified/unverified · nameserver service) ---
+    try {
+      const json = await this.get(c, '/v5/domains?limit=100');
+      const domains: Array<Record<string, unknown>> = json?.domains ?? [];
+      const items = domains.map((d) => {
+        const verified = d.verified === true;
+        const metaParts = [
+          verified ? 'verified' : 'unverified',
+          (d.serviceType as string) || undefined,
+        ].filter(Boolean) as string[];
+        return {
+          id: d.name as string,
+          name: d.name as string,
+          state: (verified ? 'ok' : 'warn') as HealthState,
+          meta: metaParts.join(' · '),
+        };
+      });
+      if (items.length)
+        groups.push({ kind: 'domains', label: 'Domains', items });
+    } catch {
+      // domains listing optional — skip quietly
+    }
 
     return groups;
   }
@@ -297,12 +458,12 @@ class VercelPlugin implements StackPlugin {
         .filter((d) => nameMatches((d.name as string) || '', repoName))
         .slice(0, 8)
         .map((d) => {
-          const meta = (d.meta ?? {}) as Record<string, string>;
+          const git = gitMeta(d.meta as Record<string, unknown>);
           const state = deployHealth(d.readyState as string);
           return {
             url: `https://${d.url as string}`,
-            branch: meta.githubCommitRef || meta.gitBranch,
-            commit: (meta.githubCommitSha || '').slice(0, 7) || undefined,
+            branch: git.branch,
+            commit: git.sha,
             when: d.createdAt
               ? new Date(d.createdAt as number).toISOString()
               : undefined,

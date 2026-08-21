@@ -552,7 +552,7 @@ function ConnectRepoDialog({
         <DialogHeader>
           <DialogTitle>Connect a repository</DialogTitle>
         </DialogHeader>
-        <DialogBody className="space-y-3">
+        <DialogBody className="mr-0 w-full min-w-0 space-y-3 pr-0">
           <Input
             placeholder="Search your repos…"
             value={search}
@@ -585,21 +585,21 @@ function ConnectRepoDialog({
               {loaded ? "No repositories match your search." : "Loading…"}
             </p>
           ) : (
-            <div className="max-h-72 space-y-1 overflow-y-auto">
+            <div className="-mr-2 max-h-72 w-full min-w-0 space-y-1 overflow-y-auto overflow-x-hidden pr-2">
               {list.map((r) => (
                 <button
                   key={`${r.integrationId}-${r.externalId}`}
                   onClick={() => toggle(r.externalId)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-linear",
+                    "flex w-full min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-linear",
                     selected.has(r.externalId)
-                      ? "border-primary/40 bg-primary/5"
+                      ? "border-primary/50 bg-primary/10 ring-1 ring-primary/40"
                       : "border-border hover:bg-surface-hover",
                   )}
                 >
                   <Github className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <p className="truncate font-medium">{r.name}</p>
                       {r.fullPath.includes("/") && (
                         <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">

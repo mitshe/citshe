@@ -91,6 +91,14 @@ export type ResourceKind =
   // VPS resource kinds
   | "servers";
 
+/** One labelled stat inside a resource item's expandable details panel. */
+export interface PluginResourceDetail {
+  label: string;
+  value: string;
+  /** Optional health tint for the value (e.g. disk > 90% → down). */
+  state?: HealthState;
+}
+
 export interface PluginResourceItem {
   id: string;
   name: string;
@@ -98,6 +106,17 @@ export interface PluginResourceItem {
   state?: HealthState;
   /** Optional right-aligned meta line (e.g. "load 0.4 · disk 30% · ram 42%"). */
   meta?: string;
+  /**
+   * Optional structured stats rendered as an expandable panel under the row
+   * (e.g. a VPS server's uptime / load / RAM / disk / CPU / OS). Cleaner than
+   * cramming everything into `meta`.
+   */
+  details?: PluginResourceDetail[];
+  /**
+   * Optional error message for this item (e.g. an unreachable VPS server),
+   * shown inline on its own row rather than as a page-wide error.
+   */
+  error?: string;
 }
 
 /** One SSH server inside the VPS plugin's list of servers. */

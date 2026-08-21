@@ -8,6 +8,7 @@ import {
   PluginMetric,
   PluginActionResult,
   PluginResourceGroup,
+  PluginResourceDetail,
   HealthState,
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
@@ -67,6 +68,14 @@ interface ServerHealth {
   headline: string;
   metrics: PluginMetric[];
   meta: string; // compact one-liner shown in the resource row
+  /** Structured stats for the expandable detail panel. */
+  details: PluginResourceDetail[];
+  /** Numeric load (1m) if read — used for the fleet aggregate. */
+  load?: number;
+  /** Disk usage % of / if read — used for the "disk > 80%" aggregate. */
+  diskPct?: number;
+  /** If the server was unreachable, the SSH error message. */
+  error?: string;
 }
 
 /**
@@ -163,29 +172,42 @@ class VpsPlugin implements StackPlugin {
 
   /** Probe one server for health — SSH + parse one round-trip of metrics. */
   private async probe(server: VpsServer): Promise<ServerHealth> {
-    // One round-trip: gather everything with a single command.
+    // One round-trip: gather everything with a single command. Each field is
+    // best-effort (`|| echo '?'` / ignored parse) so a missing tool on the box
+    // just omits that stat instead of failing the whole probe.
     //   UPTIME|<pretty uptime>
-    //   LOAD|<1min load>
+    //   LOAD|<1m>|<5m>|<15m>          (from /proc/loadavg)
     //   CPUS|<nproc>
-    //   MEM|<used>|<total>   (MB)
-    //   DISK|<used%>|<mount>
+    //   MEM|<used>|<total>            (MB, from free -m)
+    //   DISK|<used%>|<mount>|<used>|<total>  (from df -h /)
+    //   OS|<pretty os name>           (from /etc/os-release or uname)
+    //   USERS|<logged-in user count>  (from who | wc -l)
+    //   SERVICES|<running systemd services> (systemctl, optional)
+    //   PROC|<name>|<%mem>            (top process by memory, from ps)
     const script = [
       "echo UPTIME\\|$(uptime -p 2>/dev/null | sed 's/^up //' || echo '?')",
-      "echo LOAD\\|$(cat /proc/loadavg | awk '{print $1}')",
+      "echo LOAD\\|$(cat /proc/loadavg 2>/dev/null | awk '{print $1\"|\"$2\"|\"$3}' || echo '?')",
       'echo CPUS\\|$(nproc 2>/dev/null || echo 1)',
-      "echo MEM\\|$(free -m | awk '/^Mem:/{print $3\"|\"$2}')",
-      "echo DISK\\|$(df -P / | awk 'NR==2{print $5\"|\"$6}')",
+      "echo MEM\\|$(free -m 2>/dev/null | awk '/^Mem:/{print $3\"|\"$2}')",
+      "echo DISK\\|$(df -h / 2>/dev/null | awk 'NR==2{print $5\"|\"$6\"|\"$3\"|\"$2}')",
+      "echo OS\\|$( (. /etc/os-release 2>/dev/null && echo \"$PRETTY_NAME\") || uname -sr 2>/dev/null || echo '?')",
+      'echo USERS\\|$(who 2>/dev/null | wc -l)',
+      "echo SERVICES\\|$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l || echo '?')",
+      "echo PROC\\|$(ps -eo comm,pmem --sort=-pmem 2>/dev/null | awk 'NR==2{print $1\"|\"$2}')",
     ].join('; ');
 
     let raw: string;
     try {
       raw = await this.exec(server, script);
     } catch (err) {
+      const message = (err as Error).message;
       return {
         state: 'down',
         headline: 'Down',
         metrics: [],
-        meta: (err as Error).message,
+        meta: 'unreachable',
+        details: [],
+        error: message,
       };
     }
 
@@ -196,23 +218,46 @@ class VpsPlugin implements StackPlugin {
     }
 
     const metrics: PluginMetric[] = [];
+    const details: PluginResourceDetail[] = [];
     let state: HealthState = 'ok';
     let headline = 'Up';
     const metaParts: string[] = [];
+    const result: ServerHealth = {
+      state,
+      headline,
+      metrics,
+      meta: '',
+      details,
+    };
 
+    // Uptime
     const uptime = fields.get('UPTIME')?.[0];
     if (uptime && uptime !== '?') {
       metrics.push({ label: 'Uptime', value: uptime });
+      details.push({ label: 'Uptime', value: uptime });
+      metaParts.push(`up ${uptime.replace(/,/g, '').replace(/\s+/g, '')}`);
     }
 
-    const load = parseFloat(fields.get('LOAD')?.[0] ?? '');
+    // Load average (1/5/15m)
+    const loadRaw = fields.get('LOAD');
+    const load = parseFloat(loadRaw?.[0] ?? '');
     const cpus = parseInt(fields.get('CPUS')?.[0] ?? '1', 10) || 1;
-    if (!Number.isNaN(load)) {
+    if (loadRaw && !Number.isNaN(load)) {
+      result.load = load;
       const ratio = load / cpus;
+      const l5 = loadRaw[1];
+      const l15 = loadRaw[2];
+      const loadStr =
+        l5 && l15 ? `${load.toFixed(2)} ${l5} ${l15}` : load.toFixed(2);
       metrics.push({
         label: 'Load',
         value: load.toFixed(2),
         hint: `${cpus} cpu`,
+        state: ratio > 1 ? 'warn' : 'ok',
+      });
+      details.push({
+        label: 'Load (1/5/15m)',
+        value: loadStr,
         state: ratio > 1 ? 'warn' : 'ok',
       });
       metaParts.push(`load ${load.toFixed(2)}`);
@@ -222,18 +267,23 @@ class VpsPlugin implements StackPlugin {
       }
     }
 
+    // CPU count
+    if (fields.get('CPUS')?.[0]) {
+      details.push({ label: 'CPU', value: `${cpus} core${cpus === 1 ? '' : 's'}` });
+      metaParts.push(`${cpus} CPU`);
+    }
+
+    // Memory
     const mem = fields.get('MEM');
     if (mem && mem.length >= 2) {
       const used = parseInt(mem[0], 10);
       const total = parseInt(mem[1], 10);
       if (total > 0) {
         const pct = Math.round((used / total) * 100);
-        metrics.push({
-          label: 'RAM',
-          value: `${pct}%`,
-          hint: `${(used / 1024).toFixed(1)}/${(total / 1024).toFixed(1)} GB`,
-          state: pct > 90 ? 'down' : pct > 75 ? 'warn' : 'ok',
-        });
+        const memState: HealthState = pct > 90 ? 'down' : pct > 75 ? 'warn' : 'ok';
+        const memHint = `${(used / 1024).toFixed(1)}/${(total / 1024).toFixed(1)} GB`;
+        metrics.push({ label: 'RAM', value: `${pct}%`, hint: memHint, state: memState });
+        details.push({ label: 'RAM', value: `${pct}% · ${memHint}`, state: memState });
         metaParts.push(`ram ${pct}%`);
         if (pct > 90) {
           state = 'down';
@@ -244,16 +294,17 @@ class VpsPlugin implements StackPlugin {
       }
     }
 
+    // Disk (/)
     const disk = fields.get('DISK');
     if (disk && disk.length >= 1) {
       const pct = parseInt(disk[0].replace('%', ''), 10);
       if (!Number.isNaN(pct)) {
-        metrics.push({
-          label: 'Disk',
-          value: `${pct}%`,
-          hint: disk[1] || '/',
-          state: pct > 90 ? 'down' : pct > 80 ? 'warn' : 'ok',
-        });
+        result.diskPct = pct;
+        const diskState: HealthState = pct > 90 ? 'down' : pct > 80 ? 'warn' : 'ok';
+        const usedTotal =
+          disk[2] && disk[3] ? `${disk[2]}/${disk[3]}` : disk[1] || '/';
+        metrics.push({ label: 'Disk', value: `${pct}%`, hint: disk[1] || '/', state: diskState });
+        details.push({ label: 'Disk (/)', value: `${pct}% · ${usedTotal}`, state: diskState });
         metaParts.push(`disk ${pct}%`);
         if (pct > 90) {
           state = 'down';
@@ -264,12 +315,35 @@ class VpsPlugin implements StackPlugin {
       }
     }
 
-    return {
-      state,
-      headline,
-      metrics,
-      meta: metaParts.length ? metaParts.join(' · ') : 'reachable',
-    };
+    // OS
+    const os = fields.get('OS')?.join('|');
+    if (os && os !== '?') {
+      details.push({ label: 'OS', value: os });
+    }
+
+    // Logged-in users
+    const users = parseInt(fields.get('USERS')?.[0] ?? '', 10);
+    if (!Number.isNaN(users)) {
+      details.push({ label: 'Users', value: String(users) });
+    }
+
+    // Running services
+    const services = fields.get('SERVICES')?.[0];
+    if (services && services !== '?' && !Number.isNaN(parseInt(services, 10))) {
+      details.push({ label: 'Services', value: `${parseInt(services, 10)} running` });
+    }
+
+    // Top process by memory
+    const proc = fields.get('PROC');
+    if (proc && proc[0]) {
+      const pmem = proc[1] ? ` (${proc[1]}%)` : '';
+      details.push({ label: 'Top process', value: `${proc[0]}${pmem}` });
+    }
+
+    result.state = state;
+    result.headline = headline;
+    result.meta = metaParts.length ? metaParts.join(' · ') : 'reachable';
+    return result;
   }
 
   async testConnection(config: PluginConfig) {
@@ -342,6 +416,25 @@ class VpsPlugin implements StackPlugin {
       metrics.push({ label: 'Down', value: String(down), state: 'down' });
     }
 
+    // Fleet aggregates across the reachable servers.
+    const loads = healths
+      .map((h) => h.load)
+      .filter((n): n is number => typeof n === 'number');
+    if (loads.length > 0) {
+      const avg = loads.reduce((a, b) => a + b, 0) / loads.length;
+      metrics.push({ label: 'Avg load', value: avg.toFixed(2) });
+    }
+    const diskPressured = healths.filter(
+      (h) => typeof h.diskPct === 'number' && h.diskPct > 80,
+    ).length;
+    if (diskPressured > 0) {
+      metrics.push({
+        label: 'Disk >80%',
+        value: String(diskPressured),
+        state: 'warn',
+      });
+    }
+
     return {
       type: this.type,
       connected: up > 0,
@@ -361,12 +454,21 @@ class VpsPlugin implements StackPlugin {
       {
         kind: 'servers',
         label: 'Servers',
-        items: servers.map((s, i) => ({
-          id: s.id,
-          name: s.label || s.host,
-          state: healths[i].state,
-          meta: `${s.host} · ${healths[i].meta}`,
-        })),
+        items: servers.map((s, i) => {
+          const h = healths[i];
+          return {
+            id: s.id,
+            name: s.label || s.host,
+            state: h.state,
+            meta: `${s.host} · ${h.meta}`,
+            // Prefix the host so the detail panel always identifies the box.
+            details: [
+              { label: 'Host', value: s.host },
+              ...h.details,
+            ],
+            ...(h.error ? { error: h.error } : {}),
+          };
+        }),
       },
     ];
   }

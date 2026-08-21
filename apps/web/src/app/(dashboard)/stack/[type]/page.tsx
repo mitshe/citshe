@@ -4,13 +4,14 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowUpRight,
   MoreHorizontal,
   Rocket,
   SlidersHorizontal,
   Trash2,
   Boxes,
+  ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -54,6 +55,7 @@ import type {
   PluginMetric,
   PluginItem,
   PluginResourceGroup,
+  PluginResourceItem,
   PreviewDeployment,
 } from "@/lib/api/types";
 
@@ -103,14 +105,6 @@ export default function StackToolPage({
 
   return (
     <div className="w-full max-w-6xl space-y-8 px-4 py-6 sm:py-10">
-      <Link
-        href="/stack"
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-linear hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Stack
-      </Link>
-
       {/* Header: brand + name + health · Open in provider + ⋯ menu */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -451,30 +445,12 @@ function VpsServersSection({
       ) : (
         <Panel>
           {items.map((it) => (
-            <div
+            <VpsServerRow
               key={it.id}
-              className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0"
-            >
-              <span className="flex min-w-0 items-center gap-2.5">
-                <StatusDot state={it.state ?? "idle"} size={7} />
-                <span className="truncate text-foreground">{it.name}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-3">
-                {it.meta && (
-                  <span className="hidden font-mono text-xs text-text-subtle sm:inline">
-                    {it.meta}
-                  </span>
-                )}
-                <button
-                  aria-label="Remove server"
-                  onClick={() => setConfirmId(it.id)}
-                  disabled={removingId === it.id}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </span>
-            </div>
+              item={it}
+              removing={removingId === it.id}
+              onRemove={() => setConfirmId(it.id)}
+            />
           ))}
         </Panel>
       )}
@@ -513,6 +489,97 @@ function VpsServersSection({
         </AlertDialogContent>
       </AlertDialog>
     </section>
+  );
+}
+
+/**
+ * One VPS server row: a clickable header (status + name + compact meta) that
+ * expands to a grid of rich SSH-read stats (uptime / load / RAM / disk / CPU /
+ * OS …). If the server is unreachable, its error is shown inline on the row.
+ */
+function VpsServerRow({
+  item,
+  removing,
+  onRemove,
+}: {
+  item: PluginResourceItem;
+  removing: boolean;
+  onRemove: () => void;
+}) {
+  const details = item.details ?? [];
+  const hasDetails = details.length > 0;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
+        <button
+          type="button"
+          onClick={() => hasDetails && setOpen((o) => !o)}
+          disabled={!hasDetails}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2.5 text-left transition-linear",
+            hasDetails ? "hover:text-foreground" : "cursor-default",
+          )}
+        >
+          <StatusDot state={item.state ?? "idle"} size={7} />
+          <span className="truncate text-foreground">{item.name}</span>
+          {hasDetails && (
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-linear",
+                open && "rotate-180",
+              )}
+            />
+          )}
+        </button>
+        <span className="flex shrink-0 items-center gap-3">
+          {item.meta && (
+            <span className="hidden font-mono text-xs text-text-subtle sm:inline">
+              {item.meta}
+            </span>
+          )}
+          <button
+            aria-label="Remove server"
+            onClick={onRemove}
+            disabled={removing}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      </div>
+
+      {/* Inline error for an unreachable server — scoped to its own row. */}
+      {item.error && (
+        <div className="flex items-start gap-2 px-4 pb-3 text-xs text-danger">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words">{item.error}</span>
+        </div>
+      )}
+
+      {/* Expandable rich metrics panel. */}
+      {open && hasDetails && (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-border bg-surface-hover/40 px-4 py-3 sm:grid-cols-3">
+          {details.map((d, i) => (
+            <div key={i} className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {d.label}
+              </div>
+              <div
+                className={cn(
+                  "truncate font-mono text-xs",
+                  d.state ? healthText[d.state] : "text-foreground",
+                )}
+                title={d.value}
+              >
+                {d.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -15,7 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -41,7 +40,6 @@ import {
   Sparkles,
   AlertCircle,
   Terminal,
-  Eye,
   X,
   Plus,
   Bot,
@@ -55,10 +53,8 @@ import {
   useTask,
   useUpdateTask,
   useDeleteTask,
-  useProcessTask,
   useCloseTask,
   useReopenTask,
-  useCreateSession,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import type { Task, TaskStatus, TaskPriority } from "@/lib/api/types";
@@ -161,10 +157,8 @@ export default function TaskDetailPage() {
   const { data: task, isLoading, error } = useTask(taskId);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
-  const processTask = useProcessTask();
   const closeTask = useCloseTask();
   const reopenTask = useReopenTask();
-  const createSession = useCreateSession();
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -232,31 +226,6 @@ export default function TaskDetailPage() {
       toast.error("Failed to delete task");
     } finally {
       setIsDeleteOpen(false);
-    }
-  };
-
-  const handleProcessTask = async () => {
-    try {
-      await processTask.mutateAsync(taskId);
-      toast.success("Task processing started");
-    } catch {
-      toast.error("Failed to process task");
-    }
-  };
-
-  const openInThread = async (name: string, instructions: string) => {
-    try {
-      const session = await createSession.mutateAsync({
-        name,
-        repositoryIds: task?.repositoryId ? [task.repositoryId] : [],
-        instructions,
-      });
-      toast.success("Thread created");
-      router.push(`/sessions/${session.id}`);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to create thread";
-      toast.error(message);
     }
   };
 
@@ -365,36 +334,6 @@ export default function TaskDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() =>
-                  openInThread(task.title, task.description || task.title)
-                }
-                disabled={createSession.isPending}
-              >
-                <Terminal className="w-4 h-4 mr-2" />
-                Open in Thread
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  openInThread(
-                    `Review: ${task.title}`,
-                    `Review this code for the following task:\n\n${task.title}\n\n${task.description || ""}\n\nCheck for: security issues, performance problems, code quality, test coverage.`,
-                  )
-                }
-                disabled={createSession.isPending}
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                Review in Thread
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleProcessTask}
-                disabled={processTask.isPending}
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Process with AI
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setIsDeleteOpen(true)}
                 className="text-red-600"
