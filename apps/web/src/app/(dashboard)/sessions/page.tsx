@@ -56,7 +56,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatDistanceToNow } from "@/lib/utils";
+import { formatDistanceToNow, cn } from "@/lib/utils";
 import {
   useSessions,
   useCreateSession,
@@ -93,13 +93,13 @@ const EMPTY_SNAPSHOTS: Array<{
 // open-session header.
 const statusConfig: Record<
   SessionStatus,
-  { label: string; state: StatusDotState }
+  { label: string; state: StatusDotState; textColor: string }
 > = {
-  CREATING: { label: "Creating", state: "creating" },
-  RUNNING: { label: "Running", state: "running" },
-  PAUSED: { label: "Paused", state: "paused" },
-  COMPLETED: { label: "Stopped", state: "done" },
-  FAILED: { label: "Failed", state: "failed" },
+  CREATING: { label: "Creating", state: "creating", textColor: "text-warn" },
+  RUNNING: { label: "Running", state: "running", textColor: "text-ok" },
+  PAUSED: { label: "Paused", state: "paused", textColor: "text-muted-foreground" },
+  COMPLETED: { label: "Stopped", state: "done", textColor: "text-muted-foreground" },
+  FAILED: { label: "Failed", state: "failed", textColor: "text-danger" },
 };
 
 export default function SessionsPage() {
@@ -471,10 +471,6 @@ export default function SessionsPage() {
     setSelectMode(false);
   };
 
-  const totalSessions = sessions.length;
-  const runningSessions = sessions.filter((s) => s.status === "RUNNING").length;
-  const completedSessions = sessions.filter((s) => s.status === "COMPLETED").length;
-  const failedSessions = sessions.filter((s) => s.status === "FAILED").length;
 
   const sessionProviders = aiCredentials.filter((c) =>
     ["CLAUDE_CODE_LOCAL", "OPENCLAW"].includes(c.provider),
@@ -514,7 +510,7 @@ export default function SessionsPage() {
             : router.push(`/sessions/${session.id}`)
         }
       >
-        {selectMode ? (
+        {selectMode && (
           <input
             type="checkbox"
             checked={selectedIds.has(session.id)}
@@ -522,14 +518,16 @@ export default function SessionsPage() {
             onClick={(e) => e.stopPropagation()}
             className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer shrink-0"
           />
-        ) : (
-          <StatusDot state={config.state} className="shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm truncate">{session.name}</span>
-            <span className="text-[11px] text-text-subtle shrink-0">
-              {config.label}
+            {/* Status = dot + word, never a lone dot. */}
+            <span className="flex items-center gap-1.5 shrink-0">
+              <StatusDot state={config.state} size={7} />
+              <span className={cn("text-[11px] font-medium", config.textColor)}>
+                {config.label}
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
@@ -771,46 +769,18 @@ export default function SessionsPage() {
         </Select>
       </div>
 
-      {/* Stats */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-        <span>
-          <span className="font-medium text-foreground">{totalSessions}</span> total
-        </span>
-        <span className="flex items-center gap-1.5">
-          <StatusDot state="running" size={8} />
-          <span className="font-medium text-foreground">{runningSessions}</span> running
-        </span>
-        <span className="flex items-center gap-1.5">
-          <StatusDot state="done" size={8} />
-          <span className="font-medium text-foreground">{completedSessions}</span> stopped
-        </span>
-        {failedSessions > 0 && (
-          <span className="flex items-center gap-1.5">
-            <StatusDot state="failed" size={8} />
-            <span className="font-medium text-foreground">{failedSessions}</span> failed
-          </span>
-        )}
-      </div>
-
       <div>
           {isLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-14 rounded-md bg-surface-card animate-pulse" />
+              ))}
             </div>
           ) : filteredSessions.length === 0 ? (
             <EmptyState
               icon={<MessageSquareCode />}
               title="No threads yet"
-              description={
-                <>
-                  Threads are isolated containers where AI agents work on your
-                  code. Create your first thread or{" "}
-                  <Link href="/tasks" className="underline hover:text-foreground transition-colors">
-                    import tasks from Jira
-                  </Link>{" "}
-                  to get started.
-                </>
-              }
+              description="Threads are isolated containers where AI agents work on your code. Create your first thread to get started."
               action={
                 <Button onClick={openCreate}>
                   <Plus className="w-4 h-4 mr-2" />
