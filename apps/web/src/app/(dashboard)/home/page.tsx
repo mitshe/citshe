@@ -4,9 +4,6 @@ import { useMemo } from "react";
 import Link from "next/link";
 import {
   Terminal,
-  Pause,
-  Play,
-  Cpu,
   Blocks,
   KeyRound,
   FolderGit2,
@@ -22,8 +19,6 @@ import {
   useAICredentials,
   useSessions,
   useRepositories,
-  useQueueOverview,
-  useSetQueuePaused,
   usePlugins,
   usePluginStatus,
 } from "@/lib/api/hooks";
@@ -36,7 +31,6 @@ import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import type {
   Task,
   TaskStatus,
-  QueueOverview,
   HealthState,
   PluginType,
 } from "@citshe/types";
@@ -68,7 +62,6 @@ export default function HomePage() {
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
   const { data: credentials = [] } = useAICredentials();
   const { data: repos = [], isLoading: reposLoading } = useRepositories();
-  const { data: queue } = useQueueOverview();
   const { data: plugins = [] } = usePlugins();
 
   const hasCredentials = credentials.length > 0;
@@ -272,8 +265,6 @@ export default function HomePage() {
             </Link>
           )}
 
-          {/* Workers strip (queue) */}
-          {queue && <WorkersStrip queue={queue} />}
         </>
       )}
     </div>
@@ -542,60 +533,6 @@ function SectionHeader({
       >
         {cta} →
       </Link>
-    </div>
-  );
-}
-
-function WorkersStrip({ queue }: { queue: QueueOverview }) {
-  const setPaused = useSetQueuePaused();
-  const waiting = queue.pending.length + queue.queued.length;
-  const active = queue.runningWorkers;
-
-  if (active === 0 && waiting === 0 && !queue.queuePaused) return null;
-
-  return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-2.5">
-      <Cpu
-        className={cn(
-          "h-4 w-4 shrink-0",
-          active > 0 ? "text-ok" : "text-text-subtle",
-        )}
-      />
-      <div className="flex-1 text-sm">
-        <span className="font-medium tabular-nums text-foreground">
-          {active}/{queue.maxWorkers}
-        </span>{" "}
-        <span className="text-muted-foreground">
-          worker{active === 1 ? "" : "s"} running
-        </span>
-        {waiting > 0 && (
-          <span className="text-muted-foreground"> · {waiting} waiting</span>
-        )}
-        {queue.queuePaused && <span className="text-warn"> · paused</span>}
-      </div>
-      <button
-        type="button"
-        disabled={setPaused.isPending}
-        onClick={() => setPaused.mutate(!queue.queuePaused)}
-        className={cn(
-          "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-linear disabled:opacity-50",
-          queue.queuePaused
-            ? "text-ok hover:bg-ok/10"
-            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-        )}
-      >
-        {queue.queuePaused ? (
-          <>
-            <Play className="h-3.5 w-3.5" />
-            Resume
-          </>
-        ) : (
-          <>
-            <Pause className="h-3.5 w-3.5" />
-            Pause
-          </>
-        )}
-      </button>
     </div>
   );
 }
