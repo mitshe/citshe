@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Terminal,
   Blocks,
   KeyRound,
   FolderGit2,
+  ListTodo,
   ArrowRight,
   Check,
   Search,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTaskStatus } from "@/lib/status-config";
@@ -23,9 +26,7 @@ import {
   usePluginStatus,
 } from "@/lib/api/hooks";
 import { OrgSwitcher } from "@/components/layout/org-switcher";
-import { OPEN_COMMAND_EVENT } from "@/components/shell/command-palette";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
 import type {
@@ -131,8 +132,12 @@ export default function HomePage() {
         />
       ) : (
         <>
-          {/* Quick-search — opens the global ⌘K command palette */}
-          <QuickSearch />
+          {/* Inline search — filters results live, right here */}
+          <QuickSearch
+            tasks={tasks as Task[]}
+            repos={repos as Array<{ id: string; name: string }>}
+            sessions={sessions as Array<{ id: string; name: string; status: string }>}
+          />
 
           {/* Columns — Repos / Live terminals / Recent tasks (stack on mobile) */}
           <div className="grid gap-6 md:grid-cols-3">
@@ -271,19 +276,143 @@ export default function HomePage() {
   );
 }
 
-/** Cloudflare-style full-width search field — a button that opens the ⌘K palette. */
-function QuickSearch() {
+/**
+ * Inline search on Home — filters tasks/repos/terminals AS YOU TYPE and shows
+ * results right here (not a modal). The ⌘K modal is the sidebar's search; this
+ * is the dashboard's own live search.
+ */
+function QuickSearch({
+  tasks,
+  repos,
+  sessions,
+}: {
+  tasks: Task[];
+  repos: Array<{ id: string; name: string }>;
+  sessions: Array<{ id: string; name: string; status: string }>;
+}) {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+
+  const results = useMemo(() => {
+    if (!query) return null;
+    const match = (s: string) => s.toLowerCase().includes(query);
+    return {
+      tasks: tasks.filter((t) => match(t.title)).slice(0, 5),
+      repos: repos.filter((r) => match(r.name)).slice(0, 5),
+      terminals: sessions.filter((s) => match(s.name)).slice(0, 5),
+    };
+  }, [query, tasks, repos, sessions]);
+
+  const empty =
+    results &&
+    results.tasks.length === 0 &&
+    results.repos.length === 0 &&
+    results.terminals.length === 0;
+
+  return (
+    <div className="relative">
+      <div className="group flex w-full items-center gap-3 rounded-md border border-border bg-surface-inset px-4 py-3 transition-linear focus-within:border-border-strong focus-within:ring-2 focus-within:ring-ring">
+        <Search className="h-4 w-4 shrink-0 text-text-subtle" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search tasks, repos, terminals…"
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+        />
+        {q && (
+          <button
+            onClick={() => setQ("")}
+            className="text-text-subtle transition-linear hover:text-foreground"
+            aria-label="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {results && (
+        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border border-border bg-surface-card shadow-xl">
+          {empty ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">
+              No matches for “{q}”.
+            </p>
+          ) : (
+            <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
+              <SearchGroup label="Tasks" show={results.tasks.length > 0}>
+                {results.tasks.map((t) => (
+                  <SearchRow
+                    key={t.id}
+                    icon={<ListTodo className="h-4 w-4" />}
+                    label={t.title}
+                    onClick={() => router.push(`/tasks/${t.id}`)}
+                  />
+                ))}
+              </SearchGroup>
+              <SearchGroup label="Repos" show={results.repos.length > 0}>
+                {results.repos.map((r) => (
+                  <SearchRow
+                    key={r.id}
+                    icon={<FolderGit2 className="h-4 w-4" />}
+                    label={r.name}
+                    onClick={() => router.push(`/repos`)}
+                  />
+                ))}
+              </SearchGroup>
+              <SearchGroup label="Terminals" show={results.terminals.length > 0}>
+                {results.terminals.map((s) => (
+                  <SearchRow
+                    key={s.id}
+                    icon={<Terminal className="h-4 w-4" />}
+                    label={s.name}
+                    onClick={() => router.push(`/sessions/${s.id}`)}
+                  />
+                ))}
+              </SearchGroup>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SearchGroup({
+  label,
+  show,
+  children,
+}: {
+  label: string;
+  show: boolean;
+  children: React.ReactNode;
+}) {
+  if (!show) return null;
+  return (
+    <div className="py-1.5">
+      <p className="px-4 py-1 text-[11px] font-medium uppercase tracking-wide text-text-subtle">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function SearchRow({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
-      type="button"
-      onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_EVENT))}
-      className="group flex w-full items-center gap-3 rounded-md border border-border bg-surface-inset px-4 py-3 text-left transition-linear hover:border-border-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-foreground transition-linear hover:bg-surface-hover"
     >
-      <Search className="h-4 w-4 shrink-0 text-text-subtle transition-linear group-hover:text-muted-foreground" />
-      <span className="flex-1 text-sm text-muted-foreground">
-        Search tasks, repos, terminals…
-      </span>
-      <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
+      <span className="shrink-0 text-text-subtle">{icon}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
