@@ -23,7 +23,7 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { OrgSwitcher } from "./org-switcher";
 import { OPEN_COMMAND_EVENT } from "./command-palette";
-import { useSessions, usePlugins } from "@/lib/api/hooks";
+import { usePlugins } from "@/lib/api/hooks";
 import { getPluginDef } from "@/lib/plugin-catalog";
 
 interface NavItem {
@@ -191,52 +191,6 @@ function StackNav({
   );
 }
 
-/** Live sessions — StatusDot, NO spinner. Capped at 6 + "+N more". */
-function RunningSessions({
-  collapsed,
-  onNavigate,
-}: {
-  collapsed: boolean;
-  onNavigate?: () => void;
-}) {
-  const { data: sessions = [] } = useSessions();
-  const typed = sessions as Array<{ id: string; name: string; status: string }>;
-  const active = typed.filter(
-    (s) => s.status === "RUNNING" || s.status === "CREATING",
-  );
-
-  if (active.length === 0) return null;
-
-  const shown = active.slice(0, 6);
-  const overflow = active.length - shown.length;
-
-  return (
-    <div className="mt-5 space-y-0.5 border-t border-border pt-5">
-      {!collapsed && <SectionHeading>Running</SectionHeading>}
-      {shown.map((s) => (
-        <NavRow
-          key={s.id}
-          href={`/sessions/${s.id}`}
-          label={s.name}
-          active={false}
-          collapsed={collapsed}
-          onNavigate={onNavigate}
-          icon={<SquareTerminal className="h-[18px] w-[18px]" />}
-        />
-      ))}
-      {overflow > 0 && !collapsed && (
-        <Link
-          href="/sessions"
-          onClick={onNavigate}
-          className="flex h-[30px] items-center px-2.5 text-[13px] text-text-subtle transition-linear hover:text-foreground"
-        >
-          +{overflow} more
-        </Link>
-      )}
-    </div>
-  );
-}
-
 /**
  * The scrollable body of the sidebar (org switcher + search + nav sections).
  * Shared between the desktop sidebar and the mobile Sheet drawer.
@@ -278,7 +232,6 @@ export function SidebarBody({
       </div>
 
       <StackNav isActive={isActive} collapsed={collapsed} onNavigate={onNavigate} />
-      <RunningSessions collapsed={collapsed} onNavigate={onNavigate} />
     </TooltipProvider>
   );
 }
