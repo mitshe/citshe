@@ -197,7 +197,12 @@ class VercelPlugin implements StackPlugin {
           ? ((team.billing as Record<string, unknown>).plan as string)
           : undefined;
         if (name) {
-          metrics.push({ label: 'Team', value: name, hint: plan || undefined });
+          metrics.push({
+            label: 'Team',
+            value: name,
+            hint: plan || undefined,
+            section: 'details',
+          });
         }
       } else {
         const json = await this.get(c, '/v2/user');
@@ -214,6 +219,7 @@ class VercelPlugin implements StackPlugin {
             label: 'Account',
             value: name,
             hint: plan || undefined,
+            section: 'details',
           });
         }
       }
@@ -225,7 +231,11 @@ class VercelPlugin implements StackPlugin {
     try {
       const json = await this.get(c, '/v9/projects?limit=100');
       const projects: Array<Record<string, unknown>> = json?.projects ?? [];
-      metrics.push({ label: 'Projects', value: String(projects.length) });
+      metrics.push({
+        label: 'Projects',
+        value: String(projects.length),
+        section: 'details',
+      });
 
       // Each project carries its latest deployments; rank by createdAt.
       const withDeploy = projects
@@ -234,6 +244,7 @@ class VercelPlugin implements StackPlugin {
             [])[0];
           return {
             name: p.name as string,
+            project: p,
             when: (dep?.createdAt as number) || 0,
             state: dep?.readyState as string | undefined,
             target: dep?.target,
@@ -252,7 +263,38 @@ class VercelPlugin implements StackPlugin {
           value: `${timeAgo(latest.when)} · ${stateLabel(latest.state)}`,
           hint: latest.name,
           state: h.state,
+          section: 'hero',
         });
+
+        // --- Details from the current production/first project object ---
+        // Prefer the newest production project; else the freshest overall.
+        const prodEntry =
+          withDeploy.find((p) => p.target === 'production') ?? latest;
+        const proj = prodEntry.project;
+        const framework = proj.framework as string | undefined;
+        if (framework) {
+          metrics.push({
+            label: 'Framework',
+            value: framework,
+            section: 'details',
+          });
+        }
+        const nodeVersion = proj.nodeVersion as string | undefined;
+        if (nodeVersion) {
+          metrics.push({
+            label: 'Node version',
+            value: nodeVersion,
+            section: 'details',
+          });
+        }
+        const repo = repoLabel(proj.link as Record<string, unknown>);
+        if (repo) {
+          metrics.push({
+            label: 'Git repo',
+            value: repo,
+            section: 'details',
+          });
+        }
         if (latest.deploymentId) {
           actions.push({
             id: `redeploy:${latest.name}:${latest.deploymentId}`,
@@ -276,11 +318,19 @@ class VercelPlugin implements StackPlugin {
       const json = await this.get(c, '/v6/deployments?limit=20');
       const deployments: Array<Record<string, unknown>> =
         json?.deployments ?? [];
-      metrics.push({ label: 'Deployments', value: String(deployments.length) });
+      metrics.push({
+        label: 'Deployments',
+        value: String(deployments.length),
+        section: 'details',
+      });
 
       const prod = deployments.filter((d) => d.target === 'production').length;
       if (prod) {
-        metrics.push({ label: 'Production deploys', value: String(prod) });
+        metrics.push({
+          label: 'Production deploys',
+          value: String(prod),
+          section: 'details',
+        });
       }
 
       const failing = deployments.filter(
@@ -291,6 +341,7 @@ class VercelPlugin implements StackPlugin {
           label: 'Failed (recent)',
           value: String(failing),
           state: 'down',
+          section: 'details',
         });
       }
     } catch {
@@ -307,6 +358,7 @@ class VercelPlugin implements StackPlugin {
         value: String(domains.length),
         hint: unverified ? `${unverified} unverified` : undefined,
         state: unverified ? 'warn' : undefined,
+        section: 'details',
       });
     } catch {
       // domains listing optional — skip quietly

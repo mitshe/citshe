@@ -432,7 +432,11 @@ class CloudflarePlugin implements StackPlugin {
       );
       let projects: Array<Record<string, unknown>> = json?.result ?? [];
       if (filtered) projects = projects.filter((p) => selPages.has(p.name as string));
-      metrics.push({ label: 'Pages projects', value: String(projects.length) });
+      metrics.push({
+        label: 'Pages projects',
+        value: String(projects.length),
+        section: 'details',
+      });
 
       // Rank by latest deployment time and surface the top few.
       const withDeploy = projects
@@ -469,6 +473,7 @@ class CloudflarePlugin implements StackPlugin {
           value: timeAgo(latest.when),
           hint: `${stageLabel} · ${latest.name}`,
           state: ok ? 'ok' : building ? 'warn' : 'down',
+          section: 'hero',
         });
         // Offer a one-click redeploy of the freshest project.
         actions.push({
@@ -521,6 +526,7 @@ class CloudflarePlugin implements StackPlugin {
               label: 'Deployments',
               value: String(deploys.length),
               hint: latestProject,
+              section: 'details',
             });
           }
         } catch {
@@ -545,7 +551,12 @@ class CloudflarePlugin implements StackPlugin {
     // to pull 24h traffic analytics from. When nothing is selected we still
     // discover zones so the card shows traffic + DNS totals out of the box.
     const selZones = selection?.zones ?? [];
-    let zoneList: Array<{ id: string; name: string; status: string }> = [];
+    let zoneList: Array<{
+      id: string;
+      name: string;
+      status: string;
+      plan?: string;
+    }> = [];
     try {
       if (selZones.length) {
         for (const zoneId of selZones.slice(0, 8)) {
@@ -557,6 +568,7 @@ class CloudflarePlugin implements StackPlugin {
                 id: z.id as string,
                 name: (z.name as string) || (zoneId as string),
                 status: (z.status as string) || '',
+                plan: (z.plan as { name?: string } | undefined)?.name,
               });
           } catch {
             // zone unavailable — skip
@@ -569,6 +581,7 @@ class CloudflarePlugin implements StackPlugin {
             id: z.id as string,
             name: z.name as string,
             status: (z.status as string) || '',
+            plan: (z.plan as { name?: string } | undefined)?.name,
           }),
         );
       }
@@ -577,7 +590,21 @@ class CloudflarePlugin implements StackPlugin {
     }
 
     if (zoneList.length) {
-      metrics.push({ label: 'Domains', value: String(zoneList.length) });
+      metrics.push({
+        label: 'Domains',
+        value: String(zoneList.length),
+        section: 'details',
+      });
+
+      // Account plan surfaced from the zone's plan.name (best-effort).
+      const plan = zoneList.find((z) => z.plan)?.plan;
+      if (plan) {
+        metrics.push({
+          label: 'Account plan',
+          value: plan,
+          section: 'details',
+        });
+      }
 
       // DNS records across the (up to 8) surfaced zones — one cheap
       // total_count call each. Resilient: partial totals are fine.
@@ -593,7 +620,11 @@ class CloudflarePlugin implements StackPlugin {
         }
       }
       if (dnsCounted) {
-        metrics.push({ label: 'DNS records', value: compact(dnsTotal) });
+        metrics.push({
+          label: 'DNS records',
+          value: compact(dnsTotal),
+          section: 'details',
+        });
       }
 
       // Per-zone status rows (with DNS count as a compact hint on the value).
@@ -617,11 +648,13 @@ class CloudflarePlugin implements StackPlugin {
             label: 'Requests 24h',
             value: compact(t.requests),
             hint: primaryZone.name,
+            section: 'usage',
           });
           metrics.push({
             label: 'Bandwidth 24h',
             value: humanBytes(t.bytes),
             hint: primaryZone.name,
+            section: 'usage',
           });
           if (t.requests > 0) {
             const cachedPct = Math.round((t.cachedRequests / t.requests) * 100);
@@ -629,12 +662,14 @@ class CloudflarePlugin implements StackPlugin {
               label: 'Cached',
               value: `${cachedPct}%`,
               state: cachedPct >= 50 ? 'ok' : 'warn',
+              section: 'details',
             });
           }
           metrics.push({
             label: 'Threats 24h',
             value: compact(t.threats),
             state: t.threats > 0 ? 'warn' : 'ok',
+            section: 'details',
           });
         }
       } catch {
@@ -650,7 +685,11 @@ class CloudflarePlugin implements StackPlugin {
         let buckets: Array<Record<string, unknown>> =
           json?.result?.buckets ?? [];
         if (filtered) buckets = buckets.filter((b) => selR2.has(b.name as string));
-        metrics.push({ label: 'R2 buckets', value: String(buckets.length) });
+        metrics.push({
+          label: 'R2 buckets',
+          value: String(buckets.length),
+          section: 'details',
+        });
         // Surface a few buckets with their location/class as the value line.
         for (const b of buckets.slice(0, 4)) {
           const loc = (b.location as string) || '';
@@ -678,7 +717,11 @@ class CloudflarePlugin implements StackPlugin {
         if (filtered)
           scripts = scripts.filter((s) => selWorkers.has(s.id as string));
         if (scripts.length) {
-          metrics.push({ label: 'Workers', value: String(scripts.length) });
+          metrics.push({
+            label: 'Workers',
+            value: String(scripts.length),
+            section: 'details',
+          });
           // Show the freshest few workers with their last-modified time.
           const ranked = [...scripts].sort(
             (a, b) =>

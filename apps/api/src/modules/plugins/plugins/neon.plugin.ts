@@ -172,13 +172,21 @@ class NeonPlugin implements StackPlugin {
         (project.synthetic_storage_size as number | undefined) ??
         (project.data_storage_bytes as number | undefined);
       if (storage != null) {
-        metrics.push({ label: 'Size', value: bytes(storage) });
+        metrics.push({ label: 'Size', value: bytes(storage), section: 'usage' });
       }
       if (project.region_id) {
-        metrics.push({ label: 'Region', value: String(project.region_id) });
+        metrics.push({
+          label: 'Region',
+          value: String(project.region_id),
+          section: 'details',
+        });
       }
       if (project.pg_version) {
-        metrics.push({ label: 'PG version', value: String(project.pg_version) });
+        metrics.push({
+          label: 'PG version',
+          value: String(project.pg_version),
+          section: 'details',
+        });
       }
       const des = project.default_endpoint_settings as Rec | undefined;
       const min = des?.autoscaling_limit_min_cu as number | undefined;
@@ -188,7 +196,35 @@ class NeonPlugin implements StackPlugin {
           min != null && max != null && min !== max
             ? `${min}–${max} CU`
             : `${max ?? min} CU`;
-        metrics.push({ label: 'Compute', value: range });
+        metrics.push({ label: 'Compute', value: range, section: 'details' });
+      }
+
+      // IP restrictions (project settings → ip_allow / allowed_ips).
+      const settings = project.settings as Rec | undefined;
+      const ipAllow =
+        (settings?.allowed_ips as Rec | undefined) ??
+        (project.allowed_ips as Rec | undefined);
+      const ipList =
+        (ipAllow?.ips as unknown[] | undefined) ??
+        (project.ip_allow as unknown[] | undefined);
+      if (ipAllow || Array.isArray(ipList)) {
+        const count = Array.isArray(ipList) ? ipList.length : 0;
+        metrics.push({
+          label: 'IP restrictions',
+          value: count > 0 ? `${count} allowed` : 'None set',
+          section: 'details',
+        });
+      }
+
+      // History retention window (seconds → hours).
+      const retention = project.history_retention_seconds as number | undefined;
+      if (retention != null) {
+        const hours = retention / 3600;
+        metrics.push({
+          label: 'History retention',
+          value: hours >= 1 ? `${hours.toFixed(0)}h` : `${Math.round(retention / 60)}m`,
+          section: 'details',
+        });
       }
     }
 
@@ -200,10 +236,18 @@ class NeonPlugin implements StackPlugin {
       branches = (json.branches as Rec[]) ?? [];
       primary = branches.find((b) => b.primary || b.default) ?? branches[0];
       if (primary?.name) {
-        metrics.push({ label: 'Branch', value: String(primary.name) });
+        metrics.push({
+          label: 'Branch',
+          value: String(primary.name),
+          section: 'details',
+        });
       }
       if (branches.length) {
-        metrics.push({ label: 'Branches', value: String(branches.length) });
+        metrics.push({
+          label: 'Branches',
+          value: String(branches.length),
+          section: 'details',
+        });
       }
     } catch {
       // branches optional
@@ -225,6 +269,7 @@ class NeonPlugin implements StackPlugin {
             label: 'Compute state',
             value: state === 'active' ? 'active' : state === 'idle' ? 'idle' : (state ?? 'unknown'),
             state: health,
+            section: 'hero',
           });
           // Card headline reflects whether compute is awake.
           headline = {
@@ -244,7 +289,11 @@ class NeonPlugin implements StackPlugin {
         );
         const dbs = (json.databases as Rec[]) ?? [];
         if (dbs.length) {
-          metrics.push({ label: 'Databases', value: String(dbs.length) });
+          metrics.push({
+            label: 'Databases',
+            value: String(dbs.length),
+            section: 'details',
+          });
         }
       } catch {
         // databases optional
@@ -258,19 +307,57 @@ class NeonPlugin implements StackPlugin {
         );
         const roles = (json.roles as Rec[]) ?? [];
         if (roles.length) {
-          metrics.push({ label: 'Roles', value: String(roles.length) });
+          metrics.push({
+            label: 'Roles',
+            value: String(roles.length),
+            section: 'details',
+          });
         }
       } catch {
         // roles optional
       }
     }
 
+    // --- Data API (branch/project exposes an enabled flag) ---
+    {
+      const branchDataApi =
+        (primary?.data_api as Rec | undefined) ??
+        (primary?.data_api_enabled as boolean | undefined);
+      const projectDataApi =
+        (project?.data_api as Rec | undefined) ??
+        (project?.data_api_enabled as boolean | undefined);
+      const dataApi = branchDataApi ?? projectDataApi;
+      if (dataApi !== undefined) {
+        const enabled =
+          typeof dataApi === 'boolean'
+            ? dataApi
+            : Boolean((dataApi as Rec)?.enabled);
+        metrics.push({
+          label: 'Data API',
+          value: enabled ? 'Enabled' : 'Not enabled',
+          section: 'details',
+        });
+      }
+    }
+
     // --- Monthly compute usage (from project consumption fields) ---
+    // Billing period start (if the project exposes it) becomes the "since" hint.
+    let periodStart: string | undefined;
+    const rawPeriodStart =
+      (project?.consumption_period_start as string | undefined) ??
+      (project?.billing_period_start as string | undefined);
+    if (rawPeriodStart) {
+      const d = new Date(rawPeriodStart);
+      if (!Number.isNaN(d.getTime())) {
+        periodStart = `since ${d.toISOString().slice(0, 10)}`;
+      }
+    }
     if (project?.compute_time_seconds != null) {
       metrics.push({
         label: 'Compute used',
         value: duration(project.compute_time_seconds as number),
-        hint: 'this billing period',
+        hint: periodStart ?? 'this billing period',
+        section: 'usage',
       });
     }
     if (project?.data_transfer_bytes != null) {
@@ -278,6 +365,7 @@ class NeonPlugin implements StackPlugin {
         label: 'Data transfer',
         value: bytes(project.data_transfer_bytes as number),
         hint: 'this billing period',
+        section: 'usage',
       });
     }
 
@@ -294,6 +382,7 @@ class NeonPlugin implements StackPlugin {
           label: 'Last activity',
           value: timeAgo(latest.created_at as string),
           state: opHealth(latest.status as string | undefined),
+          section: 'details',
         });
       }
       for (const op of ops.slice(0, 5)) {

@@ -405,15 +405,21 @@ class VpsPlugin implements StackPlugin {
     }
 
     const metrics: PluginMetric[] = [
-      { label: 'Servers', value: String(healths.length) },
+      { label: 'Servers', value: String(healths.length), section: 'details' },
       {
         label: 'Up',
         value: `${up}/${healths.length}`,
         state: down > 0 ? 'down' : anyWarn ? 'warn' : 'ok',
+        section: 'hero',
       },
     ];
     if (down > 0) {
-      metrics.push({ label: 'Down', value: String(down), state: 'down' });
+      metrics.push({
+        label: 'Down',
+        value: String(down),
+        state: 'down',
+        section: 'details',
+      });
     }
 
     // Fleet aggregates across the reachable servers.
@@ -422,7 +428,11 @@ class VpsPlugin implements StackPlugin {
       .filter((n): n is number => typeof n === 'number');
     if (loads.length > 0) {
       const avg = loads.reduce((a, b) => a + b, 0) / loads.length;
-      metrics.push({ label: 'Avg load', value: avg.toFixed(2) });
+      metrics.push({
+        label: 'Avg load',
+        value: avg.toFixed(2),
+        section: 'details',
+      });
     }
     const diskPressured = healths.filter(
       (h) => typeof h.diskPct === 'number' && h.diskPct > 80,
@@ -432,6 +442,7 @@ class VpsPlugin implements StackPlugin {
         label: 'Disk >80%',
         value: String(diskPressured),
         state: 'warn',
+        section: 'details',
       });
     }
 
