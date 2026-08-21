@@ -25,12 +25,12 @@
   --border: oklch(1 0 0 / 0.08);
   --border-strong: oklch(1 0 0 / 0.14);
   --input: oklch(1 0 0 / 0.08);
-  --ring: oklch(0.72 0.14 250 / 0.6);
+  --ring: oklch(0.62 0.17 250 / 0.6);
 
-  /* --- accent / primary --- */
-  --primary: oklch(0.62 0.19 265);
+  /* --- accent / primary (Vercel/Cloudflare-style clean blue) --- */
+  --primary: oklch(0.62 0.17 250);
   --primary-foreground: oklch(0.98 0 0);
-  --accent-glow: oklch(0.62 0.19 265 / 0.35);
+  --accent-glow: oklch(0.62 0.17 250 / 0.35);
 
   /* --- state colors --- */
   --ok: oklch(0.72 0.15 162);
@@ -68,10 +68,10 @@
   --sidebar-ring: var(--ring);
 
   /* --- landing gradients (keep helpers in globals working) --- */
-  --gradient-start: oklch(0.62 0.19 265);
-  --gradient-mid: oklch(0.58 0.16 250);
-  --gradient-end: oklch(0.66 0.14 290);
-  --glow: oklch(0.62 0.19 265 / 0.25);
+  --gradient-start: oklch(0.62 0.17 250);
+  --gradient-mid: oklch(0.58 0.15 245);
+  --gradient-end: oklch(0.66 0.13 255);
+  --glow: oklch(0.62 0.17 250 / 0.25);
 
   /* --- fonts (Geist + brand) --- */
   --font-sans: var(--font-geist-sans);
@@ -106,11 +106,11 @@
   --border: oklch(0.14 0.01 285 / 0.1);
   --border-strong: oklch(0.14 0.01 285 / 0.18);
   --input: oklch(0.14 0.01 285 / 0.1);
-  --ring: oklch(0.62 0.14 250 / 0.5);
+  --ring: oklch(0.55 0.17 250 / 0.5);
 
-  --primary: oklch(0.55 0.2 265);
+  --primary: oklch(0.55 0.18 250);
   --primary-foreground: oklch(0.99 0 0);
-  --accent-glow: oklch(0.55 0.2 265 / 0.25);
+  --accent-glow: oklch(0.55 0.18 250 / 0.25);
 
   --ok: oklch(0.6 0.15 162);
   --warn: oklch(0.65 0.15 74);
@@ -134,7 +134,7 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
 
-  --glow: oklch(0.55 0.2 265 / 0.15);
+  --glow: oklch(0.55 0.18 250 / 0.15);
 }
 
 /* ============================================================================

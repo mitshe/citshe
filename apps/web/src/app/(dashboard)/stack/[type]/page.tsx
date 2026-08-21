@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  ExternalLink,
-  Loader2,
+  ArrowUpRight,
+  MoreHorizontal,
   Rocket,
   SlidersHorizontal,
   Trash2,
@@ -22,6 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -40,6 +47,7 @@ import type {
   HealthState,
   PluginType,
   PluginMetric,
+  PluginItem,
   PluginResourceGroup,
   PreviewDeployment,
 } from "@/lib/api/types";
@@ -76,8 +84,8 @@ export default function StackToolPage({
   if (!def) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-8">
-        <p className="text-sm text-muted-foreground">Unknown tool.</p>
-        <Link href="/stack" className="text-sm text-primary hover:underline">
+        <p className="text-muted-foreground">Unknown tool.</p>
+        <Link href="/stack" className="text-primary hover:underline">
           ← Back to stack
         </Link>
       </div>
@@ -85,9 +93,11 @@ export default function StackToolPage({
   }
 
   const state: HealthState = status?.headline.state ?? "idle";
+  const primaryLink = status?.links?.[0];
+  const extraLinks = status?.links?.slice(1) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:py-8">
+    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:py-10">
       <Link
         href="/stack"
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-linear hover:text-foreground"
@@ -96,19 +106,21 @@ export default function StackToolPage({
         Stack
       </Link>
 
-      {/* Header: brand + name + health + provider links + actions */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className={def.accent}>{def.icon}</span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight">
+      {/* Header: brand + name + health · Open in provider + ⋯ menu */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-card text-muted-foreground [&_svg]:h-5 [&_svg]:w-5">
+            {def.icon}
+          </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-semibold tracking-tight">
                 {def.name}
               </h1>
               {connected && !statusLoading && (
                 <span
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-inset px-2 py-0.5 text-[11px] font-medium",
+                    "inline-flex items-center gap-1.5 text-xs font-medium",
                     healthText[state],
                   )}
                 >
@@ -122,35 +134,52 @@ export default function StackToolPage({
         </div>
 
         {connected && (
-          <div className="flex flex-wrap items-center gap-2">
-            {(status?.links ?? []).map((l, i) => (
+          <div className="flex items-center gap-2">
+            {primaryLink && (
               <a
-                key={i}
-                href={l.url}
+                href={primaryLink.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 px-3 py-1.5 text-sm font-medium text-primary transition-linear hover:bg-primary/10"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
-                {l.label}
+                {primaryLink.label}
+                <ArrowUpRight className="h-4 w-4" />
               </a>
-            ))}
-            {def.configurable && (
-              <button
-                onClick={() => setConfiguring(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Configure
-              </button>
             )}
-            <button
-              onClick={() => setConfirmRemove(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Disconnect
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label="More actions"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {extraLinks.map((l, i) => (
+                  <DropdownMenuItem key={i} asChild>
+                    <a href={l.url} target="_blank" rel="noreferrer">
+                      <ArrowUpRight className="h-4 w-4" />
+                      {l.label}
+                    </a>
+                  </DropdownMenuItem>
+                ))}
+                {def.configurable && (
+                  <DropdownMenuItem onSelect={() => setConfiguring(true)}>
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Configure resources
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setConfirmRemove(true)}
+                  className="text-danger focus:text-danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Disconnect
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
@@ -172,7 +201,11 @@ export default function StackToolPage({
           }
         />
       ) : (
-        <PluginDashboard type={type} statusLoading={statusLoading} status={status} />
+        <PluginDashboard
+          type={type}
+          statusLoading={statusLoading}
+          status={status}
+        />
       )}
 
       {configuring && (
@@ -239,110 +272,92 @@ function PluginDashboard({
   if (status?.error) {
     return (
       <div className="rounded-md border border-danger/40 bg-danger/5 p-4">
-        <p className="text-sm font-medium text-danger">Couldn&apos;t reach {type}</p>
+        <p className="text-sm font-medium text-danger">
+          Couldn&apos;t reach {type}
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">{status.error}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* KPI metric grid */}
-      <section className="space-y-2">
-        <SectionLabel>Overview</SectionLabel>
-        {statusLoading ? (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <KpiSkeleton key={i} />
-            ))}
-          </div>
-        ) : metrics.length === 0 ? (
-          <EmptyState
-            icon={<Boxes />}
-            title="No metrics yet"
-            description="This tool hasn't reported any metrics for this portal."
-          />
-        ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {metrics.map((m, i) => (
-              <KpiCard key={i} metric={m} />
-            ))}
-          </div>
-        )}
-      </section>
+    <div className="space-y-8">
+      {/* Big KPI row — large stat blocks from status.metrics */}
+      {statusLoading ? (
+        <KpiRowSkeleton />
+      ) : metrics.length === 0 ? (
+        <EmptyState
+          icon={<Boxes />}
+          title="No metrics yet"
+          description="This tool hasn't reported any metrics for this portal."
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-4">
+          {metrics.map((m, i) => (
+            <KpiCard key={i} metric={m} />
+          ))}
+        </div>
+      )}
 
       {/* Global actions surfaced from status */}
       {actions.length > 0 && (
-        <section className="space-y-2">
-          <SectionLabel>Actions</SectionLabel>
-          <div className="flex flex-wrap gap-2 rounded-md border border-border bg-surface-card p-3">
+        <Section title="Actions">
+          <div className="flex flex-wrap gap-2">
             {actions.map((a) => (
               <PluginActionButton key={a.id} type={type} action={a} />
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
-      {/* Status items (e.g. per-domain / per-zone health rows) */}
-      {items.length > 0 && (
-        <ResourceSection title="Status">
-          {items.map((it, i) => (
-            <ResourceRow
-              key={i}
-              name={it.label}
-              state={it.state ?? "idle"}
-              meta={it.value}
-            />
-          ))}
-        </ResourceSection>
-      )}
-
-      {/* Preview / branch deployments (deploy plugins) */}
+      {/* Deployments — preview/branch deploys from deploy plugins */}
       {(previewsLoading || previews.length > 0) && (
-        <section className="space-y-2">
-          <SectionLabel>
-            <Rocket className="mr-1.5 inline h-3 w-3" />
-            Deployments
-          </SectionLabel>
-          <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+        <Section
+          title="Deployments"
+          icon={<Rocket className="h-4 w-4" />}
+          count={previews.length}
+        >
+          <Panel>
             {previewsLoading ? (
               <SectionRowsSkeleton />
             ) : (
               previews.map((p, i) => <PreviewRow key={i} preview={p} />)
             )}
-          </div>
-        </section>
+          </Panel>
+        </Section>
       )}
 
-      {/* Resource sections, grouped by whatever kinds the plugin returns */}
-      <section className="space-y-2">
-        <SectionLabel>Resources</SectionLabel>
-        {resourcesLoading ? (
-          <div className="overflow-hidden rounded-md border border-border bg-surface-card">
-            <SectionRowsSkeleton />
-          </div>
-        ) : groups.length === 0 ? (
-          <EmptyState
-            icon={<Boxes />}
-            title="No resources tracked"
-            description="Nothing discovered for this token yet. If this tool supports it, use Configure to pick what to track."
-          />
-        ) : (
-          <div className="space-y-4">
-            {groups.map((g) => (
-              <ResourceGroupPanel
-                key={g.kind}
-                group={g}
-                selectedCount={
-                  (resources?.selected as Record<string, string[]> | undefined)?.[
-                    g.kind
-                  ]?.length
-                }
-              />
+      {/* Status items — e.g. per-domain / per-zone health rows */}
+      {items.length > 0 && (
+        <Section title="Status" count={items.length}>
+          <Panel>
+            {items.map((it, i) => (
+              <StatusItemRow key={i} item={it} />
             ))}
-          </div>
-        )}
-      </section>
+          </Panel>
+        </Section>
+      )}
+
+      {/* Resource groups, generic over whatever kinds the plugin returns */}
+      {resourcesLoading ? (
+        <Section title="Resources">
+          <Panel>
+            <SectionRowsSkeleton />
+          </Panel>
+        </Section>
+      ) : groups.length === 0 ? null : (
+        groups.map((g) => (
+          <ResourceGroupSection
+            key={g.kind}
+            group={g}
+            selectedCount={
+              (resources?.selected as Record<string, string[]> | undefined)?.[
+                g.kind
+              ]?.length
+            }
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -358,7 +373,7 @@ const kpiText: Record<HealthState, string> = {
 
 function KpiCard({ metric }: { metric: PluginMetric }) {
   return (
-    <div className="rounded-md border border-border bg-surface-card p-3.5 transition-linear">
+    <div className="bg-surface-card p-5">
       <div className="flex items-center gap-1.5">
         {metric.state && metric.state !== "idle" && (
           <StatusDot state={metric.state} size={7} />
@@ -369,14 +384,14 @@ function KpiCard({ metric }: { metric: PluginMetric }) {
       </div>
       <p
         className={cn(
-          "mt-1.5 truncate text-2xl font-semibold tracking-tight tabular-nums",
+          "mt-2 truncate text-3xl font-semibold tracking-tight tabular-nums",
           metric.state ? kpiText[metric.state] : "text-foreground",
         )}
       >
         {metric.value}
       </p>
       {metric.hint && (
-        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+        <p className="mt-1 truncate text-xs text-muted-foreground">
           {metric.hint}
         </p>
       )}
@@ -384,18 +399,57 @@ function KpiCard({ metric }: { metric: PluginMetric }) {
   );
 }
 
-function KpiSkeleton() {
+function KpiRowSkeleton() {
   return (
-    <div className="rounded-md border border-border bg-surface-card p-3.5">
-      <div className="h-2.5 w-16 animate-pulse rounded bg-surface-hover" />
-      <div className="mt-2.5 h-6 w-20 animate-pulse rounded bg-surface-hover" />
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="bg-surface-card p-5">
+          <div className="h-2.5 w-16 animate-pulse rounded bg-surface-hover" />
+          <div className="mt-3 h-8 w-24 animate-pulse rounded bg-surface-hover" />
+        </div>
+      ))}
     </div>
   );
 }
 
-// ---- Resource sections -----------------------------------------------------
+// ---- Sections / panels -----------------------------------------------------
 
-function ResourceGroupPanel({
+function Section({
+  title,
+  icon,
+  count,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2">
+        {icon && <span className="text-text-subtle">{icon}</span>}
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {count != null && count > 0 && (
+          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Panel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface-card">
+      {children}
+    </div>
+  );
+}
+
+function ResourceGroupSection({
   group,
   selectedCount,
 }: {
@@ -403,43 +457,32 @@ function ResourceGroupPanel({
   selectedCount?: number;
 }) {
   return (
-    <div className="space-y-2">
+    <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <SectionLabel>{group.label}</SectionLabel>
-        <span className="text-[11px] text-text-subtle">
-          {selectedCount
-            ? `${selectedCount} tracked · ${group.items.length}`
-            : group.items.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground">
+            {group.label}
+          </h2>
+          <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+            {selectedCount
+              ? `${selectedCount} / ${group.items.length}`
+              : group.items.length}
+          </span>
+        </div>
       </div>
-      <div className="overflow-hidden rounded-md border border-border bg-surface-card">
-        {group.items.length === 0 ? (
-          <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
-            None found.
-          </p>
-        ) : (
-          group.items.map((it) => (
+      {group.items.length === 0 ? (
+        <EmptyState
+          icon={<Boxes />}
+          title={`No ${group.label.toLowerCase()}`}
+          description="Nothing discovered for this token yet."
+        />
+      ) : (
+        <Panel>
+          {group.items.map((it) => (
             <ResourceRow key={it.id} name={it.name} state="idle" />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ResourceSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-2">
-      <SectionLabel>{title}</SectionLabel>
-      <div className="overflow-hidden rounded-md border border-border bg-surface-card">
-        {children}
-      </div>
+          ))}
+        </Panel>
+      )}
     </section>
   );
 }
@@ -448,41 +491,37 @@ function ResourceRow({
   name,
   state,
   meta,
-  href,
 }: {
   name: string;
   state: HealthState;
   meta?: string;
-  href?: string;
 }) {
-  const inner = (
-    <>
-      <span className="flex min-w-0 items-center gap-2">
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0">
+      <span className="flex min-w-0 items-center gap-2.5">
         <StatusDot state={state} size={7} />
         <span className="truncate text-foreground">{name}</span>
       </span>
       {meta && (
-        <span className="shrink-0 font-mono text-[11px] text-text-subtle">
+        <span className="shrink-0 font-mono text-xs text-text-subtle">
           {meta}
         </span>
       )}
-    </>
+    </div>
   );
+}
 
-  const cls =
-    "flex items-center justify-between gap-2 px-3.5 py-2.5 text-sm border-b border-border last:border-b-0 transition-linear";
-
-  return href ? (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className={cn(cls, "hover:bg-surface-hover")}
-    >
-      {inner}
-    </a>
-  ) : (
-    <div className={cls}>{inner}</div>
+function StatusItemRow({ item }: { item: PluginItem }) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <StatusDot state={item.state ?? "idle"} size={7} />
+        <span className="truncate text-foreground">{item.label}</span>
+      </span>
+      <span className="shrink-0 font-mono text-xs text-text-subtle">
+        {item.value}
+      </span>
+    </div>
   );
 }
 
@@ -494,40 +533,37 @@ function PreviewRow({ preview }: { preview: PreviewDeployment }) {
       href={preview.url}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center justify-between gap-2 border-b border-border px-3.5 py-2.5 text-sm transition-linear last:border-b-0 hover:bg-surface-hover"
+      className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0 hover:bg-surface-hover"
     >
-      <span className="flex min-w-0 items-center gap-2">
+      <span className="flex min-w-0 items-center gap-2.5">
         <StatusDot state={preview.state} size={7} />
-        <span className="truncate text-foreground">{label}</span>
-        {preview.project && preview.branch && (
-          <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {preview.project}
+        <span className="min-w-0">
+          <span className="flex items-center gap-2">
+            <span className="truncate font-mono text-foreground">{label}</span>
+            {preview.project && preview.branch && (
+              <span className="shrink-0 rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {preview.project}
+              </span>
+            )}
           </span>
-        )}
+        </span>
       </span>
-      <span className="flex shrink-0 items-center gap-2">
-        {preview.when && (
-          <span className="text-[11px] text-text-subtle">{preview.when}</span>
-        )}
+      <span className="flex shrink-0 items-center gap-3">
         {preview.commit && (
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {preview.commit}
           </span>
         )}
+        {preview.when && (
+          <span className="text-xs text-text-subtle">{preview.when}</span>
+        )}
+        <ArrowUpRight className="h-4 w-4 text-text-subtle" />
       </span>
     </a>
   );
 }
 
-// ---- misc primitives -------------------------------------------------------
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-      {children}
-    </p>
-  );
-}
+// ---- skeletons -------------------------------------------------------------
 
 function SectionRowsSkeleton() {
   return (
@@ -535,10 +571,10 @@ function SectionRowsSkeleton() {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-2 border-b border-border px-3.5 py-3 last:border-b-0"
+          className="flex items-center gap-2.5 border-b border-border px-4 py-3.5 last:border-b-0"
         >
           <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-surface-hover" />
-          <div className="h-2.5 w-40 animate-pulse rounded bg-surface-hover" />
+          <div className="h-3 w-40 animate-pulse rounded bg-surface-hover" />
         </div>
       ))}
     </>
@@ -547,15 +583,11 @@ function SectionRowsSkeleton() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <KpiSkeleton key={i} />
-        ))}
-      </div>
-      <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+    <div className="space-y-8">
+      <KpiRowSkeleton />
+      <Panel>
         <SectionRowsSkeleton />
-      </div>
+      </Panel>
     </div>
   );
 }

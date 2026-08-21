@@ -9,6 +9,7 @@ import {
   SquareTerminal,
   Cog,
   Plus,
+  Search,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -19,8 +20,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Kbd } from "@/components/ui/kbd";
 import { StatusDot } from "@/components/ui/status-dot";
 import { OrgSwitcher } from "./org-switcher";
+import { OPEN_COMMAND_EVENT } from "./command-palette";
 import { useSessions, usePlugins } from "@/lib/api/hooks";
 import { getPluginDef } from "@/lib/plugin-catalog";
 
@@ -43,13 +46,23 @@ const primaryNav: NavItem[] = [
   },
 ];
 
+function openCommand() {
+  window.dispatchEvent(new Event(OPEN_COMMAND_EVENT));
+}
+
+/** Section label — Vercel-style 13px uppercase, with a subtle top separator. */
 const SectionHeading = ({ children }: { children: React.ReactNode }) => (
-  <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wider text-text-subtle">
+  <p className="px-2.5 pb-1.5 text-[13px] font-medium uppercase tracking-wide text-text-subtle">
     {children}
   </p>
 );
 
-/** A single nav row. Collapsed → icon + tooltip. */
+/**
+ * A single nav row — Vercel-style.
+ * Active = full rounded-md surface-hover pill (icon + label → foreground).
+ * Inactive = muted, hover lifts to a faint fill + foreground text.
+ * Collapsed → icon + tooltip.
+ */
 function NavRow({
   href,
   label,
@@ -72,18 +85,21 @@ function NavRow({
       href={href}
       onClick={onNavigate}
       data-tour={tourId}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex h-[34px] items-center rounded-md text-sm transition-linear",
-        collapsed ? "w-full justify-center" : "gap-2.5 px-2",
+        "group flex h-[38px] items-center rounded-md text-[15px] transition-linear",
+        collapsed ? "w-full justify-center" : "gap-3 px-2.5",
         active
-          ? "bg-surface-hover font-medium text-foreground"
-          : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+          ? "bg-surface-hover font-semibold text-foreground"
+          : "font-medium text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
       )}
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-      )}
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4">
+      <span
+        className={cn(
+          "flex h-[18px] w-[18px] shrink-0 items-center justify-center [&>svg]:h-[18px] [&>svg]:w-[18px]",
+          !active && "text-muted-foreground group-hover:text-foreground",
+        )}
+      >
         {icon}
       </span>
       {!collapsed && <span className="truncate">{label}</span>}
@@ -96,6 +112,37 @@ function NavRow({
       <TooltipTrigger asChild>{row}</TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/** Sidebar search — faux input opening the command palette (Vercel "Find"). */
+function SidebarSearch({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={openCommand}
+            className="flex h-[38px] w-full items-center justify-center rounded-md text-muted-foreground transition-linear hover:bg-foreground/[0.04] hover:text-foreground"
+            aria-label="Search"
+          >
+            <Search className="h-[18px] w-[18px]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Search</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <button
+      onClick={openCommand}
+      className="flex h-[38px] w-full items-center gap-2.5 rounded-md border border-border bg-surface-inset px-2.5 text-[15px] text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+    >
+      <Search className="h-[18px] w-[18px] shrink-0" />
+      <span>Search…</span>
+      <Kbd className="ml-auto">⌘K</Kbd>
+    </button>
   );
 }
 
@@ -112,7 +159,7 @@ function StackNav({
   const { data: plugins = [] } = usePlugins();
 
   return (
-    <div className="mt-4 space-y-0.5">
+    <div className="mt-5 space-y-0.5 border-t border-border pt-5">
       {!collapsed && <SectionHeading>Stack</SectionHeading>}
       {plugins.map((p) => {
         const def = getPluginDef(p.type);
@@ -139,7 +186,7 @@ function StackNav({
         }
         collapsed={collapsed}
         onNavigate={onNavigate}
-        icon={<Plus className="h-4 w-4" />}
+        icon={<Plus className="h-[18px] w-[18px]" />}
       />
     </div>
   );
@@ -165,7 +212,7 @@ function RunningSessions({
   const overflow = active.length - shown.length;
 
   return (
-    <div className="mt-4 space-y-0.5">
+    <div className="mt-5 space-y-0.5 border-t border-border pt-5">
       {!collapsed && <SectionHeading>Running</SectionHeading>}
       {shown.map((s) => {
         const state = s.status === "CREATING" ? "creating" : "running";
@@ -177,7 +224,11 @@ function RunningSessions({
             active={false}
             collapsed={collapsed}
             onNavigate={onNavigate}
-            icon={<StatusDot state={state} size={8} />}
+            icon={
+              <span className="flex h-[18px] w-[18px] items-center justify-center">
+                <StatusDot state={state} size={8} />
+              </span>
+            }
           />
         );
       })}
@@ -185,7 +236,7 @@ function RunningSessions({
         <Link
           href="/sessions"
           onClick={onNavigate}
-          className="flex h-[30px] items-center px-2 text-xs text-text-subtle transition-linear hover:text-foreground"
+          className="flex h-[30px] items-center px-2.5 text-[13px] text-text-subtle transition-linear hover:text-foreground"
         >
           +{overflow} more
         </Link>
@@ -195,7 +246,7 @@ function RunningSessions({
 }
 
 /**
- * The scrollable body of the sidebar (org switcher + nav sections).
+ * The scrollable body of the sidebar (org switcher + search + nav sections).
  * Shared between the desktop sidebar and the mobile Sheet drawer.
  */
 export function SidebarBody({
@@ -215,6 +266,10 @@ export function SidebarBody({
         <OrgSwitcher collapsed={collapsed} />
       </div>
 
+      <div className="mb-4">
+        <SidebarSearch collapsed={collapsed} />
+      </div>
+
       <div className="space-y-0.5">
         {primaryNav.map((item) => (
           <NavRow
@@ -225,7 +280,7 @@ export function SidebarBody({
             collapsed={collapsed}
             onNavigate={onNavigate}
             tourId={item.tourId}
-            icon={<item.icon className="h-4 w-4" />}
+            icon={<item.icon className="h-[18px] w-[18px]" />}
           />
         ))}
       </div>
@@ -255,7 +310,7 @@ function SettingsRow({
         active={active}
         collapsed={collapsed}
         onNavigate={onNavigate}
-        icon={<Cog className="h-4 w-4" />}
+        icon={<Cog className="h-[18px] w-[18px]" />}
       />
     </TooltipProvider>
   );
@@ -266,7 +321,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
   return (
     <Link
       href="/home"
-      className="flex items-center font-brand text-[15px] tracking-tight text-foreground"
+      className="flex items-center font-brand text-lg font-semibold tracking-tight text-foreground"
     >
       {collapsed ? "c" : "citshe"}
     </Link>

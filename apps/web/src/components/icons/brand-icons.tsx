@@ -12,6 +12,7 @@ import {
   SiObsidian,
   SiAnthropic,
   SiGoogle,
+  SiVercel,
 } from "react-icons/si";
 import { TbWebhook } from "react-icons/tb";
 import { AiFillApi } from "react-icons/ai";
@@ -39,6 +40,11 @@ export function TelegramIcon({ className }: IconProps) {
 
 export function GitHubIcon({ className }: IconProps) {
   return <SiGithub className={cn("w-5 h-5", className)} />;
+}
+
+/** Vercel triangle (mono — inherits currentColor, so black/white by theme). */
+export function VercelIcon({ className }: IconProps) {
+  return <SiVercel className={cn("w-5 h-5", className)} />;
 }
 
 export function GitLabIcon({ className }: IconProps) {

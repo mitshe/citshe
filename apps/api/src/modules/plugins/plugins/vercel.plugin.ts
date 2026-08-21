@@ -7,6 +7,7 @@ import {
   PluginItem,
   PluginAction,
   PluginActionResult,
+  PluginResourceGroup,
   PreviewDeployment,
   HealthState,
 } from './plugin.interface';
@@ -25,6 +26,7 @@ const API = 'https://api.vercel.com';
 
 interface VercelConfig {
   apiToken: string;
+  teamId?: string; // optional — for team-scoped tokens
 }
 
 function timeAgo(ms: number): string {
@@ -66,8 +68,16 @@ class VercelPlugin implements StackPlugin {
     return config as unknown as VercelConfig;
   }
 
+  /** Append ?teamId= (as an extra query param) when the token is team-scoped. */
+  private withTeam(config: VercelConfig, path: string): string {
+    if (!config.teamId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}teamId=${encodeURIComponent(config.teamId)}`;
+  }
+
+  /** Authed Vercel API GET — Bearer token + optional teamId query param. */
   private async get(config: VercelConfig, path: string) {
-    const res = await fetch(`${API}${path}`, {
+    const res = await fetch(`${API}${this.withTeam(config, path)}`, {
       headers: { Authorization: `Bearer ${config.apiToken}` },
     });
     if (!res.ok) throw new Error(`Vercel returned ${res.status}`);
@@ -79,7 +89,7 @@ class VercelPlugin implements StackPlugin {
     if (!c.apiToken) return { ok: false, error: 'An API token is required.' };
     try {
       // Token is valid if it can read the current user.
-      const res = await fetch(`${API}/v2/user`, {
+      const res = await fetch(`${API}${this.withTeam(c, '/v2/user')}`, {
         headers: { Authorization: `Bearer ${c.apiToken}` },
       });
       if (!res.ok) return { ok: false, error: `Token rejected (${res.status}).` };
@@ -148,6 +158,25 @@ class VercelPlugin implements StackPlugin {
       metrics.push({ label: 'Projects', value: 'no access', state: 'warn' });
     }
 
+    // --- Recent deployments count (resilient: omit on failure) ---
+    try {
+      const json = await this.get(c, '/v6/deployments?limit=20');
+      const deployments: Array<Record<string, unknown>> =
+        json?.deployments ?? [];
+      metrics.push({ label: 'Deployments', value: String(deployments.length) });
+    } catch {
+      // deployments listing optional — skip quietly
+    }
+
+    // --- Domains count (resilient: omit on failure) ---
+    try {
+      const json = await this.get(c, '/v5/domains?limit=100');
+      const domains: Array<Record<string, unknown>> = json?.domains ?? [];
+      metrics.push({ label: 'Domains', value: String(domains.length) });
+    } catch {
+      // domains listing optional — skip quietly
+    }
+
     if (metrics.length === 0) {
       metrics.push({ label: 'Vercel', value: 'connected' });
     }
@@ -175,7 +204,7 @@ class VercelPlugin implements StackPlugin {
         return { ok: false, message: 'Nothing to redeploy.' };
       }
       try {
-        const res = await fetch(`${API}/v13/deployments`, {
+        const res = await fetch(`${API}${this.withTeam(c, '/v13/deployments')}`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${c.apiToken}`,
@@ -197,6 +226,60 @@ class VercelPlugin implements StackPlugin {
       }
     }
     return { ok: false, message: `Unknown action: ${actionId}` };
+  }
+
+  /** Everything the token can see, grouped — projects, deployments, domains. */
+  async listResources(config: PluginConfig): Promise<PluginResourceGroup[]> {
+    const c = this.cfg(config);
+    const groups: PluginResourceGroup[] = [];
+
+    const safeList = async (
+      path: string,
+      pick: (json: Record<string, unknown>) => Array<Record<string, unknown>>,
+      map: (r: Record<string, unknown>) => { id: string; name: string },
+    ) => {
+      try {
+        const json = await this.get(c, path);
+        return pick(json).map(map);
+      } catch {
+        return [];
+      }
+    };
+
+    const projects = await safeList(
+      '/v9/projects?limit=100',
+      (j) => (j.projects as Array<Record<string, unknown>>) ?? [],
+      (p) => ({ id: (p.id as string) || (p.name as string), name: p.name as string }),
+    );
+    if (projects.length)
+      groups.push({ kind: 'projects', label: 'Projects', items: projects });
+
+    const deployments = await safeList(
+      '/v6/deployments?limit=20',
+      (j) => (j.deployments as Array<Record<string, unknown>>) ?? [],
+      (d) => ({
+        id: (d.uid as string) || (d.url as string),
+        name: `${(d.name as string) || 'deployment'} (${
+          (d.target as string) || 'preview'
+        })`,
+      }),
+    );
+    if (deployments.length)
+      groups.push({
+        kind: 'deployments',
+        label: 'Deployments',
+        items: deployments,
+      });
+
+    const domains = await safeList(
+      '/v5/domains?limit=100',
+      (j) => (j.domains as Array<Record<string, unknown>>) ?? [],
+      (d) => ({ id: (d.name as string), name: d.name as string }),
+    );
+    if (domains.length)
+      groups.push({ kind: 'domains', label: 'Domains', items: domains });
+
+    return groups;
   }
 
   /** Recent PREVIEW deployments (target !== production) for a repo's project. */

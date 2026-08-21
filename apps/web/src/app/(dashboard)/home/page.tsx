@@ -3,18 +3,15 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import {
-  Loader2,
   Terminal,
   Pause,
   Play,
   Cpu,
   Blocks,
-  ListPlus,
   KeyRound,
   FolderGit2,
   ArrowRight,
   Check,
-  AlertTriangle,
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -36,7 +33,6 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pluginCatalog, getPluginDef } from "@/lib/plugin-catalog";
-import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import type {
   Task,
   TaskStatus,
@@ -74,7 +70,6 @@ export default function HomePage() {
   const { data: repos = [], isLoading: reposLoading } = useRepositories();
   const { data: queue } = useQueueOverview();
   const { data: plugins = [] } = usePlugins();
-  const quickLaunch = useQuickLaunch();
 
   const hasCredentials = credentials.length > 0;
   const hasRepo = repos.length > 0;
@@ -110,18 +105,18 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-10 space-y-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-10 space-y-10">
       {/* Portal selector — mobile only; desktop has it in the sidebar */}
       <div className="sm:hidden">
         <OrgSwitcher />
       </div>
 
       {/* Header */}
-      <header className="space-y-1.5">
+      <header className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wider text-text-subtle">
           {greeting}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           {currentOrg?.name ?? "Your portal"}
         </h1>
         {isSetUp && connectedTypes.has("CLOUDFLARE") ? (
@@ -146,38 +141,10 @@ export default function HomePage() {
           {/* Quick-search — opens the global ⌘K command palette */}
           <QuickSearch />
 
-          {/* Quick actions */}
-          <div className="grid grid-cols-3 gap-3">
-            <ActionCard
-              onClick={() => quickLaunch.launch()}
-              icon={
-                quickLaunch.launching ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Terminal className="h-5 w-5" />
-                )
-              }
-              title="Terminal"
-              accent="text-ok"
-            />
-            <ActionCard
-              href="/tasks"
-              icon={<ListPlus className="h-5 w-5" />}
-              title="New task"
-              accent="text-warn"
-            />
-            <ActionCard
-              href="/repos"
-              icon={<FolderGit2 className="h-5 w-5" />}
-              title="Repos"
-              accent="text-primary"
-            />
-          </div>
-
           {/* Columns — Repos / Live terminals / Recent tasks (stack on mobile) */}
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-3">
             {/* Repos */}
-            <section className="space-y-2.5">
+            <section className="space-y-3">
               <SectionHeader
                 label="Repos"
                 href="/repos"
@@ -194,10 +161,10 @@ export default function HomePage() {
                     <Link
                       key={repo.id}
                       href="/repos"
-                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
                     >
                       <FolderGit2 className="h-4 w-4 shrink-0 text-primary" />
-                      <span className="flex-1 truncate text-sm text-foreground">
+                      <span className="flex-1 truncate text-foreground">
                         {repo.name}
                       </span>
                     </Link>
@@ -207,7 +174,7 @@ export default function HomePage() {
             </section>
 
             {/* Live terminals */}
-            <section className="space-y-2.5">
+            <section className="space-y-3">
               <SectionHeader
                 label="Live terminals"
                 href="/sessions"
@@ -224,21 +191,21 @@ export default function HomePage() {
                     <Link
                       key={s.id}
                       href={`/sessions/${s.id}`}
-                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+                      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
                     >
-                      <Terminal className="h-4 w-4 shrink-0 text-ok" />
-                      <span className="flex-1 truncate text-sm text-foreground">
+                      <Terminal className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate text-foreground">
                         {s.name}
                       </span>
-                      <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+                      <span className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground">
                         {s.status === "CREATING" ? (
                           <>
-                            <StatusDot state="creating" />
+                            <StatusDot state="creating" size={8} />
                             Starting
                           </>
                         ) : (
                           <>
-                            <StatusDot state="running" />
+                            <StatusDot state="running" size={8} />
                             Live
                           </>
                         )}
@@ -250,7 +217,7 @@ export default function HomePage() {
             </section>
 
             {/* Recent tasks */}
-            <section className="space-y-2.5">
+            <section className="space-y-3">
               <SectionHeader
                 label="Recent tasks"
                 href="/tasks"
@@ -269,10 +236,15 @@ export default function HomePage() {
             </section>
           </div>
 
-          {/* Stack — compact shortcuts; full view lives on each tool's page */}
+          {/* Stack — connected plugins; full view lives on each tool's page */}
           {hasPlugin && (
-            <section className="space-y-2.5">
-              <SectionHeader label="Stack" href="/stack" cta="Manage" />
+            <section className="space-y-3">
+              <SectionHeader
+                label="Stack"
+                href="/stack"
+                cta="Manage"
+                count={connectedTypes.size}
+              />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {pluginCatalog
                   .filter((def) => connectedTypes.has(def.type))
@@ -341,10 +313,10 @@ function RowSkeletons({ count = 3 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3"
+          className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5"
         >
           <Skeleton className="h-4 w-4 rounded-sm" />
-          <Skeleton className="h-3.5 flex-1" />
+          <Skeleton className="h-4 flex-1" />
         </div>
       ))}
     </>
@@ -503,27 +475,45 @@ function StackTile({ type }: { type: PluginType }) {
   return (
     <Link
       href={`/stack/${type.toLowerCase()}`}
-      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+      className="group flex flex-col gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
-      <span className={def.accent}>{def.icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">{def.name}</p>
+      <div className="flex items-center gap-2.5">
+        <span className="text-muted-foreground">{def.icon}</span>
+        <span className="flex-1 truncate font-medium text-foreground">
+          {def.name}
+        </span>
+        <span
+          className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground"
+          title={STATUS_LABELS[state]}
+        >
+          <StatusDot state={state as StatusDotHealth} size={8} />
+          {status?.headline.label ?? "—"}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
         <p className="truncate text-xs text-muted-foreground">
           {status
             ? status.metrics
                 .slice(0, 2)
-                .map((m) => `${m.value}`)
-                .join(" · ") || status.headline.label
+                .map((m) => `${m.value} ${m.label.toLowerCase()}`)
+                .join(" · ") || def.tagline
             : "…"}
         </p>
+        <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-linear group-hover:text-foreground">
+          Manage
+          <ArrowRight className="h-3.5 w-3.5 transition-linear group-hover:translate-x-0.5" />
+        </span>
       </div>
-      <span className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-muted-foreground">
-        <StatusDot state={state as StatusDotHealth} size={8} />
-        {status?.headline.label ?? "—"}
-      </span>
     </Link>
   );
 }
+
+const STATUS_LABELS: Record<StatusDotHealth, string> = {
+  ok: "Healthy",
+  warn: "Warning",
+  down: "Down",
+  idle: "Idle",
+};
 
 function SectionHeader({
   label,
@@ -553,33 +543,6 @@ function SectionHeader({
         {cta} →
       </Link>
     </div>
-  );
-}
-
-function ActionCard({
-  href,
-  onClick,
-  icon,
-  title,
-  accent,
-}: {
-  href?: string;
-  onClick?: () => void;
-  icon: React.ReactNode;
-  title: string;
-  accent: string;
-}) {
-  const inner = (
-    <div className="group flex cursor-pointer flex-col items-center gap-2 rounded-md border border-border bg-surface-card px-2 py-4 text-center transition-linear hover:border-primary/40 hover:bg-surface-hover hover:shadow-[0_0_24px_-8px_var(--accent-glow)]">
-      <span className={accent}>{icon}</span>
-      <span className="text-sm font-medium text-foreground">{title}</span>
-    </div>
-  );
-  if (href) return <Link href={href}>{inner}</Link>;
-  return (
-    <button onClick={onClick} className="text-left">
-      {inner}
-    </button>
   );
 }
 
@@ -648,28 +611,26 @@ function TaskRow({ task }: { task: Task }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-3.5 py-3 transition-linear hover:border-border-strong hover:bg-surface-hover"
+      className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
       <span className={cn("shrink-0", textColor)}>{meta.icon}</span>
-      <span className="flex-1 truncate text-sm text-foreground">
-        {task.title}
-      </span>
+      <span className="flex-1 truncate text-foreground">{task.title}</span>
       {stuck && (
         <span
           title="No worker picked this up. Is the executor image built? Run `just executor-build`."
-          className="flex items-center gap-1 shrink-0 rounded-sm border border-warn/25 bg-warn/10 px-2 py-0.5 text-[11px] font-medium text-warn"
+          className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground"
         >
-          <AlertTriangle className="h-3 w-3" />
-          Stuck — executor?
+          <StatusDot state="warn" size={8} />
+          Stuck
         </span>
       )}
-      {liveWorker && (
-        <span className="flex items-center gap-1 shrink-0 text-[11px] font-medium text-ok">
+      {liveWorker && !stuck && (
+        <span className="flex items-center gap-1 shrink-0 text-xs font-medium text-muted-foreground">
           <Terminal className="h-3.5 w-3.5" />
           Watch
         </span>
       )}
-      <span className={cn("shrink-0 text-[11px] font-medium", textColor)}>
+      <span className={cn("shrink-0 text-xs font-medium", textColor)}>
         {meta.label}
       </span>
     </Link>

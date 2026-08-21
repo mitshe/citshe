@@ -18,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Kbd } from "@/components/ui/kbd";
 import { SidebarBody } from "./sidebar";
 import { OPEN_COMMAND_EVENT } from "./command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,23 +51,17 @@ export function Topbar() {
           <Menu className="h-4 w-4" />
         </Button>
 
-        {/* Search — faux input, opens the command palette */}
-        <button
-          onClick={openCommand}
-          className="hidden h-8 w-56 items-center gap-2 rounded-md border border-border bg-surface-inset px-2.5 text-sm text-muted-foreground transition-linear hover:bg-surface-hover sm:flex lg:w-72"
-        >
-          <Search className="h-3.5 w-3.5" />
-          <span>Search…</span>
-          <Kbd className="ml-auto">⌘K</Kbd>
-        </button>
       </div>
 
       <div className="flex items-center gap-1.5">
+        {/* Search lives in the sidebar (Vercel-style). Topbar keeps a compact
+            trigger for quick access when the sidebar is a drawer / collapsed. */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 sm:hidden"
+          className="h-8 w-8"
           onClick={openCommand}
+          aria-label="Search"
         >
           <Search className="h-4 w-4" />
         </Button>
@@ -109,7 +102,7 @@ export function Topbar() {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="flex h-12 flex-row items-center border-b border-border px-3">
-            <SheetTitle className="font-brand text-[15px] tracking-tight">
+            <SheetTitle className="font-brand text-lg font-semibold tracking-tight">
               citshe
             </SheetTitle>
           </SheetHeader>

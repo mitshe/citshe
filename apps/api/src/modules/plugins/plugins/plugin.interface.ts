@@ -51,7 +51,15 @@ export interface PluginActionResult {
   message: string;
 }
 
-export type ResourceKind = 'pages' | 'zones' | 'workers' | 'r2';
+export type ResourceKind =
+  | 'pages'
+  | 'zones'
+  | 'workers'
+  | 'r2'
+  // Vercel resource kinds
+  | 'projects'
+  | 'deployments'
+  | 'domains';
 
 export interface PluginResourceItem {
   id: string;
@@ -64,12 +72,16 @@ export interface PluginResourceGroup {
   items: PluginResourceItem[];
 }
 
-/** Per-portal selection of which Cloudflare resources to show. */
+/** Per-portal selection of which resources to show. */
 export interface PluginSelection {
   pages?: string[];
   zones?: string[];
   workers?: string[];
   r2?: string[];
+  // Vercel
+  projects?: string[];
+  deployments?: string[];
+  domains?: string[];
 }
 
 /** A preview/branch deployment surfaced from a deploy plugin. */
