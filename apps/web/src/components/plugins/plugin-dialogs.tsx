@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogBody,
   DialogContent,
@@ -111,14 +118,44 @@ export function ConnectDialog({
             </a>
           )}
 
-          {def.fields.map((field) => (
+          {def.fields.map((field) => {
+            // Hide key/passphrase vs password based on the chosen auth method.
+            const authMethod = form["authMethod"] || "key";
+            if (
+              (field.key === "privateKey" || field.key === "passphrase") &&
+              authMethod === "password"
+            ) {
+              return null;
+            }
+            if (field.key === "password" && authMethod !== "password") {
+              return null;
+            }
+            return (
             <div key={field.key} className="space-y-1.5">
               <Label htmlFor={field.key}>
                 {field.label}
                 {field.required && <span className="text-destructive"> *</span>}
               </Label>
               <div className="relative">
-                {field.type === "textarea" ? (
+                {field.type === "select" ? (
+                  <Select
+                    value={form[field.key] || field.options?.[0]?.value || ""}
+                    onValueChange={(v) =>
+                      setForm({ ...form, [field.key]: v })
+                    }
+                  >
+                    <SelectTrigger id={field.key}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options?.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : field.type === "textarea" ? (
                   <Textarea
                     id={field.key}
                     rows={5}
@@ -166,7 +203,8 @@ export function ConnectDialog({
                 </p>
               )}
             </div>
-          ))}
+            );
+          })}
 
           {testState.status !== "idle" && testState.status !== "testing" && (
             <div

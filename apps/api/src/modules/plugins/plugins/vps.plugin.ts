@@ -13,11 +13,29 @@ interface VpsConfig {
   host: string;
   port?: number | string;
   username: string;
-  privateKey: string;
+  authMethod?: 'key' | 'password';
+  privateKey?: string;
   passphrase?: string;
+  password?: string;
 }
 
 const CONNECT_TIMEOUT_MS = 10_000;
+
+/**
+ * Normalize a pasted PEM private key: strip carriage returns, trim surrounding
+ * whitespace, and guarantee exactly one trailing newline. Web textareas often
+ * mangle line endings, which makes ssh2 reject the key ("Unsupported key
+ * format").
+ */
+function normalizeKey(raw: string): string {
+  const cleaned = raw.replace(/\r/g, '').trim();
+  if (!cleaned.includes('BEGIN')) {
+    throw new Error(
+      'Paste the full PEM private key (-----BEGIN ... END-----).',
+    );
+  }
+  return cleaned + '\n';
+}
 
 /**
  * VPS plugin: SSH into a box (Hetzner / DigitalOcean / anything) with a private
@@ -77,17 +95,25 @@ class VpsPlugin implements StackPlugin {
           host: config.host,
           port: config.port ? Number(config.port) : 22,
           username: config.username,
-          privateKey: config.privateKey,
-          passphrase: config.passphrase || undefined,
           readyTimeout: CONNECT_TIMEOUT_MS,
+          ...(config.authMethod === 'password' ||
+          (config.password && !config.privateKey)
+            ? { password: config.password }
+            : {
+                privateKey: normalizeKey(config.privateKey ?? ''),
+                passphrase: config.passphrase || undefined,
+              }),
         });
     });
   }
 
   async testConnection(config: PluginConfig) {
     const c = this.cfg(config);
-    if (!c.host || !c.username || !c.privateKey) {
-      return { ok: false, error: 'Host, username and private key are required.' };
+    if (!c.host || !c.username || !(c.privateKey || c.password)) {
+      return {
+        ok: false,
+        error: 'Host, username and a key or password are required.',
+      };
     }
     try {
       await this.exec(c, 'echo ok');

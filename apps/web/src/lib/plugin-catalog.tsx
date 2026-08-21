@@ -5,7 +5,8 @@ export interface PluginField {
   key: string;
   label: string;
   placeholder?: string;
-  type?: "text" | "password" | "textarea";
+  type?: "text" | "password" | "textarea" | "select";
+  options?: { value: string; label: string }[];
   required?: boolean;
   helpText?: string;
 }
@@ -134,6 +135,15 @@ export const pluginCatalog: PluginDef[] = [
       "https://www.digitalocean.com/community/tutorials/how-to-set-up-ssh-keys-2",
     fields: [
       {
+        key: "authMethod",
+        label: "Auth",
+        type: "select",
+        options: [
+          { value: "key", label: "SSH key" },
+          { value: "password", label: "Password" },
+        ],
+      },
+      {
         key: "host",
         label: "Host",
         placeholder: "IP or hostname, e.g. 5.75.x.x",
@@ -146,15 +156,20 @@ export const pluginCatalog: PluginDef[] = [
         label: "Private key",
         placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----\n…",
         type: "textarea",
-        required: true,
         helpText:
-          "A read-only SSH key. citshe only runs status commands (uptime, df, free) — never writes.",
+          "Paste the full PEM (BEGIN…END). Line breaks are preserved.",
       },
       {
         key: "passphrase",
         label: "Key passphrase",
         type: "password",
         placeholder: "if the key is encrypted (optional)",
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        placeholder: "SSH password",
       },
     ],
   },
