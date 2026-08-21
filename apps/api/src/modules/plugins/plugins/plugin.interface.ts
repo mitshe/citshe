@@ -7,6 +7,8 @@ export interface PluginMetric {
   value: string;
   hint?: string;
   state?: HealthState;
+  /** UI placement hint: 'hero' | 'details' | 'usage'. Omit to auto-classify. */
+  section?: 'hero' | 'details' | 'usage';
 }
 
 export interface PluginItem {

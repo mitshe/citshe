@@ -29,6 +29,14 @@ export interface PluginMetric {
   value: string;
   hint?: string;
   state?: HealthState;
+  /**
+   * Where the plugin detail UI should place this metric. `hero` = the top
+   * headline strip (live state / last deploy). `details` = the right-rail
+   * "Details" block (properties: region, plan, version…). `usage` = the
+   * right-rail "Usage" block (storage, compute, transfer, traffic). When
+   * omitted the UI classifies by label.
+   */
+  section?: "hero" | "details" | "usage";
 }
 
 export interface PluginLink {
