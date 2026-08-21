@@ -627,7 +627,7 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className="w-full max-w-[1600px] space-y-5 px-6 py-4 sm:py-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Threads</h1>

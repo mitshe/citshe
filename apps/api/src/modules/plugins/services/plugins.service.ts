@@ -260,10 +260,24 @@ export class PluginsService {
 
     const config = this.decrypt(plugin);
     const result = await impl.runAction(config, actionId, input);
+    // Some actions mutate the plugin's own config (e.g. VPS add/remove server).
+    // runAction has no DB access, so when it returns a `config` we re-encrypt
+    // and persist it here.
+    if (result.config) {
+      const { encrypted, iv } = this.encryption.encryptJson(result.config);
+      await this.prisma.plugin.update({
+        where: { id: plugin.id },
+        data: {
+          config: new Uint8Array(encrypted),
+          configIv: new Uint8Array(iv),
+        },
+      });
+    }
     // The action likely changed things — drop the cached status so the next
     // read is fresh.
     this.statusCache.delete(plugin.id);
-    return result;
+    // Never leak the (possibly secret-bearing) config back to the client.
+    return { ok: result.ok, message: result.message };
   }
 
   private asType(type: string): PluginType {

@@ -123,7 +123,7 @@ export default function ReposPage() {
   }, [repos, search, filter]);
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Repos</h1>

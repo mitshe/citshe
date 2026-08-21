@@ -206,10 +206,17 @@ class CloudflarePlugin implements StackPlugin {
           label: ok ? 'Live' : building ? 'Deploying' : 'Deploy failed',
           state: ok ? 'ok' : building ? 'warn' : 'down',
         };
+        // Normalize the deploy stage to a compact READY/BUILDING/ERROR-style
+        // status so it reads the same as Vercel's Last deploy hint.
+        const stageLabel = ok
+          ? 'READY'
+          : building
+            ? 'BUILDING'
+            : (latest.stage || 'error').toUpperCase();
         metrics.push({
           label: 'Last deploy',
           value: timeAgo(latest.when),
-          hint: latest.name,
+          hint: `${stageLabel} · ${latest.name}`,
           state: ok ? 'ok' : building ? 'warn' : 'down',
         });
         // Offer a one-click redeploy of the freshest project.
@@ -246,6 +253,27 @@ class CloudflarePlugin implements StackPlugin {
           }
         } catch {
           // domains listing optional
+        }
+      }
+
+      // Recent deployments count for the freshest project (mirrors Vercel's
+      // Deployments metric). Cheap single call, resilient: omit on failure.
+      if (latestProject) {
+        try {
+          const lj = await this.get(
+            apiToken,
+            `/accounts/${accountId}/pages/projects/${latestProject}/deployments?per_page=20`,
+          );
+          const deploys: Array<Record<string, unknown>> = lj?.result ?? [];
+          if (deploys.length) {
+            metrics.push({
+              label: 'Deployments',
+              value: String(deploys.length),
+              hint: latestProject,
+            });
+          }
+        } catch {
+          // deployments listing optional — skip quietly
         }
       }
 

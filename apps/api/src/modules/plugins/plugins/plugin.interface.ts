@@ -49,6 +49,12 @@ export type PluginConfig = Record<string, unknown>;
 export interface PluginActionResult {
   ok: boolean;
   message: string;
+  /**
+   * If set, the plugin mutated its own config (e.g. VPS add/remove server) and
+   * asks the service to persist (re-encrypt) this new config. runAction itself
+   * has no DB access, so this is how a plugin writes config changes back.
+   */
+  config?: PluginConfig;
 }
 
 export type ResourceKind =
@@ -59,11 +65,17 @@ export type ResourceKind =
   // Vercel resource kinds
   | 'projects'
   | 'deployments'
-  | 'domains';
+  | 'domains'
+  // VPS resource kinds
+  | 'servers';
 
 export interface PluginResourceItem {
   id: string;
   name: string;
+  /** Optional per-item health (e.g. a VPS server up/down). */
+  state?: HealthState;
+  /** Optional right-aligned meta line. */
+  meta?: string;
 }
 
 export interface PluginResourceGroup {

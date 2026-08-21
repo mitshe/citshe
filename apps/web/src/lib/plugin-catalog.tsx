@@ -136,12 +136,19 @@ export const pluginCatalog: PluginDef[] = [
   {
     type: "VPS",
     name: "VPS",
-    tagline: "Server health — up, load, disk, RAM",
+    tagline: "Server fleet health — up, load, disk, RAM",
     icon: <Server className="h-5 w-5" />,
     accent: "text-sky-500",
     docsUrl:
       "https://www.digitalocean.com/community/tutorials/how-to-set-up-ssh-keys-2",
     fields: [
+      {
+        key: "label",
+        label: "Name",
+        placeholder: "e.g. web-1 / hetzner-fsn",
+        helpText:
+          "Add your first server here — you can add more from the VPS page afterwards.",
+      },
       {
         key: "authMethod",
         label: "Auth",

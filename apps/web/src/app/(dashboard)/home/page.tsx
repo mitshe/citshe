@@ -99,7 +99,7 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-10 space-y-10">
+    <div className="w-full max-w-[1600px] px-6 py-6 sm:py-10 space-y-10">
       {/* Portal selector — mobile only; desktop has it in the sidebar */}
       <div className="sm:hidden">
         <OrgSwitcher />

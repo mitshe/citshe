@@ -37,7 +37,12 @@ import {
   usePluginStatus,
   usePluginResources,
   usePreviews,
+  useRunPluginAction,
 } from "@/lib/api/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/api/hooks/shared";
+import { VpsAddDialog } from "@/components/plugins/vps-management";
+import { Plus } from "lucide-react";
 import { getPluginDef } from "@/lib/plugin-catalog";
 import { PluginActionButton } from "@/components/plugins/plugin-card";
 import { ResourcePicker } from "@/components/plugins/plugin-dialogs";
@@ -97,7 +102,7 @@ export default function StackToolPage({
   const extraLinks = status?.links?.slice(1) ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:py-10">
+    <div className="w-full max-w-6xl space-y-8 px-4 py-6 sm:py-10">
       <Link
         href="/stack"
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-linear hover:text-foreground"
@@ -292,7 +297,7 @@ function PluginDashboard({
           description="This tool hasn't reported any metrics for this portal."
         />
       ) : (
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-4">
+        <div className="flex flex-wrap gap-3">
           {metrics.map((m, i) => (
             <KpiCard key={i} metric={m} />
           ))}
@@ -338,27 +343,176 @@ function PluginDashboard({
         </Section>
       )}
 
-      {/* Resource groups, generic over whatever kinds the plugin returns */}
+      {/* VPS: a managed list of servers (add / remove), gated by type. */}
+      {type === "VPS" && (
+        <VpsServersSection
+          group={groups.find((g) => g.kind === "servers")}
+          loading={resourcesLoading}
+        />
+      )}
+
+      {/* Resource groups, generic over whatever kinds the plugin returns.
+          VPS "servers" are rendered by the managed section above. */}
       {resourcesLoading ? (
-        <Section title="Resources">
-          <Panel>
-            <SectionRowsSkeleton />
-          </Panel>
-        </Section>
+        type === "VPS" ? null : (
+          <Section title="Resources">
+            <Panel>
+              <SectionRowsSkeleton />
+            </Panel>
+          </Section>
+        )
       ) : groups.length === 0 ? null : (
-        groups.map((g) => (
-          <ResourceGroupSection
-            key={g.kind}
-            group={g}
-            selectedCount={
-              (resources?.selected as Record<string, string[]> | undefined)?.[
-                g.kind
-              ]?.length
-            }
-          />
-        ))
+        groups
+          .filter((g) => !(type === "VPS" && g.kind === "servers"))
+          .map((g) => (
+            <ResourceGroupSection
+              key={g.kind}
+              group={g}
+              selectedCount={
+                (resources?.selected as Record<string, string[]> | undefined)?.[
+                  g.kind
+                ]?.length
+              }
+            />
+          ))
       )}
     </div>
+  );
+}
+
+// ---- VPS server management (add / remove) ----------------------------------
+
+function VpsServersSection({
+  group,
+  loading,
+}: {
+  group: PluginResourceGroup | undefined;
+  loading: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const runAction = useRunPluginAction("VPS");
+  const queryClient = useQueryClient();
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  const items = group?.items ?? [];
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
+
+  const remove = async (id: string) => {
+    setRemovingId(id);
+    try {
+      const res = await runAction.mutateAsync({
+        actionId: "remove-server",
+        input: { id },
+      });
+      if (!res.ok) throw new Error(res.message);
+      toast.success(res.message);
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove");
+    } finally {
+      setRemovingId(null);
+      setConfirmId(null);
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground">Servers</h2>
+          {items.length > 0 && (
+            <span className="rounded-sm bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              {items.length}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 px-2.5 py-1.5 text-xs font-medium text-primary transition-linear hover:bg-primary/10"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add VPS
+        </button>
+      </div>
+
+      {loading ? (
+        <Panel>
+          <SectionRowsSkeleton />
+        </Panel>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<Boxes />}
+          title="No servers yet"
+          description="Add your first VPS to start seeing its health here."
+        />
+      ) : (
+        <Panel>
+          {items.map((it) => (
+            <div
+              key={it.id}
+              className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0"
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <StatusDot state={it.state ?? "idle"} size={7} />
+                <span className="truncate text-foreground">{it.name}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3">
+                {it.meta && (
+                  <span className="hidden font-mono text-xs text-text-subtle sm:inline">
+                    {it.meta}
+                  </span>
+                )}
+                <button
+                  aria-label="Remove server"
+                  onClick={() => setConfirmId(it.id)}
+                  disabled={removingId === it.id}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            </div>
+          ))}
+        </Panel>
+      )}
+
+      {adding && (
+        <VpsAddDialog
+          onClose={() => setAdding(false)}
+          onAdded={() => {
+            setAdding(false);
+            refresh();
+          }}
+        />
+      )}
+
+      <AlertDialog
+        open={confirmId != null}
+        onOpenChange={(o) => !o && setConfirmId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this server?</AlertDialogTitle>
+            <AlertDialogDescription>
+              citshe will stop reading health from this server. You can add it
+              back anytime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmId && remove(confirmId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   );
 }
 
@@ -373,7 +527,7 @@ const kpiText: Record<HealthState, string> = {
 
 function KpiCard({ metric }: { metric: PluginMetric }) {
   return (
-    <div className="bg-surface-card p-5">
+    <div className="min-w-[8.5rem] flex-1 basis-[8.5rem] rounded-lg border border-border bg-surface-card p-5 sm:max-w-[16rem]">
       <div className="flex items-center gap-1.5">
         {metric.state && metric.state !== "idle" && (
           <StatusDot state={metric.state} size={7} />
@@ -401,9 +555,12 @@ function KpiCard({ metric }: { metric: PluginMetric }) {
 
 function KpiRowSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-4">
+    <div className="flex flex-wrap gap-3">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="bg-surface-card p-5">
+        <div
+          key={i}
+          className="min-w-[8.5rem] flex-1 basis-[8.5rem] rounded-lg border border-border bg-surface-card p-5 sm:max-w-[16rem]"
+        >
           <div className="h-2.5 w-16 animate-pulse rounded bg-surface-hover" />
           <div className="mt-3 h-8 w-24 animate-pulse rounded bg-surface-hover" />
         </div>
@@ -479,7 +636,12 @@ function ResourceGroupSection({
       ) : (
         <Panel>
           {group.items.map((it) => (
-            <ResourceRow key={it.id} name={it.name} state="idle" />
+            <ResourceRow
+              key={it.id}
+              name={it.name}
+              state={it.state ?? "idle"}
+              meta={it.meta}
+            />
           ))}
         </Panel>
       )}

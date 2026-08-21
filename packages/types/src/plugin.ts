@@ -87,11 +87,30 @@ export type ResourceKind =
   // Vercel resource kinds
   | "projects"
   | "deployments"
-  | "domains";
+  | "domains"
+  // VPS resource kinds
+  | "servers";
 
 export interface PluginResourceItem {
   id: string;
   name: string;
+  /** Optional per-item health (e.g. a VPS server up/down). */
+  state?: HealthState;
+  /** Optional right-aligned meta line (e.g. "load 0.4 · disk 30% · ram 42%"). */
+  meta?: string;
+}
+
+/** One SSH server inside the VPS plugin's list of servers. */
+export interface VpsServer {
+  id: string;
+  label: string;
+  host: string;
+  port?: number | string;
+  username: string;
+  authMethod?: "key" | "password";
+  privateKey?: string;
+  passphrase?: string;
+  password?: string;
 }
 
 export interface PluginResourceGroup {
@@ -110,6 +129,8 @@ export interface PluginSelection {
   projects?: string[];
   deployments?: string[];
   domains?: string[];
+  // VPS
+  servers?: string[];
 }
 
 /** Response of GET /plugins/:type/resources. */
