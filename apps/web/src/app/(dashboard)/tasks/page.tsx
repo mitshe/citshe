@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,14 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -42,99 +33,31 @@ import {
 import {
   Loader2,
   ListTodo,
-  Download,
   Search,
   Plus,
   Sparkles,
-  Terminal,
-  Play,
-  MoreHorizontal,
-  Trash2,
   ChevronRight,
-  ArrowRight,
-  GitPullRequest,
-  CheckCircle2,
-  RotateCcw,
   X,
+  LayoutGrid,
+  List as ListIcon,
 } from "lucide-react";
 import {
   useTasks,
   useRepositories,
   useCreateTask,
   useDeleteTask,
-  useProcessTask,
   useRefineTask,
-  useUpdateTask,
-  useCloseTask,
-  useReopenTask,
 } from "@/lib/api/hooks";
-import { formatDistanceToNow, cn } from "@/lib/utils";
-import { getTaskStatus } from "@/lib/status-config";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDebounce } from "@/lib/hooks/use-debounce";
-import type { Task, TaskStatus, RefinedTask } from "@/lib/api/types";
-import { ImportTaskDialog } from "./components/import-task-dialog";
+import type { Task, RefinedTask } from "@/lib/api/types";
+import { isClosed } from "./components/task-shared";
+import { TaskBoardView } from "./components/task-board-view";
+import { TaskListView } from "./components/task-list-view";
 
-const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
-const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
-
-// ============================================================================
-// Board columns — a display layer over the machine TaskStatus.
-// ============================================================================
-
-type ColumnId = "todo" | "in_progress" | "review" | "done" | "closed";
-
-const COLUMNS: {
-  id: ColumnId;
-  name: string;
-  statuses: TaskStatus[];
-  // The status a card moves to when dropped into this column.
-  moveTo?: TaskStatus;
-}[] = [
-  { id: "todo", name: "Todo", statuses: ["PENDING", "QUEUED"], moveTo: "PENDING" },
-  {
-    id: "in_progress",
-    name: "In Progress",
-    statuses: ["ANALYZING", "IN_PROGRESS"],
-    moveTo: "IN_PROGRESS",
-  },
-  { id: "review", name: "Review", statuses: ["REVIEW"], moveTo: "REVIEW" },
-  { id: "done", name: "Done", statuses: ["COMPLETED"], moveTo: "COMPLETED" },
-];
-
-// Extra section for terminal/closed tasks, shown only when "Show closed" is on.
-const CLOSED_COLUMN: { id: ColumnId; name: string; statuses: TaskStatus[] } = {
-  id: "closed",
-  name: "Closed",
-  statuses: ["COMPLETED", "FAILED", "CANCELLED"],
-};
-
-const STATUS_TO_COLUMN: Record<TaskStatus, ColumnId> = {
-  PENDING: "todo",
-  QUEUED: "todo",
-  ANALYZING: "in_progress",
-  IN_PROGRESS: "in_progress",
-  REVIEW: "review",
-  COMPLETED: "done",
-  FAILED: "closed",
-  CANCELLED: "closed",
-};
-
-// Terminal statuses that are hidden unless "Show closed" is on.
-const TERMINAL_STATUSES: TaskStatus[] = ["COMPLETED", "FAILED", "CANCELLED"];
-
-function isClosed(task: Task): boolean {
-  return !!task.closedAt || TERMINAL_STATUSES.includes(task.status);
-}
-
-/** Pull a PR/MR url off task.result if present. */
-function prUrl(task: Task): string | null {
-  const r = task.result as Record<string, unknown> | null | undefined;
-  if (!r) return null;
-  const candidate =
-    r.mergeRequestUrl ?? r.pullRequestUrl ?? r.prUrl ?? r.pull_request_url;
-  return typeof candidate === "string" && candidate ? candidate : null;
-}
+type ViewMode = "board" | "list";
+const VIEW_STORAGE_KEY = "citshe.tasks.view";
 
 export default function TasksPage() {
   const { data: tasks = [], isLoading } = useTasks();
@@ -142,13 +65,23 @@ export default function TasksPage() {
   const deleteTask = useDeleteTask();
 
   const [newOpen, setNewOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const [filterRepo, setFilterRepo] = useState<string>("all");
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+
+  // View toggle — persisted in localStorage, SSR-safe (default "board").
+  const [view, setView] = useState<ViewMode>("board");
+  useEffect(() => {
+    const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (saved === "board" || saved === "list") setView(saved);
+  }, []);
+  const changeView = (next: ViewMode) => {
+    setView(next);
+    window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+  };
 
   const repoName = (id: string | null | undefined) =>
     id ? repos.find((r) => r.id === id)?.name ?? "—" : "—";
@@ -162,6 +95,7 @@ export default function TasksPage() {
     return [...set].sort();
   }, [tasks]);
 
+  // Shared filtered set — used by BOTH views.
   const filtered = useMemo(() => {
     let result = tasks as Task[];
     if (!showClosed) {
@@ -185,30 +119,6 @@ export default function TasksPage() {
     return result;
   }, [tasks, showClosed, filterRepo, activeLabel, debouncedSearch]);
 
-  // Bucket tasks per column. Closed tasks only land in the Closed column.
-  const byColumn = useMemo(() => {
-    const map: Record<ColumnId, Task[]> = {
-      todo: [],
-      in_progress: [],
-      review: [],
-      done: [],
-      closed: [],
-    };
-    for (const t of filtered) {
-      if (showClosed && isClosed(t)) {
-        map.closed.push(t);
-      } else {
-        map[STATUS_TO_COLUMN[t.status]].push(t);
-      }
-    }
-    for (const key of Object.keys(map) as ColumnId[]) {
-      map[key].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
-    }
-    return map;
-  }, [filtered, showClosed]);
-
-  const columns = showClosed ? [...COLUMNS, CLOSED_COLUMN] : COLUMNS;
-
   const hasFilters =
     !!search || filterRepo !== "all" || !!activeLabel || showClosed;
   const isEmpty = !isLoading && tasks.length === 0;
@@ -223,14 +133,37 @@ export default function TasksPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setImportOpen(true)}
-          >
-            <Download className="mr-1.5 h-4 w-4" />
-            Import
-          </Button>
+          {/* View toggle (segmented control) */}
+          <div className="inline-flex items-center rounded-lg border border-border p-0.5">
+            <button
+              type="button"
+              onClick={() => changeView("board")}
+              aria-pressed={view === "board"}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                view === "board"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Board
+            </button>
+            <button
+              type="button"
+              onClick={() => changeView("list")}
+              aria-pressed={view === "list"}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                view === "list"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <ListIcon className="h-3.5 w-3.5" />
+              List
+            </button>
+          </div>
           <Button size="sm" onClick={() => setNewOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New task
@@ -302,7 +235,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Board */}
+      {/* Views */}
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -322,62 +255,24 @@ export default function TasksPage() {
         <p className="py-12 text-center text-sm text-muted-foreground">
           Nothing matches your filters.
         </p>
+      ) : view === "board" ? (
+        <TaskBoardView
+          tasks={filtered}
+          repoName={repoName}
+          onDelete={setDeleteTarget}
+          onLabelClick={setActiveLabel}
+          showClosed={showClosed}
+        />
       ) : (
-        <>
-          {/* Desktop: kanban columns */}
-          <div
-            className={cn(
-              "hidden gap-4 md:grid",
-              showClosed ? "md:grid-cols-5" : "md:grid-cols-4",
-            )}
-          >
-            {columns.map((col) => (
-              <BoardColumn
-                key={col.id}
-                name={col.name}
-                tasks={byColumn[col.id]}
-                repoName={repoName}
-                onDelete={setDeleteTarget}
-                onLabelClick={setActiveLabel}
-              />
-            ))}
-          </div>
-
-          {/* Mobile: sectioned vertical list */}
-          <div className="space-y-6 md:hidden">
-            {columns.map((col) => (
-              <section key={col.id} className="space-y-2">
-                <div className="flex items-center gap-2 px-0.5">
-                  <h2 className="text-sm font-semibold">{col.name}</h2>
-                  <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
-                    {byColumn[col.id].length}
-                  </span>
-                </div>
-                {byColumn[col.id].length === 0 ? (
-                  <p className="px-0.5 text-xs text-muted-foreground/60">
-                    Nothing here.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {byColumn[col.id].map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        repoName={repoName(task.repositoryId)}
-                        onDelete={() => setDeleteTarget(task)}
-                        onLabelClick={setActiveLabel}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            ))}
-          </div>
-        </>
+        <TaskListView
+          tasks={filtered}
+          repoName={repoName}
+          onDelete={setDeleteTarget}
+          onLabelClick={setActiveLabel}
+        />
       )}
 
       <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} repos={repos} />
-      <ImportTaskDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <AlertDialog
         open={!!deleteTarget}
@@ -412,287 +307,6 @@ export default function TasksPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-// ============================================================================
-// Board column (desktop)
-// ============================================================================
-
-function BoardColumn({
-  name,
-  tasks,
-  repoName,
-  onDelete,
-  onLabelClick,
-}: {
-  name: string;
-  tasks: Task[];
-  repoName: (id: string | null | undefined) => string;
-  onDelete: (task: Task) => void;
-  onLabelClick: (label: string) => void;
-}) {
-  return (
-    <div className="flex min-h-0 flex-col rounded-xl border border-border bg-muted/20">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-        <h2 className="text-sm font-semibold">{name}</h2>
-        <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
-          {tasks.length}
-        </span>
-      </div>
-      <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto p-2">
-        {tasks.length === 0 ? (
-          <p className="px-1 py-6 text-center text-xs text-muted-foreground/50">
-            Nothing here.
-          </p>
-        ) : (
-          tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              repoName={repoName(task.repositoryId)}
-              onDelete={() => onDelete(task)}
-              onLabelClick={onLabelClick}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Task card
-// ============================================================================
-
-function TaskCard({
-  task,
-  repoName,
-  onDelete,
-  onLabelClick,
-}: {
-  task: Task;
-  repoName: string;
-  onDelete: () => void;
-  onLabelClick: (label: string) => void;
-}) {
-  const processTask = useProcessTask();
-  const updateTask = useUpdateTask();
-  const closeTask = useCloseTask();
-  const reopenTask = useReopenTask();
-
-  const status = getTaskStatus(task.status);
-  const liveWorker =
-    !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
-  const isOpen = OPEN_STATUSES.includes(task.status);
-  const closed = isClosed(task);
-  const currentColumn = STATUS_TO_COLUMN[task.status];
-  const link = prUrl(task);
-
-  const busy =
-    processTask.isPending ||
-    updateTask.isPending ||
-    closeTask.isPending ||
-    reopenTask.isPending;
-
-  const run = async () => {
-    try {
-      await processTask.mutateAsync(task.id);
-      toast.success("Delegated to a worker");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to run task");
-    }
-  };
-
-  const moveTo = async (col: (typeof COLUMNS)[number]) => {
-    if (!col.moveTo) return;
-    try {
-      await updateTask.mutateAsync({ id: task.id, data: { status: col.moveTo } });
-      toast.success(`Moved to ${col.name}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to move task");
-    }
-  };
-
-  const close = async () => {
-    try {
-      await closeTask.mutateAsync(task.id);
-      toast.success("Task closed");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to close task");
-    }
-  };
-
-  const reopen = async () => {
-    try {
-      await reopenTask.mutateAsync(task.id);
-      toast.success("Task reopened");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reopen task");
-    }
-  };
-
-  return (
-    <div className="group rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-foreground/20">
-      {/* Status + menu */}
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 text-[11px] font-medium",
-            status.color.split(" ")[1],
-          )}
-        >
-          {status.icon}
-          {status.label}
-        </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
-            >
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <MoreHorizontal className="h-4 w-4" />
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem asChild>
-              <Link href={`/tasks/${task.id}`}>Open</Link>
-            </DropdownMenuItem>
-            {isOpen && (
-              <DropdownMenuItem onClick={run} disabled={processTask.isPending}>
-                <Play className="mr-2 h-3.5 w-3.5" />
-                Run
-              </DropdownMenuItem>
-            )}
-            {liveWorker && task.sessionId && (
-              <DropdownMenuItem asChild>
-                <Link href={`/sessions/${task.sessionId}`}>
-                  <Terminal className="mr-2 h-3.5 w-3.5" />
-                  Watch
-                </Link>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
-              Move to
-            </DropdownMenuLabel>
-            {COLUMNS.filter((c) => c.id !== currentColumn).map((c) => (
-              <DropdownMenuItem key={c.id} onClick={() => moveTo(c)}>
-                <ArrowRight className="mr-2 h-3.5 w-3.5" />
-                {c.name}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            {closed ? (
-              <DropdownMenuItem onClick={reopen}>
-                <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                Reopen
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={close}>
-                <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
-                Close
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={onDelete}
-            >
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Title */}
-      <Link
-        href={`/tasks/${task.id}`}
-        className="block text-sm font-medium leading-snug hover:underline"
-      >
-        {task.title}
-      </Link>
-
-      {/* Labels */}
-      {(task.labels ?? []).length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {(task.labels ?? []).map((l) => (
-            <button
-              key={l}
-              onClick={() => onLabelClick(l)}
-              className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted-foreground/20"
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Footer: repo · updated · PR */}
-      <div className="mt-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="truncate">{repoName}</span>
-        <span className="text-muted-foreground/40">·</span>
-        <span className="whitespace-nowrap">
-          {formatDistanceToNow(new Date(task.updatedAt))}
-        </span>
-        {link && (
-          <>
-            <span className="text-muted-foreground/40">·</span>
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              <GitPullRequest className="h-3 w-3" />
-              PR
-            </a>
-          </>
-        )}
-      </div>
-
-      {/* Quick actions */}
-      {(isOpen || liveWorker) && (
-        <div className="mt-2.5 flex items-center gap-1.5">
-          {isOpen && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 flex-1 px-2 text-xs"
-              disabled={processTask.isPending}
-              title="Delegate to a worker (Claude Code)"
-              onClick={run}
-            >
-              {processTask.isPending ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="mr-1 h-3.5 w-3.5" />
-              )}
-              Run
-            </Button>
-          )}
-          {liveWorker && task.sessionId && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="h-7 flex-1 px-2 text-xs text-emerald-600"
-            >
-              <Link href={`/sessions/${task.sessionId}`}>
-                <Terminal className="mr-1 h-3.5 w-3.5" />
-                Watch
-              </Link>
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
