@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogBody,
@@ -24,6 +25,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -48,6 +51,11 @@ import {
   MoreHorizontal,
   Trash2,
   ChevronRight,
+  ArrowRight,
+  GitPullRequest,
+  CheckCircle2,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import {
   useTasks,
@@ -56,6 +64,9 @@ import {
   useDeleteTask,
   useProcessTask,
   useRefineTask,
+  useUpdateTask,
+  useCloseTask,
+  useReopenTask,
 } from "@/lib/api/hooks";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import { getTaskStatus } from "@/lib/status-config";
@@ -67,17 +78,63 @@ import { ImportTaskDialog } from "./components/import-task-dialog";
 const LIVE_WORKER_STATUSES: TaskStatus[] = ["ANALYZING", "IN_PROGRESS"];
 const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
 
-// Order for the status column sort (active first, closed last).
-const STATUS_ORDER: Record<TaskStatus, number> = {
-  IN_PROGRESS: 0,
-  ANALYZING: 1,
-  QUEUED: 2,
-  PENDING: 3,
-  REVIEW: 4,
-  COMPLETED: 5,
-  FAILED: 6,
-  CANCELLED: 7,
+// ============================================================================
+// Board columns — a display layer over the machine TaskStatus.
+// ============================================================================
+
+type ColumnId = "todo" | "in_progress" | "review" | "done" | "closed";
+
+const COLUMNS: {
+  id: ColumnId;
+  name: string;
+  statuses: TaskStatus[];
+  // The status a card moves to when dropped into this column.
+  moveTo?: TaskStatus;
+}[] = [
+  { id: "todo", name: "Todo", statuses: ["PENDING", "QUEUED"], moveTo: "PENDING" },
+  {
+    id: "in_progress",
+    name: "In Progress",
+    statuses: ["ANALYZING", "IN_PROGRESS"],
+    moveTo: "IN_PROGRESS",
+  },
+  { id: "review", name: "Review", statuses: ["REVIEW"], moveTo: "REVIEW" },
+  { id: "done", name: "Done", statuses: ["COMPLETED"], moveTo: "COMPLETED" },
+];
+
+// Extra section for terminal/closed tasks, shown only when "Show closed" is on.
+const CLOSED_COLUMN: { id: ColumnId; name: string; statuses: TaskStatus[] } = {
+  id: "closed",
+  name: "Closed",
+  statuses: ["COMPLETED", "FAILED", "CANCELLED"],
 };
+
+const STATUS_TO_COLUMN: Record<TaskStatus, ColumnId> = {
+  PENDING: "todo",
+  QUEUED: "todo",
+  ANALYZING: "in_progress",
+  IN_PROGRESS: "in_progress",
+  REVIEW: "review",
+  COMPLETED: "done",
+  FAILED: "closed",
+  CANCELLED: "closed",
+};
+
+// Terminal statuses that are hidden unless "Show closed" is on.
+const TERMINAL_STATUSES: TaskStatus[] = ["COMPLETED", "FAILED", "CANCELLED"];
+
+function isClosed(task: Task): boolean {
+  return !!task.closedAt || TERMINAL_STATUSES.includes(task.status);
+}
+
+/** Pull a PR/MR url off task.result if present. */
+function prUrl(task: Task): string | null {
+  const r = task.result as Record<string, unknown> | null | undefined;
+  if (!r) return null;
+  const candidate =
+    r.mergeRequestUrl ?? r.pullRequestUrl ?? r.prUrl ?? r.pull_request_url;
+  return typeof candidate === "string" && candidate ? candidate : null;
+}
 
 export default function TasksPage() {
   const { data: tasks = [], isLoading } = useTasks();
@@ -88,20 +145,33 @@ export default function TasksPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterRepo, setFilterRepo] = useState<string>("all");
+  const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   const repoName = (id: string | null | undefined) =>
     id ? repos.find((r) => r.id === id)?.name ?? "—" : "—";
 
+  // Union of all labels across tasks, for the chip filter.
+  const allLabels = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks as Task[]) {
+      for (const l of t.labels ?? []) set.add(l);
+    }
+    return [...set].sort();
+  }, [tasks]);
+
   const filtered = useMemo(() => {
     let result = tasks as Task[];
-    if (filterStatus !== "all") {
-      result = result.filter((t) => t.status === filterStatus);
+    if (!showClosed) {
+      result = result.filter((t) => !isClosed(t));
     }
     if (filterRepo !== "all") {
       result = result.filter((t) => t.repositoryId === filterRepo);
+    }
+    if (activeLabel) {
+      result = result.filter((t) => (t.labels ?? []).includes(activeLabel));
     }
     if (debouncedSearch.trim()) {
       const q = debouncedSearch.toLowerCase();
@@ -112,18 +182,39 @@ export default function TasksPage() {
           (t.labels ?? []).some((l) => l.toLowerCase().includes(q)),
       );
     }
-    return [...result].sort((a, b) => {
-      const s = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-      if (s !== 0) return s;
-      return +new Date(b.updatedAt) - +new Date(a.updatedAt);
-    });
-  }, [tasks, filterStatus, filterRepo, debouncedSearch]);
+    return result;
+  }, [tasks, showClosed, filterRepo, activeLabel, debouncedSearch]);
 
-  const hasFilters = !!search || filterStatus !== "all" || filterRepo !== "all";
+  // Bucket tasks per column. Closed tasks only land in the Closed column.
+  const byColumn = useMemo(() => {
+    const map: Record<ColumnId, Task[]> = {
+      todo: [],
+      in_progress: [],
+      review: [],
+      done: [],
+      closed: [],
+    };
+    for (const t of filtered) {
+      if (showClosed && isClosed(t)) {
+        map.closed.push(t);
+      } else {
+        map[STATUS_TO_COLUMN[t.status]].push(t);
+      }
+    }
+    for (const key of Object.keys(map) as ColumnId[]) {
+      map[key].sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+    }
+    return map;
+  }, [filtered, showClosed]);
+
+  const columns = showClosed ? [...COLUMNS, CLOSED_COLUMN] : COLUMNS;
+
+  const hasFilters =
+    !!search || filterRepo !== "all" || !!activeLabel || showClosed;
   const isEmpty = !isLoading && tasks.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-8 space-y-5">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:py-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Tasks</h1>
@@ -158,19 +249,6 @@ export default function TasksPage() {
             className="pl-9"
           />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="PENDING">Open</SelectItem>
-            <SelectItem value="IN_PROGRESS">Working</SelectItem>
-            <SelectItem value="REVIEW">Review</SelectItem>
-            <SelectItem value="COMPLETED">Closed</SelectItem>
-            <SelectItem value="FAILED">Failed</SelectItem>
-          </SelectContent>
-        </Select>
         {repos.length > 0 && (
           <Select value={filterRepo} onValueChange={setFilterRepo}>
             <SelectTrigger className="w-40">
@@ -186,9 +264,45 @@ export default function TasksPage() {
             </SelectContent>
           </Select>
         )}
+        <label className="flex select-none items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+          <Switch checked={showClosed} onCheckedChange={setShowClosed} />
+          Show closed
+        </label>
       </div>
 
-      {/* Table */}
+      {/* Label chip filter */}
+      {allLabels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {allLabels.map((l) => {
+            const active = activeLabel === l;
+            return (
+              <button
+                key={l}
+                onClick={() => setActiveLabel(active ? null : l)}
+                className={cn(
+                  "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {l}
+              </button>
+            );
+          })}
+          {activeLabel && (
+            <button
+              onClick={() => setActiveLabel(null)}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Board */}
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -209,26 +323,57 @@ export default function TasksPage() {
           Nothing matches your filters.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border">
-          {/* Header row (hidden on mobile) */}
-          <div className="hidden grid-cols-[130px_1fr_140px_110px_90px] items-center gap-3 border-b border-border bg-muted/30 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground sm:grid">
-            <span>Status</span>
-            <span>Title</span>
-            <span>Repo</span>
-            <span>Updated</span>
-            <span className="text-right">Actions</span>
-          </div>
-          <div className="divide-y divide-border">
-            {filtered.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                repoName={repoName(task.repositoryId)}
-                onDelete={() => setDeleteTarget(task)}
+        <>
+          {/* Desktop: kanban columns */}
+          <div
+            className={cn(
+              "hidden gap-4 md:grid",
+              showClosed ? "md:grid-cols-5" : "md:grid-cols-4",
+            )}
+          >
+            {columns.map((col) => (
+              <BoardColumn
+                key={col.id}
+                name={col.name}
+                tasks={byColumn[col.id]}
+                repoName={repoName}
+                onDelete={setDeleteTarget}
+                onLabelClick={setActiveLabel}
               />
             ))}
           </div>
-        </div>
+
+          {/* Mobile: sectioned vertical list */}
+          <div className="space-y-6 md:hidden">
+            {columns.map((col) => (
+              <section key={col.id} className="space-y-2">
+                <div className="flex items-center gap-2 px-0.5">
+                  <h2 className="text-sm font-semibold">{col.name}</h2>
+                  <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
+                    {byColumn[col.id].length}
+                  </span>
+                </div>
+                {byColumn[col.id].length === 0 ? (
+                  <p className="px-0.5 text-xs text-muted-foreground/60">
+                    Nothing here.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {byColumn[col.id].map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        repoName={repoName(task.repositoryId)}
+                        onDelete={() => setDeleteTarget(task)}
+                        onLabelClick={setActiveLabel}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        </>
       )}
 
       <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} repos={repos} />
@@ -272,24 +417,84 @@ export default function TasksPage() {
 }
 
 // ============================================================================
-// Table row
+// Board column (desktop)
 // ============================================================================
 
-function TaskRow({
+function BoardColumn({
+  name,
+  tasks,
+  repoName,
+  onDelete,
+  onLabelClick,
+}: {
+  name: string;
+  tasks: Task[];
+  repoName: (id: string | null | undefined) => string;
+  onDelete: (task: Task) => void;
+  onLabelClick: (label: string) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-col rounded-xl border border-border bg-muted/20">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <h2 className="text-sm font-semibold">{name}</h2>
+        <span className="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground">
+          {tasks.length}
+        </span>
+      </div>
+      <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto p-2">
+        {tasks.length === 0 ? (
+          <p className="px-1 py-6 text-center text-xs text-muted-foreground/50">
+            Nothing here.
+          </p>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              repoName={repoName(task.repositoryId)}
+              onDelete={() => onDelete(task)}
+              onLabelClick={onLabelClick}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Task card
+// ============================================================================
+
+function TaskCard({
   task,
   repoName,
   onDelete,
+  onLabelClick,
 }: {
   task: Task;
   repoName: string;
   onDelete: () => void;
+  onLabelClick: (label: string) => void;
 }) {
   const processTask = useProcessTask();
+  const updateTask = useUpdateTask();
+  const closeTask = useCloseTask();
+  const reopenTask = useReopenTask();
 
   const status = getTaskStatus(task.status);
   const liveWorker =
     !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
   const isOpen = OPEN_STATUSES.includes(task.status);
+  const closed = isClosed(task);
+  const currentColumn = STATUS_TO_COLUMN[task.status];
+  const link = prUrl(task);
+
+  const busy =
+    processTask.isPending ||
+    updateTask.isPending ||
+    closeTask.isPending ||
+    reopenTask.isPending;
 
   const run = async () => {
     try {
@@ -300,80 +505,101 @@ function TaskRow({
     }
   };
 
+  const moveTo = async (col: (typeof COLUMNS)[number]) => {
+    if (!col.moveTo) return;
+    try {
+      await updateTask.mutateAsync({ id: task.id, data: { status: col.moveTo } });
+      toast.success(`Moved to ${col.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move task");
+    }
+  };
+
+  const close = async () => {
+    try {
+      await closeTask.mutateAsync(task.id);
+      toast.success("Task closed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to close task");
+    }
+  };
+
+  const reopen = async () => {
+    try {
+      await reopenTask.mutateAsync(task.id);
+      toast.success("Task reopened");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reopen task");
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 items-center gap-2 px-4 py-3 transition-colors hover:bg-muted/30 sm:grid-cols-[130px_1fr_140px_110px_90px] sm:gap-3">
-      {/* Status */}
-      <div className={cn("flex items-center gap-1.5 text-xs font-medium", status.color.split(" ")[1])}>
-        {status.icon}
-        <span>{status.label}</span>
-      </div>
-
-      {/* Title + labels */}
-      <div className="min-w-0">
-        <Link
-          href={`/tasks/${task.id}`}
-          className="block truncate text-sm hover:underline"
+    <div className="group rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-foreground/20">
+      {/* Status + menu */}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-[11px] font-medium",
+            status.color.split(" ")[1],
+          )}
         >
-          {task.title}
-        </Link>
-        {(task.labels ?? []).length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {(task.labels ?? []).map((l) => (
-              <span
-                key={l}
-                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-              >
-                {l}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Repo */}
-      <span className="truncate text-xs text-muted-foreground">{repoName}</span>
-
-      {/* Updated */}
-      <span className="text-xs text-muted-foreground">
-        {formatDistanceToNow(new Date(task.updatedAt))}
-      </span>
-
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-1">
-        {liveWorker && task.sessionId && (
-          <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-emerald-500">
-            <Link href={`/sessions/${task.sessionId}`}>
-              <Terminal className="mr-1 h-3.5 w-3.5" />
-              Watch
-            </Link>
-          </Button>
-        )}
-        {isOpen && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2"
-            disabled={processTask.isPending}
-            title="Delegate to a worker (Claude Code)"
-            onClick={run}
-          >
-            {processTask.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        )}
+          {status.icon}
+          {status.label}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
-              <MoreHorizontal className="h-4 w-4" />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MoreHorizontal className="h-4 w-4" />
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem asChild>
               <Link href={`/tasks/${task.id}`}>Open</Link>
             </DropdownMenuItem>
+            {isOpen && (
+              <DropdownMenuItem onClick={run} disabled={processTask.isPending}>
+                <Play className="mr-2 h-3.5 w-3.5" />
+                Run
+              </DropdownMenuItem>
+            )}
+            {liveWorker && task.sessionId && (
+              <DropdownMenuItem asChild>
+                <Link href={`/sessions/${task.sessionId}`}>
+                  <Terminal className="mr-2 h-3.5 w-3.5" />
+                  Watch
+                </Link>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
+              Move to
+            </DropdownMenuLabel>
+            {COLUMNS.filter((c) => c.id !== currentColumn).map((c) => (
+              <DropdownMenuItem key={c.id} onClick={() => moveTo(c)}>
+                <ArrowRight className="mr-2 h-3.5 w-3.5" />
+                {c.name}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            {closed ? (
+              <DropdownMenuItem onClick={reopen}>
+                <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                Reopen
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={close}>
+                <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
+                Close
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onClick={onDelete}
@@ -384,6 +610,89 @@ function TaskRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Title */}
+      <Link
+        href={`/tasks/${task.id}`}
+        className="block text-sm font-medium leading-snug hover:underline"
+      >
+        {task.title}
+      </Link>
+
+      {/* Labels */}
+      {(task.labels ?? []).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(task.labels ?? []).map((l) => (
+            <button
+              key={l}
+              onClick={() => onLabelClick(l)}
+              className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted-foreground/20"
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Footer: repo · updated · PR */}
+      <div className="mt-2.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="truncate">{repoName}</span>
+        <span className="text-muted-foreground/40">·</span>
+        <span className="whitespace-nowrap">
+          {formatDistanceToNow(new Date(task.updatedAt))}
+        </span>
+        {link && (
+          <>
+            <span className="text-muted-foreground/40">·</span>
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              <GitPullRequest className="h-3 w-3" />
+              PR
+            </a>
+          </>
+        )}
+      </div>
+
+      {/* Quick actions */}
+      {(isOpen || liveWorker) && (
+        <div className="mt-2.5 flex items-center gap-1.5">
+          {isOpen && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 flex-1 px-2 text-xs"
+              disabled={processTask.isPending}
+              title="Delegate to a worker (Claude Code)"
+              onClick={run}
+            >
+              {processTask.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="mr-1 h-3.5 w-3.5" />
+              )}
+              Run
+            </Button>
+          )}
+          {liveWorker && task.sessionId && (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-7 flex-1 px-2 text-xs text-emerald-600"
+            >
+              <Link href={`/sessions/${task.sessionId}`}>
+                <Terminal className="mr-1 h-3.5 w-3.5" />
+                Watch
+              </Link>
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -450,7 +759,7 @@ function NewTaskDialog({
   };
 
   // Create the task as Open — it does NOT auto-run. Running is a deliberate
-  // action from the table (Play), gated on an AI key being present.
+  // action from the board (Run).
   const handleCreate = async () => {
     if (!title.trim()) return;
     try {

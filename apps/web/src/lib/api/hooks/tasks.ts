@@ -115,6 +115,40 @@ export function useProcessTask() {
   });
 }
 
+export function useCloseTask() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getToken();
+      const { task } = await api.tasks.close(id, token);
+      return task;
+    },
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      queryClient.setQueryData(queryKeys.tasks.detail(task.id), task);
+    },
+  });
+}
+
+export function useReopenTask() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getToken();
+      const { task } = await api.tasks.reopen(id, token);
+      return task;
+    },
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      queryClient.setQueryData(queryKeys.tasks.detail(task.id), task);
+    },
+  });
+}
+
 export function useImportPreview() {
   const getToken = useAuthToken();
 

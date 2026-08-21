@@ -169,6 +169,54 @@ export class TasksService {
     return this.prisma.task.delete({ where: { id } });
   }
 
+  /** Close a task: mark it COMPLETED and stamp closedAt. */
+  async close(organizationId: string, id: string) {
+    const task = await this.findOne(organizationId, id);
+    const previousStatus = task.status;
+
+    const updated = await this.prisma.task.update({
+      where: { id },
+      data: { status: TaskStatus.COMPLETED, closedAt: new Date() },
+    });
+
+    if (previousStatus !== TaskStatus.COMPLETED) {
+      this.eventBus.publish(
+        new TaskStatusChangedEvent(
+          id,
+          organizationId,
+          previousStatus,
+          TaskStatus.COMPLETED,
+        ),
+      );
+    }
+
+    return updated;
+  }
+
+  /** Reopen a task: move it back to PENDING and clear closedAt. */
+  async reopen(organizationId: string, id: string) {
+    const task = await this.findOne(organizationId, id);
+    const previousStatus = task.status;
+
+    const updated = await this.prisma.task.update({
+      where: { id },
+      data: { status: TaskStatus.PENDING, closedAt: null },
+    });
+
+    if (previousStatus !== TaskStatus.PENDING) {
+      this.eventBus.publish(
+        new TaskStatusChangedEvent(
+          id,
+          organizationId,
+          previousStatus,
+          TaskStatus.PENDING,
+        ),
+      );
+    }
+
+    return updated;
+  }
+
   // =========================================================================
   // Task Processing Methods
   // =========================================================================

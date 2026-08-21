@@ -161,6 +161,18 @@ export const api = {
         token,
       }),
 
+    close: (id: string, token: string) =>
+      request<{ task: Task; message: string }>(`/tasks/${id}/close`, {
+        method: "POST",
+        token,
+      }),
+
+    reopen: (id: string, token: string) =>
+      request<{ task: Task; message: string }>(`/tasks/${id}/reopen`, {
+        method: "POST",
+        token,
+      }),
+
     importPreview: (data: ImportPreviewDto, token: string) =>
       request<{ preview: JiraImportPreview }>("/tasks/import/preview", {
         method: "POST",

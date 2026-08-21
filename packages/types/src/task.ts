@@ -27,6 +27,7 @@ export interface Task {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  closedAt?: string | null;
   repository?: { id: string; name: string };
   externalSource?: string | null;
   externalIssueId?: string | null;

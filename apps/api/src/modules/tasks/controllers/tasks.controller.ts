@@ -208,4 +208,40 @@ export class TasksController {
     const task = await this.tasksService.cancel(organizationId, id);
     return { task, message: 'Task cancelled' };
   }
+
+  @Post(':id/close')
+  @ApiOperation({ summary: 'Close a task (mark completed)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task closed',
+    type: TaskWithMessageResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @HttpCode(HttpStatus.OK)
+  async close(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.close(organizationId, id);
+    return { task, message: 'Task closed' };
+  }
+
+  @Post(':id/reopen')
+  @ApiOperation({ summary: 'Reopen a closed task' })
+  @ApiResponse({
+    status: 200,
+    description: 'Task reopened',
+    type: TaskWithMessageResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @HttpCode(HttpStatus.OK)
+  async reopen(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.tasksService.reopen(organizationId, id);
+    return { task, message: 'Task reopened' };
+  }
 }
