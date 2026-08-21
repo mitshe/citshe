@@ -1,4 +1,9 @@
-import { Logger } from '@nestjs/common';
+import {
+  Logger,
+  BadRequestException,
+  ServiceUnavailableException,
+  HttpException,
+} from '@nestjs/common';
 import {
   GitProviderPort,
   Repository,
@@ -602,7 +607,16 @@ export class GitHubAdapter implements GitProviderPort {
       }
 
       this.logger.error(`GitHub API Error: ${errorMessage}`, errorBody);
-      throw new Error(errorMessage);
+
+      // Map GitHub HTTP status to a NestJS HttpException so callers surface
+      // a readable 4xx/5xx instead of an opaque 500. This turns errors like
+      // "No commits between main and main", "A pull request already exists",
+      // or "Validation Failed" into a 400 with a clear message.
+      const httpError: HttpException =
+        response.status >= 500
+          ? new ServiceUnavailableException(`GitHub: ${errorMessage}`)
+          : new BadRequestException(`GitHub: ${errorMessage}`);
+      throw httpError;
     }
 
     // Handle empty responses

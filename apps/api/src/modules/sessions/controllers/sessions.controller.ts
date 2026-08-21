@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  HttpException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
@@ -130,20 +131,27 @@ export class SessionsController {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     setImmediate(async () => {
       try {
-        const containerId = await this.containerService.createAndStart({
-          sessionId: session.id,
-          organizationId,
-          repos,
-          instructions: session.instructions,
-          provider: session.aiCredential?.provider,
-          enableDocker: session.enableDocker,
-          enableBrowser: session.enableBrowser,
-          localPath: dto.localPath,
-          environment: envConfig,
-          integrations:
-            integrationConfigs.length > 0 ? integrationConfigs : undefined,
-          skills,
-        });
+        const containerId = await this.containerService.createAndStart(
+          {
+            sessionId: session.id,
+            organizationId,
+            repos,
+            instructions: session.instructions,
+            provider: session.aiCredential?.provider,
+            enableDocker: session.enableDocker,
+            enableBrowser: session.enableBrowser,
+            localPath: dto.localPath,
+            environment: envConfig,
+            integrations:
+              integrationConfigs.length > 0 ? integrationConfigs : undefined,
+            skills,
+          },
+          // Persist container id the moment it starts so a running container is
+          // never left orphaned in CREATING (self-heals via syncContainerStates).
+          async (cid) => {
+            await this.sessionsService.updateContainerId(session.id, cid);
+          },
+        );
 
         await this.sessionsService.updateStatus(
           session.id,
@@ -348,19 +356,24 @@ export class SessionsController {
             : undefined,
         ]);
 
-        const containerId = await this.containerService.createAndStart({
-          sessionId: id,
-          organizationId,
-          repos,
-          instructions: session.instructions,
-          provider: session.aiCredential?.provider,
-          enableDocker: session.enableDocker,
-          enableBrowser: session.enableBrowser,
-          environment: envConfig,
-          integrations:
-            integrationConfigs.length > 0 ? integrationConfigs : undefined,
-          image: snapshotImage ?? undefined,
-        });
+        const containerId = await this.containerService.createAndStart(
+          {
+            sessionId: id,
+            organizationId,
+            repos,
+            instructions: session.instructions,
+            provider: session.aiCredential?.provider,
+            enableDocker: session.enableDocker,
+            enableBrowser: session.enableBrowser,
+            environment: envConfig,
+            integrations:
+              integrationConfigs.length > 0 ? integrationConfigs : undefined,
+            image: snapshotImage ?? undefined,
+          },
+          async (cid) => {
+            await this.sessionsService.updateContainerId(id, cid);
+          },
+        );
 
         await this.sessionsService.updateStatus(id, 'RUNNING', containerId);
         this.eventsGateway.emitSessionStatus(organizationId, id, 'RUNNING');
@@ -756,8 +769,9 @@ export class SessionsController {
     }
 
     const repoDir = `/workspace/${repo.repository.name}`;
+    const targetBranch = body.targetBranch || repo.repository.defaultBranch;
 
-    // Get current branch name
+    // Get current branch name (empty for detached HEAD)
     const branchName = (
       await this.containerService.execCommand(
         session.containerId,
@@ -766,46 +780,88 @@ export class SessionsController {
       )
     ).trim();
 
+    // Detached HEAD guard (already handled — empty branch name)
     if (!branchName) {
       throw new BadRequestException('Could not determine current branch');
     }
 
-    // Push the branch
-    const pushResult = await this.containerService.execCommand(
-      session.containerId,
-      ['git', 'push', '-u', 'origin', branchName],
-      repoDir,
-      30000,
-    );
+    // Base-branch guard: you can't open a PR from the base branch onto itself.
+    if (branchName === targetBranch) {
+      throw new BadRequestException(
+        "You're on the base branch — switch to a feature branch before opening a PR.",
+      );
+    }
 
-    // Create PR via git provider
-    const gitProvider =
-      await this.adapterFactory.createGitProviderFromIntegration(
+    try {
+      // Re-embed a fresh token into the origin remote before pushing. The token
+      // baked in at clone time may have expired (GitHub App installation tokens
+      // are short-lived), which would otherwise make `git push` fail with an
+      // opaque auth error.
+      const freshUrl = await this.sessionsService.buildAuthenticatedRemoteUrl(
         organizationId,
         repo.repository.integrationId,
+        repo.repository.cloneUrl,
+        repo.repository.provider,
+      );
+      if (freshUrl) {
+        await this.containerService.execCommand(
+          session.containerId,
+          ['git', 'remote', 'set-url', 'origin', freshUrl],
+          repoDir,
+          15000,
+          'executor',
+          { throwOnError: true },
+        );
+      }
+
+      // Push the branch — throwOnError so a push failure (auth, nothing to
+      // push, rejected non-fast-forward) surfaces as a clear 400 instead of
+      // silently continuing to a confusing PR error.
+      const pushResult = await this.containerService.execCommand(
+        session.containerId,
+        ['git', 'push', '-u', 'origin', branchName],
+        repoDir,
+        30000,
+        'executor',
+        { throwOnError: true },
       );
 
-    const pr = await gitProvider.createMergeRequest(
-      repo.repository.externalId,
-      {
-        title: body.title || session.name,
-        description:
-          body.description || `Created from citshe session "${session.name}"`,
-        sourceBranch: branchName,
-        targetBranch: body.targetBranch || repo.repository.defaultBranch,
-      },
-    );
+      // Create PR via git provider
+      const gitProvider =
+        await this.adapterFactory.createGitProviderFromIntegration(
+          organizationId,
+          repo.repository.integrationId,
+        );
 
-    return {
-      branch: branchName,
-      pushResult: pushResult.trim(),
-      pr: {
-        id: pr.id,
-        title: pr.title,
-        webUrl: pr.webUrl,
-        status: pr.status,
-      },
-    };
+      const pr = await gitProvider.createMergeRequest(
+        repo.repository.externalId,
+        {
+          title: body.title || session.name,
+          description:
+            body.description || `Created from citshe session "${session.name}"`,
+          sourceBranch: branchName,
+          targetBranch,
+        },
+      );
+
+      return {
+        branch: branchName,
+        pushResult: pushResult.trim(),
+        pr: {
+          id: pr.id,
+          title: pr.title,
+          webUrl: pr.webUrl,
+          status: pr.status,
+        },
+      };
+    } catch (err) {
+      // Known HttpExceptions (e.g. mapped GitHub 4xx/5xx) pass through as-is;
+      // wrap raw errors (git push failures) in a readable 400.
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new BadRequestException((err as Error).message);
+    }
   }
 
   @Get(':id/file')

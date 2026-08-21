@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { IntegrationType, IntegrationStatus, AIProvider } from '@prisma/client';
 import { PrismaService } from '../persistence/prisma/prisma.service';
 import { EncryptionService } from '../../shared/encryption/encryption.service';
@@ -82,7 +82,7 @@ export class AdapterFactoryService {
     });
 
     if (!integration) {
-      throw new Error(
+      throw new BadRequestException(
         `Integration ${integrationId} not found or not connected`,
       );
     }

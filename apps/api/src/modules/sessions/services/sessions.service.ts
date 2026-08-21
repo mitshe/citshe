@@ -147,17 +147,33 @@ export class SessionsService {
         const state = await this.containerService.getContainerState(
           session.containerId!,
         );
-        if (state !== 'running') {
-          this.logger.warn(
-            `Session ${session.id} container is ${state}, marking as COMPLETED`,
-          );
-          session.status = 'COMPLETED' as SessionStatus;
-          (session as Record<string, unknown>).containerId = null;
-          await this.prisma.agentSession.update({
-            where: { id: session.id },
-            data: { status: 'COMPLETED', containerId: null },
-          });
+        if (state === 'running') {
+          // Self-heal: a session left in CREATING whose container is actually
+          // running (e.g. the RUNNING update was lost to a process restart, or
+          // the container is still finishing post-start setup) should surface
+          // as RUNNING instead of spinning forever.
+          if (session.status === 'CREATING') {
+            this.logger.log(
+              `Session ${session.id} container is running, promoting CREATING → RUNNING`,
+            );
+            session.status = 'RUNNING' as SessionStatus;
+            await this.prisma.agentSession.update({
+              where: { id: session.id },
+              data: { status: 'RUNNING' },
+            });
+          }
+          return;
         }
+
+        this.logger.warn(
+          `Session ${session.id} container is ${state}, marking as COMPLETED`,
+        );
+        session.status = 'COMPLETED' as SessionStatus;
+        (session as Record<string, unknown>).containerId = null;
+        await this.prisma.agentSession.update({
+          where: { id: session.id },
+          data: { status: 'COMPLETED', containerId: null },
+        });
       }),
     );
   }
@@ -424,6 +440,67 @@ export class SessionsService {
         branch: branchOverride || sr.repository.defaultBranch,
       };
     });
+  }
+
+  /**
+   * Mint a fresh token for an integration and embed it into a repository's
+   * clone URL. Reuses the same token-resolution + URL-embedding logic as
+   * buildRepoConfigs so a stale token in the container's origin remote can be
+   * refreshed right before `git push`. Returns null when no token is available
+   * (e.g. SSH-only / misconfigured integration) so callers can decide.
+   */
+  async buildAuthenticatedRemoteUrl(
+    organizationId: string,
+    integrationId: string,
+    cloneUrl: string,
+    provider: string,
+  ): Promise<string | null> {
+    const integration = await this.prisma.integration.findFirst({
+      where: { id: integrationId, organizationId },
+    });
+
+    if (!integration?.config || !integration?.configIv) {
+      return null;
+    }
+
+    let token: string | undefined;
+    try {
+      const config = this.encryption.decryptJson<Record<string, string>>(
+        Buffer.from(integration.config),
+        Buffer.from(integration.configIv),
+      );
+      // GitHub App: mint a fresh short-lived installation token.
+      if (config.mode === 'app' && config.installationId) {
+        token = await this.githubApp.getInstallationToken(config.installationId);
+      } else {
+        token = config.accessToken || config.apiToken || config.token;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to resolve token for integration ${integrationId}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+
+    if (!token) {
+      return null;
+    }
+
+    // Convert SSH URLs to HTTPS so token auth works
+    let url = this.sshToHttps(cloneUrl);
+    if (url.startsWith('https://')) {
+      const parsed = new URL(url);
+      if (provider === 'GITLAB') {
+        parsed.username = 'oauth2';
+        parsed.password = token;
+      } else {
+        parsed.username = token;
+        parsed.password = 'x-oauth-basic';
+      }
+      url = parsed.toString();
+    }
+
+    return url;
   }
 
   /**

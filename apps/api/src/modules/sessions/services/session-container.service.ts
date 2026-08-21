@@ -64,7 +64,10 @@ export class SessionContainerService implements OnModuleInit {
 
   // ─── Container Lifecycle ────────────────────────────────────────
 
-  async createAndStart(config: SessionContainerConfig): Promise<string> {
+  async createAndStart(
+    config: SessionContainerConfig,
+    onStarted?: (containerId: string) => Promise<void> | void,
+  ): Promise<string> {
     const containerName = `${this.containerPrefix}-${config.sessionId}`;
 
     const sessionConfig = Buffer.from(
@@ -158,6 +161,20 @@ export class SessionContainerService implements OnModuleInit {
     await container.start();
 
     const containerId = container.id;
+
+    // Persist the container id as early as possible (before the potentially
+    // long copy/setup steps below). This lets the session be reconciled to
+    // RUNNING even if the process restarts mid-boot — otherwise the session
+    // could stay stuck in CREATING forever while its container is running.
+    if (onStarted) {
+      try {
+        await onStarted(containerId);
+      } catch (err) {
+        this.logger.warn(
+          `onStarted callback failed for ${containerName}: ${(err as Error).message}`,
+        );
+      }
+    }
 
     // Copy local folder into container (isolated copy, not a bind mount)
     if (config.localPath) {
@@ -618,6 +635,7 @@ export class SessionContainerService implements OnModuleInit {
     workDir = '/workspace',
     timeoutMs = 60000,
     user = 'executor',
+    options: { throwOnError?: boolean } = {},
   ): Promise<string> {
     const container = this.docker.getContainer(containerId);
 
@@ -638,35 +656,79 @@ export class SessionContainerService implements OnModuleInit {
       exec.start({}, (err, stream) => {
         if (err || !stream) {
           clearTimeout(timer);
-          resolve('');
+          // Preserve legacy behaviour for callers that don't opt in, but let
+          // opt-in callers detect the failure to start the exec.
+          if (options.throwOnError) {
+            reject(
+              err instanceof Error
+                ? err
+                : new Error('Failed to start command in container'),
+            );
+          } else {
+            resolve('');
+          }
           return;
         }
 
         const chunks: Buffer[] = [];
         stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-        stream.on('end', () => {
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        stream.on('end', async () => {
           clearTimeout(timer);
           const data = Buffer.concat(chunks);
-          // Demux Docker multiplexed stream
-          let output = '';
+          // Demux Docker multiplexed stream (header byte 0: 1=stdout, 2=stderr)
+          let stdout = '';
+          let stderr = '';
           let offset = 0;
           while (offset < data.length) {
             if (offset + 8 > data.length) break;
             const type = data[offset];
             const size = data.readUInt32BE(offset + 4);
             if (offset + 8 + size > data.length) break;
-            if (type === 1) {
-              output += data
-                .slice(offset + 8, offset + 8 + size)
-                .toString('utf8');
+            const text = data
+              .slice(offset + 8, offset + 8 + size)
+              .toString('utf8');
+            if (type === 2) {
+              stderr += text;
+            } else {
+              stdout += text;
             }
             offset += 8 + size;
           }
-          resolve(output);
+
+          if (options.throwOnError) {
+            try {
+              const info = await exec.inspect();
+              if (info.ExitCode && info.ExitCode !== 0) {
+                const detail = (stderr || stdout).trim();
+                reject(
+                  new Error(
+                    `Command exited with code ${info.ExitCode}${
+                      detail ? `: ${detail}` : ''
+                    }`,
+                  ),
+                );
+                return;
+              }
+            } catch (inspectErr) {
+              reject(
+                inspectErr instanceof Error
+                  ? inspectErr
+                  : new Error('Failed to inspect command result'),
+              );
+              return;
+            }
+          }
+
+          resolve(stdout);
         });
-        stream.on('error', () => {
+        stream.on('error', (streamErr: Error) => {
           clearTimeout(timer);
-          resolve('');
+          if (options.throwOnError) {
+            reject(streamErr);
+          } else {
+            resolve('');
+          }
         });
       });
     });
