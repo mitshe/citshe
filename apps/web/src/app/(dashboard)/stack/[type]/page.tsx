@@ -110,7 +110,7 @@ export default function StackToolPage({
   const extraLinks = status?.links?.slice(1) ?? [];
 
   return (
-    <div className="w-full max-w-[1400px] space-y-8 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
       {/* Header: brand + name + health · Open in provider + ⋯ menu */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -284,22 +284,16 @@ function PluginDashboard({
   }
 
   return (
-    <div className="space-y-8">
-      {/* Big KPI row — large stat blocks from status.metrics */}
+    <div className="space-y-6">
+      {/* Dense inline summary bar — replaces the KPI tile grid. */}
       {statusLoading ? (
-        <KpiRowSkeleton />
+        <SummaryBarSkeleton />
       ) : metrics.length === 0 ? (
-        <EmptyState
-          icon={<Boxes />}
-          title="No metrics yet"
-          description="This tool hasn't reported any metrics for this portal."
-        />
+        <p className="text-sm text-muted-foreground">
+          No metrics reported for this portal yet.
+        </p>
       ) : (
-        <div className="flex flex-wrap gap-3">
-          {metrics.map((m, i) => (
-            <KpiCard key={i} metric={m} />
-          ))}
-        </div>
+        <SummaryBar metrics={metrics} />
       )}
 
       {/* Global actions surfaced from status */}
@@ -320,24 +314,26 @@ function PluginDashboard({
           icon={<Rocket className="h-4 w-4" />}
           count={previews.length}
         >
-          <Panel>
-            {previewsLoading ? (
+          {previewsLoading ? (
+            <Panel>
               <SectionRowsSkeleton />
-            ) : (
-              previews.map((p, i) => <PreviewRow key={i} preview={p} />)
-            )}
-          </Panel>
+            </Panel>
+          ) : (
+            <CollapsibleList
+              items={previews}
+              renderItem={(p, i) => <PreviewRow key={i} preview={p} />}
+            />
+          )}
         </Section>
       )}
 
       {/* Status items — e.g. per-domain / per-zone health rows */}
       {items.length > 0 && (
         <Section title="Status" count={items.length}>
-          <Panel>
-            {items.map((it, i) => (
-              <StatusItemRow key={i} item={it} />
-            ))}
-          </Panel>
+          <CollapsibleList
+            items={items}
+            renderItem={(it, i) => <StatusItemRow key={i} item={it} />}
+          />
         </Section>
       )}
 
@@ -375,6 +371,56 @@ function PluginDashboard({
           ))
       )}
     </div>
+  );
+}
+
+// ---- Show-more mechanism ---------------------------------------------------
+
+const DEFAULT_VISIBLE = 5;
+
+/**
+ * Renders the first N (=5) items in a bordered Panel and, when there are more,
+ * a "Show more (N)" footer button that expands the full list IN PLACE (local
+ * state, toggles to "Show less"). Generic over any item type — used for
+ * deployments, previews, status items, resource rows and servers so a group of
+ * 15 identical rows never forces the user to scroll past all of them.
+ */
+function CollapsibleList<T>({
+  items,
+  renderItem,
+  initial = DEFAULT_VISIBLE,
+}: {
+  items: T[];
+  renderItem: (item: T, index: number) => React.ReactNode;
+  initial?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hidden = items.length - initial;
+  const visible = expanded ? items : items.slice(0, initial);
+
+  return (
+    <Panel>
+      {visible.map((item, i) => renderItem(item, i))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex w-full items-center justify-center gap-1.5 border-t border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+        >
+          {expanded ? (
+            <>
+              Show less
+              <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+            </>
+          ) : (
+            <>
+              Show more ({hidden})
+              <ChevronDown className="h-3.5 w-3.5" />
+            </>
+          )}
+        </button>
+      )}
+    </Panel>
   );
 }
 
@@ -417,7 +463,7 @@ function VpsServersSection({
   };
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <SectionHeader
         label="Servers"
         count={items.length}
@@ -440,16 +486,17 @@ function VpsServersSection({
           description="Add your first VPS to start seeing its health here."
         />
       ) : (
-        <Panel>
-          {items.map((it) => (
+        <CollapsibleList
+          items={items}
+          renderItem={(it) => (
             <VpsServerRow
               key={it.id}
               item={it}
               removing={removingId === it.id}
               onRemove={() => setConfirmId(it.id)}
             />
-          ))}
-        </Panel>
+          )}
+        />
       )}
 
       {adding && (
@@ -509,7 +556,7 @@ function VpsServerRow({
 
   return (
     <div className="border-b border-border last:border-b-0">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
+      <div className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
         <button
           type="button"
           onClick={() => hasDetails && setOpen((o) => !o)}
@@ -580,55 +627,70 @@ function VpsServerRow({
   );
 }
 
-// ---- KPI cards -------------------------------------------------------------
+// ---- Summary bar -----------------------------------------------------------
 
-const kpiText: Record<HealthState, string> = {
+const metricText: Record<HealthState, string> = {
   ok: "text-ok",
   warn: "text-warn",
   down: "text-danger",
   idle: "text-foreground",
 };
 
-function KpiCard({ metric }: { metric: PluginMetric }) {
+/**
+ * A single dense, information-rich status strip that replaces the grid of big
+ * empty KPI tiles. Renders every status.metric inline as
+ * `LABEL value` pairs separated by subtle "·" dividers (Vercel/Neon style),
+ * wrapping across rows on narrow screens. Values are shown in FULL (no
+ * truncation), so "aws-eu-central-1" / "production" / "0.25-1 vCPU" stay
+ * legible. A tiny StatusDot precedes only metrics that carry a meaningful
+ * (non-idle) health state.
+ */
+function SummaryBar({ metrics }: { metrics: PluginMetric[] }) {
   return (
-    <div className="min-w-[8.5rem] flex-1 basis-[8.5rem] rounded-lg border border-border bg-surface-card p-5 sm:max-w-[16rem]">
-      <div className="flex items-center gap-1.5">
-        {metric.state && metric.state !== "idle" && (
-          <StatusDot state={metric.state} size={7} />
-        )}
-        <p className="truncate text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-          {metric.label}
-        </p>
-      </div>
-      <p
-        className={cn(
-          "mt-2 truncate text-3xl font-semibold tracking-tight tabular-nums",
-          metric.state ? kpiText[metric.state] : "text-foreground",
-        )}
-      >
-        {metric.value}
-      </p>
-      {metric.hint && (
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {metric.hint}
-        </p>
-      )}
+    <div className="rounded-lg border border-border bg-surface-card px-4 py-3">
+      <dl className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm leading-tight">
+        {metrics.map((m, i) => (
+          <div key={i} className="flex items-center gap-3">
+            {i > 0 && (
+              <span className="select-none text-border-strong" aria-hidden>
+                ·
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              {m.state && m.state !== "idle" && (
+                <StatusDot state={m.state} size={7} />
+              )}
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
+                {m.label}
+              </dt>
+              <dd
+                className={cn(
+                  "font-medium tabular-nums",
+                  m.state ? metricText[m.state] : "text-foreground",
+                )}
+                title={m.hint || undefined}
+              >
+                {m.value}
+              </dd>
+            </div>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
 
-function KpiRowSkeleton() {
+function SummaryBarSkeleton() {
   return (
-    <div className="flex flex-wrap gap-3">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={i}
-          className="min-w-[8.5rem] flex-1 basis-[8.5rem] rounded-lg border border-border bg-surface-card p-5 sm:max-w-[16rem]"
-        >
-          <div className="h-2.5 w-16 animate-pulse rounded bg-surface-hover" />
-          <div className="mt-3 h-8 w-24 animate-pulse rounded bg-surface-hover" />
-        </div>
-      ))}
+    <div className="rounded-lg border border-border bg-surface-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-4 w-24 animate-pulse rounded bg-surface-hover"
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -647,7 +709,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <SectionHeader label={title} icon={icon} count={count} />
       {children}
     </section>
@@ -678,7 +740,7 @@ function ResourceGroupSection({
     : group.items;
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <div className="flex items-center gap-1.5">
         <Eyebrow>{group.label}</Eyebrow>
         <SectionCount className="normal-case tracking-normal">
@@ -694,8 +756,9 @@ function ResourceGroupSection({
           description="Nothing discovered for this token yet."
         />
       ) : (
-        <Panel>
-          {items.map((it) =>
+        <CollapsibleList
+          items={items}
+          renderItem={(it) =>
             isDeployments ? (
               <DeploymentRow key={it.id} item={it} />
             ) : (
@@ -705,9 +768,9 @@ function ResourceGroupSection({
                 state={it.state ?? "idle"}
                 meta={it.meta}
               />
-            ),
-          )}
-        </Panel>
+            )
+          }
+        />
       )}
     </section>
   );
@@ -733,7 +796,7 @@ function DeploymentRow({ item }: { item: PluginResourceItem }) {
   return (
     <div
       className={cn(
-        "relative flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0",
+        "relative flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm transition-linear last:border-b-0",
         active && "bg-primary/5",
       )}
     >
@@ -778,7 +841,7 @@ function ResourceRow({
   meta?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0">
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5 text-sm transition-linear last:border-b-0">
       <span className="flex min-w-0 items-center gap-2.5">
         <StatusDot state={state} size={7} />
         <span className="truncate text-foreground">{name}</span>
@@ -794,7 +857,7 @@ function ResourceRow({
 
 function StatusItemRow({ item }: { item: PluginItem }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0">
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5 text-sm transition-linear last:border-b-0">
       <span className="flex min-w-0 items-center gap-2.5">
         <StatusDot state={item.state ?? "idle"} size={7} />
         <span className="truncate text-foreground">{item.label}</span>
@@ -814,7 +877,7 @@ function PreviewRow({ preview }: { preview: PreviewDeployment }) {
       href={preview.url}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm transition-linear last:border-b-0 hover:bg-surface-hover"
+      className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm transition-linear last:border-b-0 hover:bg-surface-hover"
     >
       <span className="flex min-w-0 items-center gap-2.5">
         <StatusDot state={preview.state} size={7} />
@@ -864,8 +927,8 @@ function SectionRowsSkeleton() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-8">
-      <KpiRowSkeleton />
+    <div className="space-y-6">
+      <SummaryBarSkeleton />
       <Panel>
         <SectionRowsSkeleton />
       </Panel>
