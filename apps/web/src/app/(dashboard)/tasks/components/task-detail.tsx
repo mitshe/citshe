@@ -35,7 +35,6 @@ import {
   Loader2,
   ExternalLink,
   FolderOpen,
-  Clock,
   MoreVertical,
   Sparkles,
   AlertCircle,
@@ -47,6 +46,7 @@ import {
   GitPullRequest,
   ArrowUpRight,
   ArrowLeft,
+  ChevronDown,
 } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -63,7 +63,6 @@ import {
 import { toast } from "sonner";
 import type { Task, TaskStatus, TaskPriority } from "@/lib/api/types";
 import { getTaskStatus, getPriority } from "@/lib/status-config";
-import { StatusPill } from "./task-shared";
 
 // ---------------------------------------------------------------------------
 // Helpers — defensive narrowing of loosely-typed JSON (result / agentLogs)
@@ -175,6 +174,12 @@ export interface TaskDetailProps {
 /**
  * The single source of truth for rendering a task's detail. Used both by the
  * full-page route (`/tasks/[id]`) and the board/list slide-over panel.
+ *
+ * Layout follows the Jira issue-view: a main column (title → primary actions →
+ * a bordered description card → an activity feed) and a narrower meta rail (a
+ * prominent Status control at the top → a collapsible "Details" panel →
+ * Created/Updated timestamps). The `page` variant lays these out in two
+ * columns; the `panel` variant stacks them in a single dense column.
  */
 export function TaskDetail({
   taskId,
@@ -202,6 +207,9 @@ export function TaskDetail({
 
   // Add-label input
   const [newLabel, setNewLabel] = useState("");
+
+  // Collapsible "Details" panel (Jira "Details ∧").
+  const [detailsOpen, setDetailsOpen] = useState(true);
 
   useEffect(() => {
     if (editingDescription) descriptionRef.current?.focus();
@@ -309,25 +317,54 @@ export function TaskDetail({
   const liveWorker =
     !!task.sessionId &&
     (task.status === "ANALYZING" || task.status === "IN_PROGRESS");
+  const statusMeta = getTaskStatus(task.status);
 
   // -- Small building blocks reused across both layouts --------------------
 
-  const openClosedPill = (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        isTaskClosed
-          ? "border-border bg-surface-inset/60 text-muted-foreground"
-          : "border-border text-foreground",
-      )}
-    >
-      {isTaskClosed ? (
-        <CheckCircle2 className="w-3 h-3" />
-      ) : (
-        <Clock className="w-3 h-3" />
-      )}
-      {isTaskClosed ? "Closed" : "Open"}
-    </span>
+  const overflowMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon">
+          <MoreVertical className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canRun && (
+          <DropdownMenuItem
+            onClick={async () => {
+              try {
+                await processTask.mutateAsync(taskId);
+                toast.success("Delegated to a worker");
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Failed to run task",
+                );
+              }
+            }}
+            disabled={processTask.isPending}
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Process with AI
+          </DropdownMenuItem>
+        )}
+        {fullPageHref && (
+          <DropdownMenuItem asChild>
+            <Link href={fullPageHref}>
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Open full page
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {(fullPageHref || canRun) && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          onClick={() => setIsDeleteOpen(true)}
+          className="text-danger"
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          Delete task
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   const closeReopenButton = isTaskClosed ? (
@@ -364,52 +401,6 @@ export function TaskDetail({
     </Button>
   );
 
-  const overflowMenu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon">
-          <MoreVertical className="w-4 h-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {fullPageHref && (
-          <DropdownMenuItem asChild>
-            <Link href={fullPageHref}>
-              <ArrowUpRight className="w-4 h-4 mr-2" />
-              Open full page
-            </Link>
-          </DropdownMenuItem>
-        )}
-        {canRun && (
-          <DropdownMenuItem
-            onClick={async () => {
-              try {
-                await processTask.mutateAsync(taskId);
-                toast.success("Delegated to a worker");
-              } catch (err) {
-                toast.error(
-                  err instanceof Error ? err.message : "Failed to run task",
-                );
-              }
-            }}
-            disabled={processTask.isPending}
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            Process with AI
-          </DropdownMenuItem>
-        )}
-        {(fullPageHref || canRun) && <DropdownMenuSeparator />}
-        <DropdownMenuItem
-          onClick={() => setIsDeleteOpen(true)}
-          className="text-danger"
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete task
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
   const titleBlock = editingTitle ? (
     <Input
       autoFocus
@@ -444,50 +435,108 @@ export function TaskDetail({
     </h1>
   );
 
-  const descriptionBlock = (
-    <div className="space-y-2">
-      <Eyebrow>Description</Eyebrow>
-      {editingDescription ? (
-        <Textarea
-          ref={descriptionRef}
-          value={descriptionDraft}
-          onChange={(e) => setDescriptionDraft(e.target.value)}
-          onBlur={commitDescription}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              commitDescription();
-            } else if (e.key === "Escape") {
-              setEditingDescription(false);
+  // Primary actions row under the title (Jira "Create subtask / Link issue").
+  const primaryActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      {canRun && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            try {
+              await processTask.mutateAsync(taskId);
+              toast.success("Delegated to a worker");
+            } catch (err) {
+              toast.error(
+                err instanceof Error ? err.message : "Failed to run task",
+              );
             }
           }}
-          rows={5}
-          placeholder="Add a description…"
-        />
-      ) : (
-        <div
-          className="-mx-2 min-h-9 cursor-text rounded-md px-2 py-1.5 transition-linear hover:bg-surface-hover"
-          onClick={() => {
-            setDescriptionDraft(task.description ?? "");
-            setEditingDescription(true);
-          }}
+          disabled={processTask.isPending}
         >
-          {task.description ? (
-            <p className="whitespace-pre-wrap text-sm text-foreground">
-              {task.description}
-            </p>
+          {processTask.isPending ? (
+            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
           ) : (
-            <p className="text-sm italic text-muted-foreground">
-              Add a description…
-            </p>
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
           )}
-        </div>
+          Process with AI
+        </Button>
+      )}
+      {prUrl && (
+        <a href={prUrl} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" size="sm">
+            <GitPullRequest className="mr-2 h-3.5 w-3.5" />
+            View PR
+            <ExternalLink className="ml-1.5 h-3 w-3 opacity-60" />
+          </Button>
+        </a>
+      )}
+      {task.sessionId && (
+        <Link href={`/sessions/${task.sessionId}`}>
+          <Button variant="outline" size="sm">
+            {liveWorker ? (
+              <StatusDot state="running" size={8} className="mr-2" />
+            ) : (
+              <Terminal className="mr-2 h-3.5 w-3.5" />
+            )}
+            Watch terminal
+          </Button>
+        </Link>
       )}
     </div>
   );
 
+  // Description in its own bordered card (the big visual change).
+  const descriptionCard = (
+    <section className="space-y-2">
+      <Eyebrow>Description</Eyebrow>
+      <div className="rounded-lg border border-border bg-surface-card">
+        {editingDescription ? (
+          <div className="p-3">
+            <Textarea
+              ref={descriptionRef}
+              value={descriptionDraft}
+              onChange={(e) => setDescriptionDraft(e.target.value)}
+              onBlur={commitDescription}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  commitDescription();
+                } else if (e.key === "Escape") {
+                  setEditingDescription(false);
+                }
+              }}
+              rows={6}
+              placeholder="Add a description…"
+            />
+          </div>
+        ) : (
+          <div
+            className="min-h-[3.5rem] cursor-text rounded-lg px-4 py-3 transition-linear hover:bg-surface-hover"
+            onClick={() => {
+              setDescriptionDraft(task.description ?? "");
+              setEditingDescription(true);
+            }}
+          >
+            {task.description ? (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {task.description}
+              </p>
+            ) : (
+              <p className="text-sm italic text-muted-foreground">
+                Add a description…
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+
+  // Jira-style activity feed: AI Summary card above an avatar/entry/timestamp
+  // timeline, newest first.
   const activityBlock = (
-    <div className="space-y-3">
+    <section className="space-y-3">
       <Eyebrow>Activity</Eyebrow>
 
       {resultSummary && (
@@ -503,34 +552,36 @@ export function TaskDetail({
       )}
 
       {agentLogs.length > 0 ? (
-        <ol className="relative ml-2 space-y-4 border-l border-border pl-6">
-          {agentLogs.map((entry, index) => {
+        <ol className="space-y-3">
+          {[...agentLogs].reverse().map((entry, index) => {
             const details = formatDetails(entry.details);
             return (
-              <li key={index} className="relative">
-                <span className="absolute -left-[31px] flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface-card ring-4 ring-background">
+              <li key={index} className="flex gap-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface-inset">
                   <Bot className="h-3.5 w-3.5 text-muted-foreground" />
                 </span>
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="text-sm font-medium text-foreground">
-                    {entry.agentName}
-                  </span>
-                  {entry.action && (
-                    <span className="text-sm text-muted-foreground">
-                      {entry.action}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-medium text-foreground">
+                      {entry.agentName}
                     </span>
-                  )}
-                  {entry.timestamp && (
-                    <span className="text-xs text-text-subtle">
-                      {formatDistanceToNow(new Date(entry.timestamp))}
-                    </span>
+                    {entry.action && (
+                      <span className="text-sm text-muted-foreground">
+                        {entry.action}
+                      </span>
+                    )}
+                    {entry.timestamp && (
+                      <span className="text-xs text-text-subtle">
+                        {formatDistanceToNow(new Date(entry.timestamp))}
+                      </span>
+                    )}
+                  </div>
+                  {details && (
+                    <pre className="mt-1.5 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
+                      {details}
+                    </pre>
                   )}
                 </div>
-                {details && (
-                  <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
-                    {details}
-                  </pre>
-                )}
               </li>
             );
           })}
@@ -540,158 +591,146 @@ export function TaskDetail({
           <p className="text-sm italic text-text-subtle">No activity yet.</p>
         )
       )}
-    </div>
+    </section>
   );
 
-  const statusSelect = (
-    <div className="space-y-1.5">
-      <Eyebrow>Status</Eyebrow>
-      <Select
-        value={task.status}
-        onValueChange={(value: TaskStatus) => void save({ status: value })}
+  // Prominent Status control — the primary control of the rail (Jira's colored
+  // status button). Accent-tinted trigger driven by status-config.
+  const statusControl = (
+    <Select
+      value={task.status}
+      onValueChange={(value: TaskStatus) => void save({ status: value })}
+    >
+      <SelectTrigger
+        className={cn(
+          "w-full gap-2 border text-sm font-medium [&>svg]:size-3.5",
+          statusMeta.color,
+        )}
       >
-        <SelectTrigger className="w-full">
-          <SelectValue>{getTaskStatus(task.status).label}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {STATUS_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-          {!STATUS_OPTIONS.some((o) => o.value === task.status) && (
-            <SelectItem value={task.status} disabled>
-              {getTaskStatus(task.status).label}
-            </SelectItem>
-          )}
-        </SelectContent>
-      </Select>
+        <span className="flex items-center gap-1.5">
+          {statusMeta.icon}
+          <SelectValue>{statusMeta.label}</SelectValue>
+        </span>
+      </SelectTrigger>
+      <SelectContent>
+        {STATUS_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+        {!STATUS_OPTIONS.some((o) => o.value === task.status) && (
+          <SelectItem value={task.status} disabled>
+            {statusMeta.label}
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
+  );
+
+  // A single dense Details row: muted label (left) → value (right).
+  const detailRow = (label: string, value: React.ReactNode) => (
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2 py-1.5">
+      <span className="text-xs uppercase tracking-wide text-text-subtle">
+        {label}
+      </span>
+      <div className="min-w-0 text-sm text-foreground">{value}</div>
     </div>
   );
 
-  const prioritySelect = (
-    <div className="space-y-1.5">
-      <Eyebrow>Priority</Eyebrow>
-      <Select
-        value={task.priority ?? "medium"}
-        onValueChange={(value: TaskPriority) => void save({ priority: value })}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {PRIORITY_OPTIONS.map((value) => (
-            <SelectItem key={value} value={value}>
-              {getPriority(value).label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+  const priorityValue = (
+    <Select
+      value={task.priority ?? "medium"}
+      onValueChange={(value: TaskPriority) => void save({ priority: value })}
+    >
+      <SelectTrigger size="sm" className="h-8 w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {PRIORITY_OPTIONS.map((value) => (
+          <SelectItem key={value} value={value}>
+            {getPriority(value).label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 
-  const repositoryBlock = (
-    <div className="space-y-1.5">
-      <Eyebrow>Repository</Eyebrow>
-      {task.repository ? (
-        <Link
-          href="/repos"
-          className="flex items-center gap-1.5 text-sm text-foreground transition-linear hover:text-primary"
+  const repositoryValue = task.repository ? (
+    <Link
+      href="/repos"
+      className="flex items-center gap-1.5 text-sm text-foreground transition-linear hover:text-primary"
+    >
+      <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="truncate">{task.repository.name}</span>
+    </Link>
+  ) : (
+    <span className="text-sm text-text-subtle">—</span>
+  );
+
+  const labelsValue = (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {labels.map((label) => (
+        <Chip
+          key={label}
+          onRemove={() => removeLabel(label)}
+          removeLabel={`Remove ${label}`}
         >
-          <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{task.repository.name}</span>
-        </Link>
-      ) : (
-        <span className="text-sm text-text-subtle">—</span>
+          {label}
+        </Chip>
+      ))}
+      <div className="flex items-center gap-1">
+        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addLabel();
+            }
+          }}
+          onBlur={addLabel}
+          placeholder="Add label"
+          className="h-7 w-24 text-xs"
+        />
+      </div>
+    </div>
+  );
+
+  // Collapsible Details panel (Jira "Details ∧").
+  const detailsPanel = (
+    <div className="rounded-lg border border-border bg-surface-card">
+      <button
+        type="button"
+        onClick={() => setDetailsOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 transition-linear hover:bg-surface-hover"
+      >
+        <Eyebrow>Details</Eyebrow>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform",
+            !detailsOpen && "-rotate-90",
+          )}
+        />
+      </button>
+      {detailsOpen && (
+        <div className="divide-y divide-border/60 border-t border-border px-3">
+          {detailRow("Priority", priorityValue)}
+          {detailRow("Repository", repositoryValue)}
+          {detailRow("Labels", labelsValue)}
+        </div>
       )}
     </div>
   );
 
-  const labelsBlock = (
-    <div className="space-y-1.5">
-      <Eyebrow>Labels</Eyebrow>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {labels.map((label) => (
-          <Chip
-            key={label}
-            onRemove={() => removeLabel(label)}
-            removeLabel={`Remove ${label}`}
-          >
-            {label}
-          </Chip>
-        ))}
-        <div className="flex items-center gap-1">
-          <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addLabel();
-              }
-            }}
-            onBlur={addLabel}
-            placeholder="Add label"
-            className="h-7 w-24 text-xs"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const timelineBlock = (
-    <div className="space-y-1.5">
-      <Eyebrow>Timeline</Eyebrow>
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5 shrink-0" />
-          Created {formatDistanceToNow(new Date(task.createdAt))}
-        </div>
-        {task.closedAt && (
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            Closed {formatDistanceToNow(new Date(task.closedAt))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const linksBlock = (prUrl || task.sessionId) && (
-    <div className="space-y-1.5">
-      <Eyebrow>Links</Eyebrow>
-      <div className="flex flex-col gap-2">
-        {prUrl && (
-          <a href={prUrl} target="_blank" rel="noopener noreferrer">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start"
-            >
-              <GitPullRequest className="mr-2 h-4 w-4" />
-              View PR
-              <ExternalLink className="ml-auto h-3 w-3 opacity-60" />
-            </Button>
-          </a>
-        )}
-        {task.sessionId && (
-          <Link href={`/sessions/${task.sessionId}`}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start"
-            >
-              {liveWorker ? (
-                <StatusDot state="running" size={8} className="mr-2" />
-              ) : (
-                <Terminal className="mr-2 h-4 w-4" />
-              )}
-              Watch terminal
-            </Button>
-          </Link>
-        )}
-      </div>
+  // Created / Updated / Closed timestamps (Jira's muted footer).
+  const timestamps = (
+    <div className="space-y-1 text-xs text-text-subtle">
+      <div>Created {formatDistanceToNow(new Date(task.createdAt))}</div>
+      <div>Updated {formatDistanceToNow(new Date(task.updatedAt))}</div>
+      {task.closedAt && (
+        <div>Closed {formatDistanceToNow(new Date(task.closedAt))}</div>
+      )}
     </div>
   );
 
@@ -732,19 +771,15 @@ export function TaskDetail({
   );
 
   // ------------------------------------------------------------------------
-  // PANEL layout — dense single column, mobile-first.
+  // PANEL layout — dense single column, mobile-first. Same order as the page:
+  // status → actions → title → description card → details → activity → dates.
   // ------------------------------------------------------------------------
   if (isPanel) {
     return (
       <div className="space-y-5">
-        {/* Status row + actions — status on the left, actions grouped right */}
+        {/* Prominent status at the top, close/reopen + ⋯ on the right. */}
         <div className="flex items-center gap-2">
-          <StatusPill status={task.status} />
-          {isTaskClosed && (
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Closed
-            </span>
-          )}
+          <div className="min-w-[10rem] flex-1">{statusControl}</div>
           {savingIndicator}
           <div className="ml-auto flex items-center gap-2">
             {closeReopenButton}
@@ -753,19 +788,11 @@ export function TaskDetail({
         </div>
 
         {titleBlock}
-
-        {/* Status + Priority side by side */}
-        <div className="grid grid-cols-2 gap-3">
-          {statusSelect}
-          {prioritySelect}
-        </div>
-
-        {descriptionBlock}
-        {labelsBlock}
-        {repositoryBlock}
-        {timelineBlock}
-        {linksBlock}
+        {primaryActions}
+        {descriptionCard}
+        {detailsPanel}
         {activityBlock}
+        {timestamps}
 
         {deleteDialog}
       </div>
@@ -773,47 +800,42 @@ export function TaskDetail({
   }
 
   // ------------------------------------------------------------------------
-  // PAGE layout — two columns (main + meta rail).
+  // PAGE layout — two columns: main (max readable width) + meta rail (~300px).
   // ------------------------------------------------------------------------
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Link href="/tasks">
-            <Button variant="ghost" size="icon" className="shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <StatusPill status={task.status} />
-          {openClosedPill}
-          {savingIndicator}
-        </div>
-
+    <div className="w-full max-w-[1200px] space-y-6 px-4 sm:px-6 py-6 sm:py-8">
+      {/* Back + top-level actions */}
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/tasks">
+          <Button variant="ghost" size="sm" className="-ml-2 shrink-0">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Tasks
+          </Button>
+        </Link>
         <div className="flex items-center gap-2 shrink-0">
+          {savingIndicator}
           {closeReopenButton}
           {overflowMenu}
         </div>
       </div>
 
-      {titleBlock}
-
-      {/* Two-column: main content + right meta rail */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
-        {/* ---- Main content ---- */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-8">
+        {/* ---- LEFT: main content ---- */}
         <div className="min-w-0 space-y-6">
-          {descriptionBlock}
+          {titleBlock}
+          {primaryActions}
+          {descriptionCard}
           {activityBlock}
         </div>
 
-        {/* ---- Right meta rail ---- */}
-        <aside className="space-y-5 lg:border-l lg:border-border lg:pl-6">
-          {statusSelect}
-          {prioritySelect}
-          {repositoryBlock}
-          {labelsBlock}
-          {timelineBlock}
-          {linksBlock}
+        {/* ---- RIGHT: meta rail ---- */}
+        <aside className="space-y-4 lg:border-l lg:border-border lg:pl-8">
+          <div className="space-y-1.5">
+            <Eyebrow>Status</Eyebrow>
+            {statusControl}
+          </div>
+          {detailsPanel}
+          {timestamps}
         </aside>
       </div>
 
