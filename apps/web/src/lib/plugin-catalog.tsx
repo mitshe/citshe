@@ -1,6 +1,11 @@
-import { Cloud, Database, Megaphone, Server } from "lucide-react";
+import { Server } from "lucide-react";
 import type { PluginType } from "@/lib/api/types";
-import { VercelIcon } from "@/components/icons/brand-icons";
+import {
+  VercelIcon,
+  CloudflareIcon,
+  NeonIcon,
+  GoogleAdsIcon,
+} from "@/components/icons/brand-icons";
 
 export interface PluginField {
   key: string;
@@ -30,8 +35,8 @@ export const pluginCatalog: PluginDef[] = [
     type: "CLOUDFLARE",
     name: "Cloudflare",
     tagline: "Deploys, Pages & R2 — is it live?",
-    icon: <Cloud className="h-5 w-5" />,
-    accent: "text-muted-foreground",
+    icon: <CloudflareIcon className="h-5 w-5" />,
+    accent: "text-[#F38020]",
     configurable: true,
     docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
     fields: [
@@ -81,8 +86,8 @@ export const pluginCatalog: PluginDef[] = [
     type: "NEON",
     name: "Neon",
     tagline: "Postgres — size, branch, activity",
-    icon: <Database className="h-5 w-5" />,
-    accent: "text-muted-foreground",
+    icon: <NeonIcon className="h-5 w-5" />,
+    accent: "text-[#00E599]",
     docsUrl: "https://console.neon.tech/app/settings/api-keys",
     fields: [
       {
@@ -104,8 +109,8 @@ export const pluginCatalog: PluginDef[] = [
     type: "GOOGLE_ADS",
     name: "Google Ads",
     tagline: "Campaigns, spend & conversions",
-    icon: <Megaphone className="h-5 w-5" />,
-    accent: "text-muted-foreground",
+    icon: <GoogleAdsIcon className="h-5 w-5" />,
+    accent: "text-[#4285F4]",
     docsUrl: "https://developers.google.com/google-ads/api/docs/get-started/dev-token",
     fields: [
       {
