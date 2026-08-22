@@ -9,8 +9,11 @@ import {
   Users,
   Key,
   Settings,
+  FolderKanban,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthContext } from "@/lib/auth";
 
 interface SettingsNavItem {
   title: string;
@@ -19,24 +22,36 @@ interface SettingsNavItem {
 }
 
 interface SettingsNavGroup {
+  /** Short scope label shown as the group heading. */
   label: string;
+  /** One-line clarifier of what this group's scope means. */
+  hint: string;
+  /** Icon that reinforces the scope (portal vs you). */
+  scopeIcon: React.ComponentType<{ className?: string }>;
   items: SettingsNavItem[];
 }
 
+// Grouped by SCOPE so it's obvious what belongs to the current portal vs what
+// is personal to you. Everything in "This portal" is configured per portal
+// (each portal has its own GitHub, AI key, team, …); "You" is per-device.
 const navGroups: SettingsNavGroup[] = [
   {
-    label: "Setup",
+    label: "This portal",
+    hint: "Applies only to the portal you're in",
+    scopeIcon: FolderKanban,
     items: [
       { title: "AI", href: "/settings/ai", icon: Bot },
       { title: "GitHub", href: "/settings/integrations", icon: Plug },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
       { title: "Organization", href: "/settings/organization", icon: Building2 },
       { title: "Team", href: "/settings/team", icon: Users },
       { title: "API Keys", href: "/settings/api-keys", icon: Key },
+    ],
+  },
+  {
+    label: "You",
+    hint: "Personal to you, across every portal",
+    scopeIcon: UserRound,
+    items: [
       { title: "Preferences", href: "/settings/preferences", icon: Settings },
     ],
   },
@@ -88,10 +103,18 @@ export default function SettingsLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { currentOrg } = useAuthContext();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
   const activeItem = allItems.find((i) => isActive(i.href));
+
+  // Show the portal name in the "This portal" heading so it's unmistakable
+  // which portal these settings affect.
+  const scopeSubtitle = (group: SettingsNavGroup) =>
+    group.label === "This portal" && currentOrg?.name
+      ? currentOrg.name
+      : group.hint;
 
   return (
     <div className="flex min-h-full w-full flex-col lg:flex-row">
@@ -116,22 +139,31 @@ export default function SettingsLayout({
       </div>
 
       {/* Desktop: sticky left sub-nav */}
-      <aside className="hidden shrink-0 lg:block lg:w-[220px]">
-        <nav className="sticky top-0 max-h-screen space-y-6 overflow-y-auto p-4">
-          {navGroups.map((group) => (
-            <div key={group.label} className="space-y-0.5">
-              <p className="px-2.5 pb-1.5 text-[13px] font-medium uppercase tracking-wide text-text-subtle">
-                {group.label}
-              </p>
-              {group.items.map((item) => (
-                <SubNavRow
-                  key={item.href}
-                  item={item}
-                  active={isActive(item.href)}
-                />
-              ))}
-            </div>
-          ))}
+      <aside className="hidden shrink-0 lg:block lg:w-[240px]">
+        <nav className="sticky top-0 max-h-screen space-y-7 overflow-y-auto p-4">
+          {navGroups.map((group) => {
+            const ScopeIcon = group.scopeIcon;
+            return (
+              <div key={group.label} className="space-y-0.5">
+                <div className="px-2.5 pb-2">
+                  <p className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-wide text-foreground">
+                    <ScopeIcon className="h-3.5 w-3.5 text-text-subtle" />
+                    {group.label}
+                  </p>
+                  <p className="mt-0.5 truncate text-[12px] text-text-subtle">
+                    {scopeSubtitle(group)}
+                  </p>
+                </div>
+                {group.items.map((item) => (
+                  <SubNavRow
+                    key={item.href}
+                    item={item}
+                    active={isActive(item.href)}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </nav>
       </aside>
 
