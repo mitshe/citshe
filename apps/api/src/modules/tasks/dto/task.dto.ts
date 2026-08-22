@@ -8,6 +8,7 @@ import {
   MinLength,
   MaxLength,
   IsInt,
+  IsNumber,
   Min,
   Max,
 } from 'class-validator';
@@ -86,6 +87,11 @@ export class UpdateTaskDto {
   @IsOptional()
   @MaxLength(50)
   dueDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  queueOrder?: number;
 
   @IsObject()
   @IsOptional()

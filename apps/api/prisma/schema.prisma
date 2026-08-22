@@ -83,8 +83,12 @@ model Organization {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Orchestrator: when true, dispatched tasks stay QUEUED instead of
-  // auto-starting a worker thread.
+  // auto-starting a worker thread. Hard global stop.
   queuePaused Boolean @default(false) @map("queue_paused")
+
+  // Orchestrator: per-portal auto-pull. When true, QUEUED tasks are actively
+  // pulled into the BullMQ worker queue; when false they stay QUEUED (waiting).
+  autoPull Boolean @default(false) @map("auto_pull")
 
   // Per-org webhook secrets (encrypted)
   githubWebhookSecret   Bytes? @map("github_webhook_secret")
@@ -161,6 +165,10 @@ model Task {
   // Worker thread that executes this task (orchestrator dispatch)
   sessionId String? @map("session_id")
 
+  // Ordering within the Queue column. Float enables gap-based reordering
+  // (insert between neighbours without renumbering). Lower = pulled first.
+  queueOrder Float? @map("queue_order")
+
   // Result
   result    Json? // TaskResult
   agentLogs Json? @map("agent_logs") // TaskAgentLog[]
@@ -180,6 +188,7 @@ model Task {
   @@index([repositoryId])
   @@index([status])
   @@index([sessionId])
+  @@index([queueOrder])
   @@map("tasks")
 }
 

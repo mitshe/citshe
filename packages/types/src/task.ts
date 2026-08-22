@@ -25,6 +25,8 @@ export interface Task {
   dueDate?: string | null;
   organizationId: string;
   createdBy: string;
+  /** Ordering within the Queue column (gap-based; lower = pulled first). */
+  queueOrder?: number | null;
   createdAt: string;
   updatedAt: string;
   closedAt?: string | null;
@@ -41,11 +43,14 @@ export interface QueueTask {
   priority: TaskPriority | null;
   sessionId: string | null;
   repositoryId: string | null;
+  queueOrder?: number | null;
 }
 
 /** Live snapshot of the orchestrator queue and its workers. */
 export interface QueueOverview {
   queuePaused: boolean;
+  /** Per-portal auto-pull: when true, QUEUED tasks are actively pulled by workers. */
+  autoPull: boolean;
   runningWorkers: number;
   maxWorkers: number;
   pending: QueueTask[];
@@ -82,4 +87,5 @@ export interface UpdateTaskDto {
   repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
+  queueOrder?: number;
 }

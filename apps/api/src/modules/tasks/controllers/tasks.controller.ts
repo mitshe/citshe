@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { TasksService } from '../services/tasks.service';
 import { TaskComposerService } from '../services/task-composer.service';
+import { OrchestrationService } from '../../mcp/orchestration/orchestration.service';
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -44,6 +45,7 @@ export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
     private readonly composer: TaskComposerService,
+    private readonly orchestration: OrchestrationService,
   ) {}
 
   @Post('refine')
@@ -150,6 +152,11 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
   ) {
     const task = await this.tasksService.update(organizationId, id, dto);
+    // If the caller repositioned the task in the Queue, also re-prioritize its
+    // pending BullMQ job so the worker pull order follows the new position.
+    if (dto.queueOrder !== undefined) {
+      await this.orchestration.reorderTask(organizationId, id, dto.queueOrder);
+    }
     return { task };
   }
 
@@ -185,6 +192,27 @@ export class TasksController {
   ) {
     const task = await this.tasksService.startProcessing(organizationId, id);
     return { task, message: 'Task processing started' };
+  }
+
+  @Post(':id/queue')
+  @ApiOperation({
+    summary:
+      'Move a task into the Queue column (status QUEUED, appended to the end)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Task queued',
+    type: TaskWrapperResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @HttpCode(HttpStatus.OK)
+  async enqueue(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.orchestration.enqueueTask(organizationId, id);
+    return { task };
   }
 
   @Post(':id/cancel')

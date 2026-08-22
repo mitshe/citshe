@@ -38,4 +38,33 @@ export class OrchestrationController {
   ) {
     return this.orchestration.setQueuePaused(organizationId, !!body.paused);
   }
+
+  @Post('queue/auto-pull')
+  @ApiOperation({
+    summary:
+      'Toggle per-portal auto-pull: ON enqueues QUEUED tasks to workers, OFF holds them',
+  })
+  @ApiResponse({ status: 200, description: 'New auto-pull state' })
+  async setAutoPull(
+    @OrganizationId() organizationId: string,
+    @Body() body: { autoPull: boolean },
+  ) {
+    return this.orchestration.setAutoPull(organizationId, !!body.autoPull);
+  }
+
+  @Post('queue/reorder')
+  @ApiOperation({
+    summary: 'Reorder a task within the Queue column (set its queueOrder)',
+  })
+  @ApiResponse({ status: 200, description: 'Updated task' })
+  async reorder(
+    @OrganizationId() organizationId: string,
+    @Body() body: { taskId: string; queueOrder: number },
+  ) {
+    return this.orchestration.reorderTask(
+      organizationId,
+      body.taskId,
+      body.queueOrder,
+    );
+  }
 }

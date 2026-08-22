@@ -140,6 +140,7 @@ export class TasksService {
         repositoryId: dto.repositoryId,
         assigneeId: dto.assigneeId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        queueOrder: dto.queueOrder,
         result: dto.result as Prisma.InputJsonValue,
       },
     });

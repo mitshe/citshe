@@ -1,9 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SessionContainerService } from '../../sessions/services/session-container.service';
 import { EventsGateway } from '../../../infrastructure/websocket/events.gateway';
+import {
+  QUEUES,
+  TaskQueueJob,
+} from '../../../infrastructure/queue/queues';
 
 /**
  * The orchestrator: a persistent chat (the main Claude thread) decomposes work
@@ -22,10 +28,18 @@ export class OrchestrationService {
     private readonly sessionsService: SessionsService,
     private readonly containerService: SessionContainerService,
     private readonly eventsGateway: EventsGateway,
+    @InjectQueue(QUEUES.TASK_QUEUE)
+    private readonly taskQueue: Queue<TaskQueueJob>,
   ) {}
 
-  /** How many worker threads may run at once per organization. */
-  private readonly MAX_CONCURRENT_WORKERS = 3;
+  /**
+   * How many worker threads may run at once. This is also the BullMQ worker
+   * concurrency for the `task-queue` (see TaskQueueProcessor) — BullMQ caps
+   * parallelism natively, so no manual runningWorkers counting is needed.
+   */
+  static readonly MAX_CONCURRENT_WORKERS = 3;
+  private readonly MAX_CONCURRENT_WORKERS =
+    OrchestrationService.MAX_CONCURRENT_WORKERS;
   /** How long to wait for a worker container to become RUNNING. */
   private readonly WORKER_READY_TIMEOUT_MS = 90_000;
   /** How long a single task execution may run inside the worker. */
@@ -49,7 +63,8 @@ export class OrchestrationService {
             ],
           },
         },
-        orderBy: { createdAt: 'asc' },
+        // Queue column ordering: queueOrder asc (nulls last), then createdAt.
+        orderBy: [{ queueOrder: 'asc' }, { createdAt: 'asc' }],
         select: {
           id: true,
           title: true,
@@ -57,6 +72,7 @@ export class OrchestrationService {
           priority: true,
           sessionId: true,
           repositoryId: true,
+          queueOrder: true,
         },
       }),
       this.prisma.agentSession.count({
@@ -66,13 +82,14 @@ export class OrchestrationService {
 
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { queuePaused: true },
+      select: { queuePaused: true, autoPull: true },
     });
 
     const byStatus = (s: TaskStatus) => tasks.filter((t) => t.status === s);
 
     return {
       queuePaused: org?.queuePaused ?? false,
+      autoPull: org?.autoPull ?? false,
       runningWorkers,
       maxWorkers: this.MAX_CONCURRENT_WORKERS,
       pending: byStatus(TaskStatus.PENDING),
@@ -88,6 +105,231 @@ export class OrchestrationService {
       data: { queuePaused: paused },
     });
     return { queuePaused: paused };
+  }
+
+  // ─── auto-pull (per-portal toggle) ────────────────────────────────────────
+
+  /**
+   * Toggle per-portal auto-pull.
+   *  ON  → enqueue ALL of the org's QUEUED tasks as BullMQ jobs (ordered by
+   *        queueOrder) so free workers start pulling them. Respects the global
+   *        queuePaused hard-stop (no jobs added while paused).
+   *  OFF → remove the org's pending (waiting/delayed) jobs from `task-queue`;
+   *        tasks stay QUEUED in the DB. Already-active jobs finish.
+   */
+  async setAutoPull(organizationId: string, autoPull: boolean) {
+    await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { autoPull },
+    });
+
+    if (autoPull) {
+      await this.enqueueOrgQueue(organizationId);
+    } else {
+      await this.removeOrgPendingJobs(organizationId);
+    }
+
+    return { autoPull };
+  }
+
+  /**
+   * Enqueue all of an org's QUEUED tasks as BullMQ jobs (ordered by queueOrder).
+   * No-op while queuePaused. Skips tasks that already have a pending job.
+   */
+  async enqueueOrgQueue(organizationId: string): Promise<{ enqueued: number }> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { queuePaused: true, autoPull: true },
+    });
+    if (!org || org.queuePaused || !org.autoPull) {
+      return { enqueued: 0 };
+    }
+
+    const queued = await this.prisma.task.findMany({
+      where: { organizationId, status: TaskStatus.QUEUED },
+      orderBy: [{ queueOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, queueOrder: true },
+    });
+
+    let enqueued = 0;
+    for (const task of queued) {
+      const added = await this.addTaskJob(
+        organizationId,
+        task.id,
+        task.queueOrder,
+      );
+      if (added) enqueued++;
+    }
+    return { enqueued };
+  }
+
+  /**
+   * Remove an org's not-yet-active jobs (waiting/delayed/prioritized) from the
+   * worker queue. Active (running) jobs are left to finish. Tasks stay QUEUED.
+   */
+  async removeOrgPendingJobs(
+    organizationId: string,
+  ): Promise<{ removed: number }> {
+    const jobs = await this.taskQueue.getJobs([
+      'waiting',
+      'delayed',
+      'prioritized',
+      'paused',
+    ]);
+    let removed = 0;
+    for (const job of jobs) {
+      if (job.data?.organizationId === organizationId) {
+        try {
+          await job.remove();
+          removed++;
+        } catch (err) {
+          this.logger.warn(
+            `Failed to remove job ${job.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+    return { removed };
+  }
+
+  // ─── enqueue + reorder ────────────────────────────────────────────────────
+
+  /**
+   * Move a task into the Queue column: status = QUEUED with queueOrder appended
+   * to the end of the org's queue. If auto-pull is ON (and not paused), a
+   * BullMQ job is added immediately so a free worker can pull it.
+   */
+  async enqueueTask(organizationId: string, taskId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, status: true },
+    });
+    if (!task) {
+      return { status: 'error', message: `Task ${taskId} not found.` };
+    }
+
+    const last = await this.prisma.task.findFirst({
+      where: {
+        organizationId,
+        status: TaskStatus.QUEUED,
+        queueOrder: { not: null },
+      },
+      orderBy: { queueOrder: 'desc' },
+      select: { queueOrder: true },
+    });
+    const queueOrder = (last?.queueOrder ?? 0) + 1;
+
+    const updated = await this.prisma.task.update({
+      where: { id: taskId },
+      data: { status: TaskStatus.QUEUED, queueOrder },
+    });
+    this.eventsGateway.emitTaskUpdate(organizationId, {
+      taskId,
+      status: TaskStatus.QUEUED,
+    });
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { queuePaused: true, autoPull: true },
+    });
+    if (org?.autoPull && !org.queuePaused) {
+      await this.addTaskJob(organizationId, taskId, queueOrder);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Update a task's queueOrder (the frontend computes a fractional value
+   * between neighbours). If the task has a pending BullMQ job, its priority is
+   * re-derived so the worker pull order follows the new position.
+   */
+  async reorderTask(
+    organizationId: string,
+    taskId: string,
+    newQueueOrder: number,
+  ) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true },
+    });
+    if (!task) {
+      return { status: 'error', message: `Task ${taskId} not found.` };
+    }
+
+    const updated = await this.prisma.task.update({
+      where: { id: taskId },
+      data: { queueOrder: newQueueOrder },
+    });
+
+    // Re-prioritize the pending job if one exists (remove + re-add).
+    const job = await this.findPendingJob(organizationId, taskId);
+    if (job) {
+      try {
+        await job.remove();
+        await this.addTaskJob(organizationId, taskId, newQueueOrder);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to reprioritize job for task ${taskId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    this.eventsGateway.emitTaskUpdate(organizationId, {
+      taskId,
+      status: TaskStatus.QUEUED,
+    });
+    return updated;
+  }
+
+  // ─── BullMQ job helpers ───────────────────────────────────────────────────
+
+  /**
+   * Map a queueOrder (Float, may be null) to a BullMQ priority. Smaller number
+   * = higher priority = pulled first. BullMQ requires a positive integer; we
+   * clamp into a safe range. Nulls sort last.
+   */
+  private queueOrderToPriority(queueOrder: number | null): number {
+    if (queueOrder == null) return 2_000_000;
+    const scaled = Math.round(queueOrder * 1000) + 1_000_000;
+    return Math.min(Math.max(scaled, 1), 2_000_000);
+  }
+
+  /**
+   * Add a BullMQ job for a task if it doesn't already have a pending one.
+   * Uses the task id as jobId to dedupe. Returns true if a job was added.
+   */
+  private async addTaskJob(
+    organizationId: string,
+    taskId: string,
+    queueOrder: number | null,
+  ): Promise<boolean> {
+    const existing = await this.findPendingJob(organizationId, taskId);
+    if (existing) return false;
+
+    await this.taskQueue.add(
+      'run',
+      { taskId, organizationId },
+      {
+        jobId: `task:${taskId}`,
+        priority: this.queueOrderToPriority(queueOrder),
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    );
+    return true;
+  }
+
+  /** Find a not-yet-active job for a task (used for dedupe / reprioritize). */
+  private async findPendingJob(organizationId: string, taskId: string) {
+    const job = await this.taskQueue.getJob(`task:${taskId}`);
+    if (!job) return null;
+    const state = await job.getState();
+    if (state === 'active' || state === 'completed') return null;
+    if (job.data?.organizationId !== organizationId) return null;
+    return job;
   }
 
   /**
@@ -213,27 +455,109 @@ export class OrchestrationService {
     return { dispatched };
   }
 
+  // ─── BullMQ worker entry point ────────────────────────────────────────────
+
+  /**
+   * Run one QUEUED task end-to-end, driven by the `task-queue` BullMQ worker.
+   * Reuses the SAME session-container path as terminals: create a session
+   * (which spins up the container), wait for it, run `claude -p`, advance the
+   * task QUEUED→IN_PROGRESS→REVIEW, and stop the worker container.
+   *
+   * This awaits completion (so BullMQ concurrency caps real parallelism) and
+   * RE-THROWS on failure so BullMQ can retry (attempts + backoff). The
+   * processor marks the task FAILED once retries are exhausted. No manual queue
+   * draining here — BullMQ pulls the next job itself.
+   */
+  async executeTask(organizationId: string, taskId: string): Promise<void> {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+    });
+    if (!task) {
+      this.logger.warn(`executeTask: task ${taskId} not found — skipping.`);
+      return;
+    }
+    if (
+      task.status === TaskStatus.IN_PROGRESS ||
+      task.status === TaskStatus.REVIEW ||
+      task.status === TaskStatus.COMPLETED ||
+      task.status === TaskStatus.CANCELLED
+    ) {
+      this.logger.log(
+        `executeTask: task ${taskId} already ${task.status} — skipping.`,
+      );
+      return;
+    }
+
+    // Respect the hard global stop even if a job slipped through.
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { queuePaused: true },
+    });
+    if (org?.queuePaused) {
+      throw new Error('Queue is paused — retry later.');
+    }
+
+    const repositoryIds = task.repositoryId
+      ? [task.repositoryId]
+      : await this.defaultRepositoryIds(organizationId);
+
+    // Create the worker thread (same container path as terminals/sessions).
+    const session = await this.sessionsService.create(
+      organizationId,
+      task.createdBy,
+      {
+        name: `worker: ${task.title}`.slice(0, 80),
+        repositoryIds,
+        instructions: this.buildWorkerInstructions(
+          task.title,
+          task.description,
+        ),
+      },
+    );
+
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { sessionId: session.id, status: TaskStatus.IN_PROGRESS },
+    });
+    this.eventsGateway.emitTaskUpdate(organizationId, {
+      taskId,
+      status: TaskStatus.IN_PROGRESS,
+      message: 'Worker starting…',
+    });
+
+    // Awaits, and re-throws on failure (see runWorker { rethrow: true }).
+    await this.runWorker(organizationId, taskId, session.id, task, {
+      rethrow: true,
+      drain: false,
+    });
+  }
+
   // ─── internals ──────────────────────────────────────────────────────────
 
   /**
    * Wait for the worker container to come up, run the task with `claude -p`,
-   * record the result on the task, stop the worker, then drain the queue.
+   * record the result on the task, stop the worker, then (optionally) drain
+   * the legacy in-process queue.
+   *
+   * @param opts.rethrow when true, errors are re-thrown after stopping the
+   *   worker (BullMQ path — the caller/processor decides FAILED vs retry).
+   *   When false (legacy dispatchTask path), the task is marked FAILED here.
+   * @param opts.drain when true, promote the next QUEUED task after finishing
+   *   (legacy in-process path). The BullMQ path leaves draining to BullMQ.
    */
   private async runWorker(
     organizationId: string,
     taskId: string,
     sessionId: string,
     task: { title: string; description: string | null; createdBy: string },
+    opts: { rethrow?: boolean; drain?: boolean } = {},
   ): Promise<void> {
+    const { rethrow = false, drain = true } = opts;
+    let caught: Error | null = null;
     try {
       const ready = await this.waitForRunning(organizationId, sessionId);
       if (!ready) {
-        await this.failTask(
-          organizationId,
-          taskId,
-          'Worker container did not become ready in time.',
-        );
-        return;
+        throw new Error('Worker container did not become ready in time.');
       }
 
       const session = await this.sessionsService.findOne(
@@ -241,8 +565,7 @@ export class OrchestrationService {
         sessionId,
       );
       if (!session.containerId) {
-        await this.failTask(organizationId, taskId, 'Worker has no container.');
-        return;
+        throw new Error('Worker has no container.');
       }
 
       this.eventsGateway.emitAgentLog(organizationId, taskId, {
@@ -281,16 +604,25 @@ export class OrchestrationService {
         comment: output.slice(0, 2000),
       });
     } catch (err) {
-      await this.failTask(
-        organizationId,
-        taskId,
-        `Worker failed: ${(err as Error).message}`,
-      );
+      caught = err as Error;
+      if (!rethrow) {
+        // Legacy path: mark FAILED here (no retry mechanism upstream).
+        await this.failTask(
+          organizationId,
+          taskId,
+          `Worker failed: ${caught.message}`,
+        );
+      }
     } finally {
-      // Free the worker slot and let the next queued task run.
+      // Always free the worker slot / stop the container.
       await this.stopWorker(organizationId, sessionId);
-      await this.drainQueue(organizationId, task.createdBy).catch(() => {});
+      if (drain) {
+        await this.drainQueue(organizationId, task.createdBy).catch(() => {});
+      }
     }
+
+    // BullMQ path: surface the error so the processor can retry / fail.
+    if (caught && rethrow) throw caught;
   }
 
   private async waitForRunning(
@@ -338,6 +670,18 @@ export class OrchestrationService {
       data: { status: TaskStatus.FAILED, result: { error: reason } },
     });
     this.eventsGateway.emitTaskFailed(organizationId, taskId, reason);
+  }
+
+  /**
+   * Public wrapper for the BullMQ processor to mark a task FAILED after retries
+   * are exhausted.
+   */
+  async markTaskFailed(
+    organizationId: string,
+    taskId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.failTask(organizationId, taskId, reason);
   }
 
   private async updateTaskStatus(
