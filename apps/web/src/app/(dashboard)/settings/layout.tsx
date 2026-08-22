@@ -98,7 +98,7 @@ export default function SettingsLayout({
   const activeItem = allItems.find((i) => isActive(i.href));
 
   return (
-    <div className="flex w-full flex-col lg:flex-row">
+    <div className="flex min-h-full w-full flex-col lg:flex-row">
       {/* Mobile: select at top */}
       <div className="border-b border-border p-3 lg:hidden">
         <select

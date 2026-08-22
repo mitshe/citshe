@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
-import { Breadcrumbs } from "./breadcrumbs";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { ThreadNotifications } from "@/components/thread-notifications";
 
@@ -41,7 +40,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar />
         <main className="relative flex-1 overflow-auto">
-          <Breadcrumbs />
           {children}
         </main>
       </div>
