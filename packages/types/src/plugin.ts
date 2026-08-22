@@ -191,6 +191,12 @@ export interface PluginResourceGroup {
   kind: ResourceKind;
   label: string;
   items: PluginResourceItem[];
+  /**
+   * A read-only group is shown for context (e.g. a build/deployment history)
+   * but is NOT selectable in the "Configure resources" picker — its items
+   * aren't persistent resources you pick, they're a live stream.
+   */
+  readonly?: boolean;
 }
 
 /** Per-portal selection of which resources to show. */

@@ -501,7 +501,14 @@ class CloudflarePlugin implements StackPlugin {
           };
         });
         if (items.length)
-          groups.push({ kind: 'deployments', label: 'Deployments', items });
+          // Deployments are a live build history for context, not resources
+          // you pick — mark read-only so they stay off the config picker.
+          groups.push({
+            kind: 'deployments',
+            label: 'Deployments',
+            items,
+            readonly: true,
+          });
       }
     } catch {
       // deployments listing optional — skip quietly

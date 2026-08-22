@@ -308,12 +308,16 @@ export function ResourcePicker({
             <div className="flex justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : (data?.groups.length ?? 0) === 0 ? (
+          ) : (data?.groups.filter((g) => !g.readonly).length ?? 0) === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               No resources found for this token.
             </p>
           ) : (
-            data!.groups.map((g) => (
+            // Read-only groups (e.g. deployment history) aren't things you
+            // pick — only show selectable resources here.
+            data!.groups
+              .filter((g) => !g.readonly)
+              .map((g) => (
               <div key={g.kind} className="space-y-1.5">
                 <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
                   {g.label}
