@@ -24,6 +24,7 @@ import type {
   AICredential,
   CreateAICredentialDto,
   UpdateAICredentialDto,
+  OpenRouterCredits,
   Repository,
   RepoAnalysisResult,
   UpdateRepositoryDto,
@@ -273,6 +274,12 @@ export const api = {
           method: "POST",
           token,
         },
+      ),
+
+    getCredits: (id: string, token: string) =>
+      request<{ credits: OpenRouterCredits | null }>(
+        `/ai-credentials/${id}/credits`,
+        { token },
       ),
 
     testBeforeConnect: (

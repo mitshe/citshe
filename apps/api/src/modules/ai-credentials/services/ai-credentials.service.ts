@@ -171,6 +171,49 @@ export class AICredentialsService {
     };
   }
 
+  /**
+   * Fetch the credit balance for a credential. Only OpenRouter exposes a
+   * simple balance endpoint; for any other provider this returns null.
+   * Resilient: adapter failures surface as null, never as thrown errors.
+   */
+  async getCredits(
+    organizationId: string,
+    id: string,
+  ): Promise<{
+    totalCredits: number;
+    totalUsage: number;
+    remaining: number;
+  } | null> {
+    const credential = await this.prisma.aICredential.findFirst({
+      where: { id, organizationId },
+    });
+
+    if (!credential) {
+      throw new NotFoundException(`AI credential ${id} not found`);
+    }
+
+    // Only OpenRouter has a credits endpoint; others aren't supported.
+    if (credential.provider !== AIProvider.OPENROUTER) {
+      return null;
+    }
+
+    try {
+      const adapter = await this.adapterFactory.createAIProviderFromCredential(
+        organizationId,
+        id,
+      );
+
+      if (typeof adapter.getCredits !== 'function') {
+        return null;
+      }
+
+      return await adapter.getCredits();
+    } catch {
+      // Never let a credits lookup break the caller.
+      return null;
+    }
+  }
+
   async testBeforeConnect(
     provider: AIProvider,
     apiKey?: string,

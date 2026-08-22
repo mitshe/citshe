@@ -106,6 +106,49 @@ export class OpenRouterAdapter implements AIProviderPort {
     };
   }
 
+  /**
+   * Fetch the OpenRouter credit balance. Resilient: returns null on any
+   * non-ok response or parse failure, never throws.
+   */
+  async getCredits(): Promise<{
+    totalCredits: number;
+    totalUsage: number;
+    remaining: number;
+  } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/credits`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+      });
+
+      if (!res.ok) {
+        this.logger.warn(`OpenRouter credits fetch failed: ${res.status}`);
+        return null;
+      }
+
+      const json = await res.json();
+      const totalCredits = Number(json?.data?.total_credits);
+      const totalUsage = Number(json?.data?.total_usage);
+
+      if (!Number.isFinite(totalCredits) || !Number.isFinite(totalUsage)) {
+        return null;
+      }
+
+      return {
+        totalCredits,
+        totalUsage,
+        remaining: totalCredits - totalUsage,
+      };
+    } catch (err) {
+      this.logger.warn(
+        `OpenRouter credits fetch error: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   completeWithTools(
     _messages: Message[],
     _tools: ToolDefinition[],

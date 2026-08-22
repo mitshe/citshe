@@ -36,6 +36,8 @@ export const queryKeys = {
     list: () => [...queryKeys.aiCredentials.all, "list"] as const,
     detail: (id: string) =>
       [...queryKeys.aiCredentials.all, "detail", id] as const,
+    credits: (id: string) =>
+      [...queryKeys.aiCredentials.all, "credits", id] as const,
   },
   repositories: {
     all: ["repositories"] as const,

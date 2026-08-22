@@ -26,3 +26,10 @@ export interface UpdateAICredentialDto {
   apiKey?: string;
   isDefault?: boolean;
 }
+
+// OpenRouter credit balance. remaining = totalCredits - totalUsage (dollars).
+export interface OpenRouterCredits {
+  totalCredits: number;
+  totalUsage: number;
+  remaining: number;
+}

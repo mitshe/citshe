@@ -170,6 +170,26 @@ export class AICredentialsController {
     );
   }
 
+  @Get(':id/credits')
+  @ApiOperation({
+    summary: 'Get credit balance for a credential (OpenRouter only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Credit balance, or null if not supported',
+  })
+  @ApiResponse({ status: 404, description: 'Credential not found' })
+  async getCredits(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const credits = await this.aiCredentialsService.getCredits(
+      organizationId,
+      id,
+    );
+    return { credits };
+  }
+
   @Post(':id/test')
   @ApiOperation({ summary: 'Test AI credential connection' })
   @ApiResponse({

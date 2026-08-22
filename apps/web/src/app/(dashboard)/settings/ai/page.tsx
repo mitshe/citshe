@@ -21,18 +21,23 @@ import {
   Check,
   Terminal,
   ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 import { AnthropicIcon, OpenRouterIcon } from "@/components/icons/brand-icons";
 import { StatusDot } from "@/components/ui/status-dot";
 import {
   useAICredentials,
+  useAICredentialCredits,
   useCreateAICredential,
   useDeleteAICredential,
   useTestAICredentialBeforeConnect,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { AIProvider } from "@/lib/api/types";
+import type { AICredential, AIProvider } from "@/lib/api/types";
+
+/** Below this remaining balance ($), the OpenRouter card shows a danger treatment. */
+const LOW_BALANCE_THRESHOLD = 5;
 
 /** The two API-key providers offered for panel-side small tasks. */
 const PANEL_PROVIDERS: {
@@ -143,35 +148,10 @@ export default function AICredentialsPage() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : panelKey ? (
-          <div className="flex items-center gap-3 rounded-md border border-border bg-surface-card p-4">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset">
-              {panelKey.provider === "OPENROUTER" ? (
-                <OpenRouterIcon className="h-5 w-5" />
-              ) : (
-                <AnthropicIcon className="h-5 w-5" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-medium text-foreground">
-                  {panelKey.provider === "OPENROUTER"
-                    ? "OpenRouter"
-                    : "Claude API"}
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <StatusDot state="ok" size={7} />
-                  Connected
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => handleDelete(panelKey.id)}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-linear hover:text-destructive"
-            >
-              <Trash2 className="h-3 w-3" />
-              Remove
-            </button>
-          </div>
+          <ConnectedKeyCard
+            credential={panelKey}
+            onRemove={() => handleDelete(panelKey.id)}
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {PANEL_PROVIDERS.map((def) => (
@@ -214,6 +194,82 @@ export default function AICredentialsPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** The connected Panel-AI credential card. For OpenRouter it also shows the
+ *  remaining credit balance ("$12.40 left"), red under $5. Claude has no
+ *  balance endpoint, so no balance line is shown for it. */
+function ConnectedKeyCard({
+  credential,
+  onRemove,
+}: {
+  credential: AICredential;
+  onRemove: () => void;
+}) {
+  const isOpenRouter = credential.provider === "OPENROUTER";
+  const {
+    data: credits,
+    isLoading: creditsLoading,
+  } = useAICredentialCredits(credential.id, isOpenRouter);
+
+  const remaining = credits?.remaining;
+  const isLow =
+    typeof remaining === "number" && remaining < LOW_BALANCE_THRESHOLD;
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-surface-card p-4">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset">
+        {isOpenRouter ? (
+          <OpenRouterIcon className="h-5 w-5" />
+        ) : (
+          <AnthropicIcon className="h-5 w-5" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-medium text-foreground">
+            {isOpenRouter ? "OpenRouter" : "Claude API"}
+          </p>
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <StatusDot state="ok" size={7} />
+            Connected
+          </span>
+        </div>
+
+        {/* Balance line — OpenRouter only. */}
+        {isOpenRouter &&
+          (creditsLoading ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Checking balance…
+            </p>
+          ) : typeof remaining === "number" ? (
+            <div className="mt-1 flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-xs font-medium",
+                  isLow ? "text-danger" : "text-foreground",
+                )}
+              >
+                {isLow && <AlertTriangle className="h-3 w-3" />}
+                {`$${remaining.toFixed(2)} left`}
+              </span>
+              {typeof credits?.totalUsage === "number" && (
+                <span className="text-[11px] text-muted-foreground">
+                  {`$${credits.totalUsage.toFixed(2)} used`}
+                </span>
+              )}
+            </div>
+          ) : null)}
+      </div>
+      <button
+        onClick={onRemove}
+        className="inline-flex items-center gap-1 self-start text-[11px] text-muted-foreground transition-linear hover:text-destructive"
+      >
+        <Trash2 className="h-3 w-3" />
+        Remove
+      </button>
     </div>
   );
 }

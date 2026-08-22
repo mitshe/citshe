@@ -144,6 +144,17 @@ export interface AIProviderPort {
     messages: Message[],
     options?: CompletionOptions,
   ): AsyncGenerator<StreamEvent, void, unknown>;
+
+  /**
+   * Optional capability: fetch the account credit balance.
+   * Only providers that expose a simple balance endpoint implement this
+   * (e.g. OpenRouter). Returns null on any failure — never throws.
+   */
+  getCredits?(): Promise<{
+    totalCredits: number;
+    totalUsage: number;
+    remaining: number;
+  } | null>;
 }
 
 /**

@@ -26,7 +26,6 @@ import {
 import { SessionExecutor } from './session/session.executor.js';
 
 // Legacy executors (to be refactored later)
-import { executeAINode } from './ai.js';
 import { executeShellNode } from './shell.js';
 import { executeHttpNode } from './http.js';
 import { executeControlNode } from './control.js';
@@ -116,11 +115,6 @@ export async function executeNode(
   }
 
   // Legacy executors (fallback)
-
-  // AI nodes
-  if (type.startsWith('action:ai_') || type === 'action:claude_code') {
-    return executeAINode(type, config, ctx);
-  }
 
   // Shell/Docker nodes
   if (type.startsWith('action:shell_') || type.startsWith('action:docker_')) {

@@ -75,6 +75,27 @@ export function useDeleteAICredential() {
   });
 }
 
+/**
+ * Fetch the OpenRouter credit balance for a credential. Only enable this for
+ * OpenRouter credentials — other providers have no balance endpoint. A failed
+ * fetch resolves to null and never breaks the page.
+ */
+export function useAICredentialCredits(id: string, enabled: boolean) {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: queryKeys.aiCredentials.credits(id),
+    enabled: enabled && !!id,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const token = await getToken();
+      const { credits } = await api.aiCredentials.getCredits(id, token);
+      return credits;
+    },
+  });
+}
+
 export function useTestAICredential() {
   const getToken = useAuthToken();
 
