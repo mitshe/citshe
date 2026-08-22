@@ -27,7 +27,7 @@ export function TaskSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:w-[540px] sm:max-w-[540px]"
+        className="w-full sm:w-[640px] sm:max-w-[640px]"
       >
         <SheetHeader className="pr-12">
           <SheetTitle className="text-sm text-muted-foreground">

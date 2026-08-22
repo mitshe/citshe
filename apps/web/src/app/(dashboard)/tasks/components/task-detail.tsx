@@ -737,10 +737,14 @@ export function TaskDetail({
   if (isPanel) {
     return (
       <div className="space-y-5">
-        {/* Status row + actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Status row + actions — status on the left, actions grouped right */}
+        <div className="flex items-center gap-2">
           <StatusPill status={task.status} />
-          {openClosedPill}
+          {isTaskClosed && (
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Closed
+            </span>
+          )}
           {savingIndicator}
           <div className="ml-auto flex items-center gap-2">
             {closeReopenButton}
