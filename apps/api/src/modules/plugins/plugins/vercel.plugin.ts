@@ -209,12 +209,23 @@ class VercelPlugin implements StackPlugin {
     const c = this.cfg(config);
     if (!c.apiToken) return { ok: false, error: 'An API token is required.' };
     try {
-      // Token is valid if it can read the current user.
-      const res = await fetch(`${API}${this.withTeam(c, '/v2/user')}`, {
-        headers: { Authorization: `Bearer ${c.apiToken}` },
-      });
-      if (!res.ok) return { ok: false, error: `Token rejected (${res.status}).` };
-      return { ok: true };
+      // Validate against the projects endpoint — the same one the status view
+      // uses. /v2/user can 404 for perfectly valid tokens (e.g. team-scoped),
+      // which made "Test" fail even though the connection worked.
+      const res = await fetch(
+        `${API}${this.withTeam(c, '/v9/projects?limit=1')}`,
+        { headers: { Authorization: `Bearer ${c.apiToken}` } },
+      );
+      if (res.ok) return { ok: true };
+      if (res.status === 401 || res.status === 403)
+        return { ok: false, error: 'Token rejected — check the API token.' };
+      if (res.status === 404)
+        return {
+          ok: false,
+          error:
+            'Not found — if this is a team token, set the Team ID field.',
+        };
+      return { ok: false, error: `Vercel API error (${res.status}).` };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }
