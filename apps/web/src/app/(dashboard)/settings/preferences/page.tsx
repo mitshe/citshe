@@ -2,86 +2,42 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { Save, Loader2, Moon, Sun, Monitor, RotateCcw } from "lucide-react";
+import { Moon, Sun, Monitor, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { resetOnboardingTour } from "@/components/onboarding-tour";
 
-const languages = [
-  { value: "en", label: "English" },
-  { value: "pl", label: "Polski" },
-  { value: "de", label: "Deutsch" },
-  { value: "fr", label: "Fran\u00e7ais" },
-];
-
-const dateFormats = [
-  { value: "relative", label: "Relative (e.g., 2 hours ago)" },
-  { value: "absolute", label: "Absolute (e.g., Jan 15, 2024)" },
-  { value: "iso", label: "ISO 8601 (e.g., 2024-01-15)" },
-];
+const WELCOME_KEY = "citshe.show-welcome-tips";
 
 export default function PreferencesPage() {
   const { theme, setTheme } = useTheme();
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
   const [mounted, setMounted] = useState(false);
-
-  const [preferences, setPreferences] = useState({
-    language: "en",
-    dateFormat: "relative",
-    compactMode: false,
-    showWelcomeTips: true,
-  });
+  const [showWelcomeTips, setShowWelcomeTips] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    // Load preferences from localStorage
-    const saved = localStorage.getItem("citshe-preferences");
-    if (saved) {
-      try {
-        setPreferences(JSON.parse(saved));
-      } catch {
-        // Ignore parse errors
-      }
+    try {
+      setShowWelcomeTips(localStorage.getItem(WELCOME_KEY) !== "0");
+    } catch {
+      /* ignore */
     }
   }, []);
 
-  const updatePreference = <K extends keyof typeof preferences>(
-    key: K,
-    value: (typeof preferences)[K]
-  ) => {
-    setPreferences((prev) => ({ ...prev, [key]: value }));
-    setHasChanges(true);
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
+  const toggleWelcomeTips = (checked: boolean) => {
+    setShowWelcomeTips(checked);
     try {
-      // Save to localStorage
-      localStorage.setItem("citshe-preferences", JSON.stringify(preferences));
-      toast.success("Preferences saved");
-      setHasChanges(false);
+      localStorage.setItem(WELCOME_KEY, checked ? "1" : "0");
     } catch {
-      toast.error("Failed to save preferences");
-    } finally {
-      setIsSaving(false);
+      /* ignore */
     }
+    toast.success(checked ? "Welcome tips on" : "Welcome tips off");
   };
 
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
   return (
     <div className="w-full space-y-8 p-4 sm:p-6">
@@ -119,73 +75,6 @@ export default function PreferencesPage() {
             ]}
           />
         </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label htmlFor="compact-mode">Compact mode</Label>
-            <p className="text-xs text-text-subtle">
-              Reduce spacing and padding throughout the interface.
-            </p>
-          </div>
-          <Switch
-            id="compact-mode"
-            checked={preferences.compactMode}
-            onCheckedChange={(checked) =>
-              updatePreference("compactMode", checked)
-            }
-          />
-        </div>
-      </section>
-
-      <Separator />
-
-      {/* Language & Region */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-foreground">
-            Language &amp; region
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Set your language and date format preferences.
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="language">Language</Label>
-          <Select
-            value={preferences.language}
-            onValueChange={(value) => updatePreference("language", value)}
-          >
-            <SelectTrigger id="language">
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent>
-              {languages.map((lang) => (
-                <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="date-format">Date format</Label>
-          <Select
-            value={preferences.dateFormat}
-            onValueChange={(value) => updatePreference("dateFormat", value)}
-          >
-            <SelectTrigger id="date-format">
-              <SelectValue placeholder="Select date format" />
-            </SelectTrigger>
-            <SelectContent>
-              {dateFormats.map((format) => (
-                <SelectItem key={format.value} value={format.value}>
-                  {format.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </section>
 
       <Separator />
@@ -208,10 +97,8 @@ export default function PreferencesPage() {
           </div>
           <Switch
             id="welcome-tips"
-            checked={preferences.showWelcomeTips}
-            onCheckedChange={(checked) =>
-              updatePreference("showWelcomeTips", checked)
-            }
+            checked={showWelcomeTips}
+            onCheckedChange={toggleWelcomeTips}
           />
         </div>
 
@@ -237,17 +124,6 @@ export default function PreferencesPage() {
           </Button>
         </div>
       </section>
-
-      <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={isSaving || !hasChanges}>
-          {isSaving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          {hasChanges ? "Save preferences" : "No changes"}
-        </Button>
-      </div>
     </div>
   );
 }
