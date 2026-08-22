@@ -89,17 +89,43 @@ services:
       - api
     networks: [citshe]
 
+  # Edge reverse-proxy. The Cloudflare Tunnel forwards to this single origin,
+  # and it splits traffic: /socket.io/* (terminals + live status, WebSockets)
+  # goes to the API, everything else to the Next.js web app. Caddy proxies
+  # WebSockets natively, which the tunnel-to-web path could not do.
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    depends_on:
+      - web
+      - api
+    networks: [citshe]
+
   # Cloudflare Tunnel — the only ingress. No host ports are published; the
-  # tunnel connects outbound to Cloudflare and forwards to web:3000. Set
+  # tunnel connects outbound to Cloudflare and forwards to the proxy. Set
   # TUNNEL_TOKEN from the tunnel you create in the Cloudflare dashboard, and
-  # point its public hostname (your PANEL_DOMAIN) at http://web:3000.
+  # point its public hostname (your PANEL_DOMAIN) at http://proxy:80.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}"]
     depends_on:
-      - web
+      - proxy
     networks: [citshe]
+
+configs:
+  caddyfile:
+    content: |
+      :80 {
+      	# Terminals + live status ride socket.io on the API.
+      	@ws path /socket.io/*
+      	reverse_proxy @ws api:3001
+      	# Everything else is the Next.js app (which itself proxies /api/v1 + /auth).
+      	reverse_proxy web:3000
+      }
 
 volumes:
   postgres-data:
