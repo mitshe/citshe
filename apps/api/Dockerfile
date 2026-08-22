@@ -44,9 +44,16 @@ COPY --from=builder /build/packages/types /build/packages/types
 
 WORKDIR /build/apps/api
 
+# Apply Prisma migrations against the (Postgres) DATABASE_URL, then start the
+# API. `migrate deploy` is idempotent and safe to run on every boot; it falls
+# back to `db push` if the migration history isn't usable.
+COPY apps/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:3001/health || exit 1
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/main"]

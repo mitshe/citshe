@@ -19,7 +19,7 @@ infra-logs:
     docker compose -f docker/dev/docker-compose.yml logs -f
 
 run:
-    docker run -d --name citshe -p 3000:3000 -p 3001:3001 -v citshe-data:/build/data -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/citshe/citshe:latest
+    docker run -d --name citshe -p 3000:3000 -p 3001:3001 -v citshe-data:/build/data -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/mitshe/citshe:latest
     @echo "citshe is starting..."
     @echo "  Frontend: http://localhost:3000"
     @echo "  API:      http://localhost:3001"
@@ -28,13 +28,13 @@ stop:
     docker stop citshe && docker rm citshe
 
 executor-build:
-    docker build --target full -t ghcr.io/citshe/citshe-executor:latest -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
+    docker build --target full -t ghcr.io/mitshe/citshe-executor:latest -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
 
 executor-build-lite:
-    docker build --target lite -t ghcr.io/citshe/citshe-executor:lite -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
+    docker build --target lite -t ghcr.io/mitshe/citshe-executor:lite -f apps/api/docker/executor/Dockerfile apps/api/docker/executor/
 
 light-build:
-    docker build -t ghcr.io/citshe/citshe:latest -f docker/light/Dockerfile .
+    docker build -t ghcr.io/mitshe/citshe:latest -f docker/light/Dockerfile .
 
 light:
     docker compose -f docker/light/docker-compose.yml up

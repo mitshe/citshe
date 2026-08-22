@@ -110,14 +110,25 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build and push citshe
+      - name: Build and push api
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/light/Dockerfile
+          file: apps/api/Dockerfile
           push: true
           provenance: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -137,5 +148,6 @@ jobs:
           echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
           echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-executor | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY

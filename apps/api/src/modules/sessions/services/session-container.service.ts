@@ -55,7 +55,7 @@ export class SessionContainerService implements OnModuleInit {
     this.docker = new Docker();
     this.executorImage =
       this.configService.get<string>('EXECUTOR_IMAGE') ||
-      'ghcr.io/citshe/citshe-executor:latest';
+      'ghcr.io/mitshe/citshe-executor:latest';
   }
 
   async onModuleInit() {

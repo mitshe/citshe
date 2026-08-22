@@ -1,57 +1,37 @@
+# Production stack for citshe — Postgres-backed, fronted by a Cloudflare Tunnel.
+#
+# Nothing is published to the host: the web app is reachable only through the
+# cloudflared tunnel (rangopanel.mitshe.com), so the VPS keeps every port but
+# SSH closed. Put POSTGRES_PASSWORD / ENCRYPTION_KEY / JWT_SECRET / IMAGE_TAG /
+# TUNNEL_TOKEN / NEXT_PUBLIC_* in an .env next to this file (chmod 600).
+#
+#   docker compose -f docker/prod/docker-compose.yml --env-file .env pull
+#   docker compose -f docker/prod/docker-compose.yml --env-file .env up -d
+#
+# Images are pulled from GHCR by default (IMAGE_TAG defaults to :latest). To
+# build from source instead, run with `--build` (the build: contexts are kept).
+
 services:
-  landing:
-    build:
-      context: ../..
-      dockerfile: apps/landing/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "3002:3002"
-    environment:
-      - PORT=3002
-
-  citshe:
-    build:
-      context: ../..
-      dockerfile: docker/light/Dockerfile
-      args:
-        DB_PROVIDER: postgresql
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-      - "3001:3001"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - NEXT_PUBLIC_APP_URL=https://app.citshe.com
-      - NEXT_PUBLIC_API_URL=https://api.citshe.com
-      - NEXT_PUBLIC_WS_URL=wss://api.citshe.com
-      - DATABASE_URL=postgresql://citshe:${POSTGRES_PASSWORD}@postgres:5432/citshe
-      - REDIS_URL=redis://redis:6379
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=citshe
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=citshe
+      POSTGRES_USER: citshe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: citshe
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U citshe"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: [citshe]
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
     healthcheck:
@@ -59,7 +39,72 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: [citshe]
+
+  api:
+    image: ghcr.io/mitshe/citshe-api:${IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: postgresql://citshe:${POSTGRES_PASSWORD}@postgres:5432/citshe?schema=public
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # The panel is same-origin behind the tunnel, so these all point at it.
+      ALLOWED_ORIGINS: https://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+      CORS_ORIGINS: https://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+      APP_URL: https://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+      API_BASE_URL: https://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+      # The executor image the API spawns for terminals/workers.
+      EXECUTOR_IMAGE: ghcr.io/mitshe/citshe-executor:${EXECUTOR_TAG:-latest}
+    # The API spawns executor containers via the Docker socket.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [citshe]
+
+  web:
+    image: ghcr.io/mitshe/citshe-web:${IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # The browser calls /api/v1 same-origin; Next proxies it to the API here.
+      BACKEND_URL: http://api:3001
+      NEXT_PUBLIC_APP_URL: https://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+      # WebSocket is client-side, so it must be the public panel URL.
+      NEXT_PUBLIC_WS_URL: wss://${PANEL_DOMAIN:-rangopanel.mitshe.com}
+    depends_on:
+      - api
+    networks: [citshe]
+
+  # Cloudflare Tunnel — the only ingress. No host ports are published; the
+  # tunnel connects outbound to Cloudflare and forwards to web:3000. Set
+  # TUNNEL_TOKEN from the tunnel you create in the Cloudflare dashboard, and
+  # point its public hostname (rangopanel.mitshe.com) at http://web:3000.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}"]
+    depends_on:
+      - web
+    networks: [citshe]
 
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  citshe:
+    driver: bridge

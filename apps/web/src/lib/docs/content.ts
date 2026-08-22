@@ -585,7 +585,7 @@ No external dependencies. Just Docker.
 \`\`\`bash
 docker run -d -p 3000:3000 -p 3001:3001 \\
   -v citshe-data:/app/data \\
-  ghcr.io/citshe/light:latest
+  ghcr.io/mitshe/light:latest
 \`\`\`
 
 Open [http://localhost:3000](http://localhost:3000).
@@ -621,7 +621,7 @@ Environment variables:
 docker run -d -p 3000:3000 -p 3001:3001 \\
   -v citshe-data:/app/data \\
   -e ENCRYPTION_KEY="your-32-byte-hex-key" \\
-  ghcr.io/citshe/light:latest
+  ghcr.io/mitshe/light:latest
 \`\`\`
 
 Generate a secure key:
@@ -637,7 +637,7 @@ For easier management, use Docker Compose:
 # docker-compose.yml
 services:
   citshe:
-    image: ghcr.io/citshe/light:latest
+    image: ghcr.io/mitshe/light:latest
     ports:
       - "3000:3000"
       - "3001:3001"
@@ -798,7 +798,7 @@ For production, use the full Docker Compose stack:
 # docker-compose.prod.yml
 services:
   web:
-    image: ghcr.io/citshe/web:latest
+    image: ghcr.io/mitshe/web:latest
     ports:
       - "3000:3000"
     environment:
@@ -807,7 +807,7 @@ services:
       - api
 
   api:
-    image: ghcr.io/citshe/api:latest
+    image: ghcr.io/mitshe/api:latest
     ports:
       - "3001:3001"
     environment:
@@ -941,7 +941,7 @@ Run multiple API instances behind a load balancer:
 \`\`\`yaml
 services:
   api:
-    image: ghcr.io/citshe/api:latest
+    image: ghcr.io/mitshe/api:latest
     deploy:
       replicas: 3
     # ... rest of config
