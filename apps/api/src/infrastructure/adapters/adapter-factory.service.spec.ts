@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdapterFactoryService } from './adapter-factory.service';
 import { PrismaService } from '../persistence/prisma/prisma.service';
 import { EncryptionService } from '../../shared/encryption/encryption.service';
+import { GithubAppService } from './git-provider/github-app.service';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 
@@ -28,6 +29,13 @@ describe('AdapterFactoryService', () => {
           useValue: mockPrismaService,
         },
         EncryptionService,
+        {
+          provide: GithubAppService,
+          useValue: {
+            isConfigured: jest.fn(() => false),
+            getInstallationToken: jest.fn(),
+          },
+        },
         {
           provide: ConfigService,
           useValue: {

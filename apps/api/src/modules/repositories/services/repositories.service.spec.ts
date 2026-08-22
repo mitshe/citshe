@@ -3,6 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 import { RepositoriesService } from './repositories.service';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
+import { EncryptionService } from '../../../shared/encryption/encryption.service';
+import { GithubAppService } from '../../../infrastructure/adapters/git-provider/github-app.service';
 import {
   GitProvider,
   IntegrationStatus,
@@ -34,12 +36,24 @@ describe('RepositoriesService', () => {
     createGitProviderFromIntegration: jest.fn(),
   };
 
+  const mockEncryption = {
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+  };
+
+  const mockGithubApp = {
+    isConfigured: jest.fn(() => false),
+    getInstallationToken: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RepositoriesService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: AdapterFactoryService, useValue: mockAdapterFactory },
+        { provide: EncryptionService, useValue: mockEncryption },
+        { provide: GithubAppService, useValue: mockGithubApp },
       ],
     }).compile();
 
