@@ -728,7 +728,7 @@ export default function SessionDetailPage() {
               state={statusDotStates[sessionStatus] ?? "idle"}
               pulse={isRunning}
             />
-            <span className="text-[11px] text-text-subtle">
+            <span className="hidden text-[11px] text-text-subtle sm:inline">
               {statusLabels[sessionStatus] || sessionStatus}
             </span>
           </span>

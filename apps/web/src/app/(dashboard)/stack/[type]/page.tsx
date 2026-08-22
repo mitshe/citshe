@@ -1699,7 +1699,7 @@ function VpsServerRow({
 
       {/* Expandable rich metrics panel. */}
       {open && hasDetails && (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-border bg-surface-hover/40 px-4 py-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2 border-t border-border bg-surface-hover/40 px-4 py-3 sm:grid-cols-2 md:grid-cols-3">
           {details.map((d, i) => (
             <div key={i} className="min-w-0">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">

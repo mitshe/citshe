@@ -66,6 +66,13 @@ export function OnboardingTour() {
         doneBtnText: "Done",
         progressText: "{{current}} of {{total}}",
         popoverClass: "onboarding-popover",
+        // A touch of breathing room around the highlighted nav item + smooth
+        // motion so the spotlight reads as intentional, not a raw box.
+        stagePadding: 6,
+        stageRadius: 8,
+        overlayOpacity: 0.72,
+        smoothScroll: true,
+        animate: true,
         onDestroyed: () => {
           localStorage.setItem(TOUR_COMPLETED_KEY, "true");
           setShouldShowTour(false);

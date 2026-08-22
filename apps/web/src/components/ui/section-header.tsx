@@ -84,7 +84,7 @@ function SectionHeader({
   return (
     <div
       data-slot="section-header"
-      className={cn("flex items-center justify-between gap-2", className)}
+      className={cn("flex flex-wrap items-center justify-between gap-2", className)}
       {...props}
     >
       <div className="flex items-center gap-1.5">

@@ -135,13 +135,13 @@ export function Topbar() {
 
       {/* Mobile drawer renders the sidebar body */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="flex w-[17rem] max-w-[85vw] flex-col p-0">
           <SheetHeader className="flex h-12 flex-row items-center border-b border-border px-3">
             <SheetTitle className="font-brand text-lg font-semibold tracking-tight">
               citshe
             </SheetTitle>
           </SheetHeader>
-          <div className="overflow-y-auto px-2 py-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
             <SidebarBody onNavigate={() => setMobileOpen(false)} />
           </div>
         </SheetContent>

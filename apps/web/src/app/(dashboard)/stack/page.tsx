@@ -17,7 +17,7 @@ export default function StackPage() {
   const connectedTypes = new Set(plugins.map((p) => p.type));
 
   return (
-    <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-6 px-4 sm:px-6 py-6 sm:py-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Add a tool</h1>
         <p className="text-sm text-muted-foreground">

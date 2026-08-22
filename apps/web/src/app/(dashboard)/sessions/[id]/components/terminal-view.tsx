@@ -61,7 +61,9 @@ export function TerminalView({
         cursorBlink: true,
         fontFamily:
           "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-        fontSize: 13,
+        // Smaller on phones so a usable number of columns fits at ~375px.
+        fontSize:
+          typeof window !== "undefined" && window.innerWidth < 640 ? 11 : 13,
         lineHeight: 1.2,
         theme: {
           // Aligned to the dark DS: surface-inset bg, accent (indigo) cursor,

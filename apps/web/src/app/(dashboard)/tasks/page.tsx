@@ -166,7 +166,7 @@ export default function TasksPage() {
 
   return (
     <div className="w-full max-w-[1400px] px-4 sm:px-6 py-6 sm:py-8 space-y-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground">
@@ -184,7 +184,7 @@ export default function TasksPage() {
               { value: "list", label: "List", icon: <ListIcon /> },
             ]}
           />
-          <Button size="sm" onClick={() => setNewOpen(true)}>
+          <Button size="sm" className="ml-auto sm:ml-0" onClick={() => setNewOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New task
           </Button>
@@ -193,7 +193,7 @@ export default function TasksPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-48 flex-1">
+        <div className="relative min-w-0 flex-1 basis-full sm:basis-auto">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search tasks or labels…"
