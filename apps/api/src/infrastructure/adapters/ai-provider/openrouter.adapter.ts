@@ -23,7 +23,7 @@ export class OpenRouterAdapter implements AIProviderPort {
 
   constructor(config: { apiKey: string; defaultModel?: string }) {
     this.apiKey = config.apiKey;
-    this.defaultModel = config.defaultModel || 'anthropic/claude-3.7-sonnet';
+    this.defaultModel = config.defaultModel || 'anthropic/claude-sonnet-4.5';
   }
 
   getProviderType(): 'openai' {
@@ -40,11 +40,23 @@ export class OpenRouterAdapter implements AIProviderPort {
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
+    // Validate the key itself, not a specific model — model slugs come and go
+    // on OpenRouter, so a chat completion against a hardcoded model gives false
+    // 404s ("No endpoints found for …"). GET /key just checks the credential.
     try {
-      const res = await this.complete([{ role: 'user', content: 'Hi' }], {
-        maxTokens: 5,
+      const res = await fetch(`${this.baseUrl}/key`, {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'HTTP-Referer': 'https://citshe.local',
+          'X-Title': 'citshe',
+        },
       });
-      return { success: !!res.content };
+      if (res.ok) return { success: true };
+      const text = await res.text();
+      return {
+        success: false,
+        error: `OpenRouter ${res.status}: ${text.slice(0, 200)}`,
+      };
     } catch (err) {
       const message = (err as Error).message;
       this.logger.warn(`OpenRouter test failed: ${message}`);
@@ -54,11 +66,11 @@ export class OpenRouterAdapter implements AIProviderPort {
 
   listModels(): Promise<string[]> {
     return Promise.resolve([
-      'anthropic/claude-3.7-sonnet',
+      'anthropic/claude-sonnet-4.5',
       'anthropic/claude-3.5-haiku',
       'openai/gpt-4o-mini',
-      'google/gemini-flash-1.5',
-      'meta-llama/llama-3.1-70b-instruct',
+      'google/gemini-2.0-flash-001',
+      'meta-llama/llama-3.3-70b-instruct',
     ]);
   }
 
@@ -101,8 +113,7 @@ export class OpenRouterAdapter implements AIProviderPort {
         input: json.usage?.prompt_tokens || 0,
         output: json.usage?.completion_tokens || 0,
       },
-      finishReason:
-        choice?.finish_reason === 'length' ? 'length' : 'stop',
+      finishReason: choice?.finish_reason === 'length' ? 'length' : 'stop',
     };
   }
 
@@ -155,12 +166,16 @@ export class OpenRouterAdapter implements AIProviderPort {
     _options?: CompletionOptions,
   ): Promise<AIResponseWithTools> {
     // The panel only needs plain completions; tools are the worker's job.
-    throw new Error('Tool use is not supported by the OpenRouter panel adapter.');
+    throw new Error(
+      'Tool use is not supported by the OpenRouter panel adapter.',
+    );
   }
 
   // eslint-disable-next-line require-yield
   async *streamComplete(): AsyncGenerator<StreamEvent, void, unknown> {
-    throw new Error('Streaming is not supported by the OpenRouter panel adapter.');
+    throw new Error(
+      'Streaming is not supported by the OpenRouter panel adapter.',
+    );
   }
 
   /** OpenAI-style messages; fold systemPrompt into a leading system message. */
@@ -173,9 +188,7 @@ export class OpenRouterAdapter implements AIProviderPort {
         content:
           typeof m.content === 'string'
             ? m.content
-            : m.content
-                .map((c) => ('text' in c ? c.text : ''))
-                .join(''),
+            : m.content.map((c) => ('text' in c ? c.text : '')).join(''),
       });
     }
     return out;

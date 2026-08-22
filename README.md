@@ -36,6 +36,49 @@ run?"* and lets you delegate the next change to an AI worker. All from your phon
 - **Panel AI** — an optional bring-your-own key (OpenRouter or Claude API) for
   small in-panel helpers (task refine, summaries).
 
+## How it works
+
+Each project is a **portal** (an organization). A portal ties together a GitHub
+repo, your stack tools, and the tasks/terminals you run against it.
+
+1. **Connect a repo** — citshe pulls its CI status, branches, PRs and commits
+   over the GitHub App, and Claude analyzes the stack.
+2. **Delegate a task** — write a rough note; Panel AI helps shape it. Drop it in
+   the **Queue** in the order you want, or run it by hand.
+3. **A worker runs it** — the api spawns a **Docker container** (the executor
+   image) running the Claude Code CLI, clones the repo, does the work, and opens
+   a PR. You watch the terminal live over a WebSocket — from your phone if you
+   want. With **auto-pull** on, a BullMQ/Redis queue feeds workers one task at a
+   time per portal.
+4. **See the result** — the PR link, CI status, and stack health (deploys,
+   traffic, cert expiry) all land back on the portal's home screen.
+
+Under the hood: the **web** (Next.js) app proxies same-origin `/api/v1` calls to
+the **api** (NestJS), which owns Prisma/Postgres, the BullMQ queue on Redis, the
+GitHub/AI adapters, and the Docker executor it drives via the Docker socket.
+Everything is self-hosted; your connected keys are encrypted at rest
+(AES-256-GCM).
+
+## Deploy on your own server
+
+Run the whole thing on a VPS with Docker, its own Postgres/Redis, and a
+**Cloudflare Tunnel** as the only ingress — so the only open port is SSH. The
+images are published to GHCR (public), so you just pull and run.
+
+```bash
+# on a fresh Ubuntu/Debian VPS
+curl -fsSL https://get.docker.com | sh
+mkdir -p /opt/citshe && cd /opt/citshe
+curl -fsSLO https://raw.githubusercontent.com/mitshe/citshe/master/docker/prod/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/mitshe/citshe/master/docker/prod/.env.example -o .env
+chmod 600 .env
+# fill in .env (domain + generated secrets + Cloudflare tunnel token), then:
+docker compose pull && docker compose up -d
+```
+
+**Full step-by-step guide (firewall, Cloudflare Tunnel, Access login wall,
+backups, troubleshooting): [docs/DEPLOY.md](./docs/DEPLOY.md).**
+
 ## Stack
 
 Turborepo monorepo — **Next.js** (web) · **NestJS** (api) · **Prisma /
