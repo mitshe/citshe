@@ -139,14 +139,9 @@ export function TaskBoardView({
   };
 
   return (
-    <div
-      className={cn(
-        "grid gap-4",
-        showClosed
-          ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-5"
-          : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
-      )}
-    >
+    // Columns sit side by side and scroll horizontally when there isn't room —
+    // never reflow into a 2×2 grid. Each column has a fixed, comfortable width.
+    <div className="flex gap-4 overflow-x-auto pb-2">
       {columns.map((col) => {
         const droppable = !!col.moveTo; // Closed column is not a drop target.
         const isTarget = dropTarget === col.id;
@@ -176,7 +171,7 @@ export function TaskBoardView({
             }
             onDrop={droppable ? () => handleColumnDrop(col) : undefined}
             className={cn(
-              "flex min-h-0 flex-col rounded-lg border bg-surface-card transition-linear",
+              "flex min-h-0 w-[300px] shrink-0 flex-col rounded-lg border bg-surface-card transition-linear",
               isTarget
                 ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/25"
                 : "border-border",

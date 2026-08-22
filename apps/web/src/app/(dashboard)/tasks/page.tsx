@@ -124,6 +124,18 @@ export default function TasksPage() {
     window.localStorage.setItem(VIEW_STORAGE_KEY, next);
   };
 
+  // The Board (columns) doesn't work on a phone — force List there and hide
+  // the toggle. On wider screens the user's saved choice wins.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const effectiveView: ViewMode = isMobile ? "list" : view;
+
   const repoName = (id: string | null | undefined) =>
     id ? repos.find((r) => r.id === id)?.name ?? "—" : "—";
 
@@ -174,16 +186,18 @@ export default function TasksPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* View toggle (segmented control) */}
-          <SegmentedControl<ViewMode>
-            aria-label="View mode"
-            value={view}
-            onChange={changeView}
-            options={[
-              { value: "board", label: "Board", icon: <LayoutGrid /> },
-              { value: "list", label: "List", icon: <ListIcon /> },
-            ]}
-          />
+          {/* View toggle — hidden on phones, which are List-only. */}
+          <div className="hidden sm:block">
+            <SegmentedControl<ViewMode>
+              aria-label="View mode"
+              value={view}
+              onChange={changeView}
+              options={[
+                { value: "board", label: "Board", icon: <LayoutGrid /> },
+                { value: "list", label: "List", icon: <ListIcon /> },
+              ]}
+            />
+          </div>
           <Button size="sm" className="ml-auto sm:ml-0" onClick={() => setNewOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             New task
@@ -271,26 +285,29 @@ export default function TasksPage() {
           title="Nothing matches your filters"
           description="Try a different search, repo, or label."
         />
-      ) : view === "board" ? (
-        <>
-          <QueueStatusBar />
-          <TaskBoardView
-            tasks={filtered}
-            repoName={repoName}
-            onDelete={setDeleteTarget}
-            onLabelClick={setActiveLabel}
-            onOpenTask={openTask}
-            showClosed={showClosed}
-          />
-        </>
       ) : (
-        <TaskListView
-          tasks={filtered}
-          repoName={repoName}
-          onDelete={setDeleteTarget}
-          onLabelClick={setActiveLabel}
-          onOpenTask={openTask}
-        />
+        <>
+          {/* Auto-pull / workers / queued bar shows on both views. */}
+          <QueueStatusBar />
+          {effectiveView === "board" ? (
+            <TaskBoardView
+              tasks={filtered}
+              repoName={repoName}
+              onDelete={setDeleteTarget}
+              onLabelClick={setActiveLabel}
+              onOpenTask={openTask}
+              showClosed={showClosed}
+            />
+          ) : (
+            <TaskListView
+              tasks={filtered}
+              repoName={repoName}
+              onDelete={setDeleteTarget}
+              onLabelClick={setActiveLabel}
+              onOpenTask={openTask}
+            />
+          )}
+        </>
       )}
 
       <TaskSheet
