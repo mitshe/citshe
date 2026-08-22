@@ -67,9 +67,14 @@ export function useOrganization(options?: {
   const hasInvitations = !!options?.invitations;
 
   return useMemo(() => {
+    // Use the actually-selected portal, not a name fabricated from the user.
+    // (This shim previously always returned "<user>'s Workspace", so Settings
+    // showed the wrong org after switching portals.)
     const org: LocalOrganization = {
-      id: context.orgId || "",
-      name: context.userName ? `${context.userName}'s Workspace` : "Workspace",
+      id: context.currentOrg?.id || context.orgId || "",
+      name:
+        context.currentOrg?.name ||
+        (context.userName ? `${context.userName}'s Workspace` : "Workspace"),
       slug: null,
       imageUrl: null,
     };
