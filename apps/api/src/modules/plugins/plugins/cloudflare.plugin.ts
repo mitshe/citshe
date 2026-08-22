@@ -174,15 +174,23 @@ class CloudflarePlugin implements StackPlugin {
   }
 
   /**
-   * Hourly request/byte series for the last 24h via the GraphQL analytics API
+   * Hourly traffic series for the last 24h via the GraphQL analytics API
    * (httpRequests1hGroups). Returns per-hour arrays (oldest→newest) so the UI
-   * can draw a sparkline. Resilient: returns null on any failure (missing
-   * Analytics scope, empty dataset, query error).
+   * can draw sparklines. Beyond total requests/bytes this also breaks requests
+   * down by HTTP status class (2xx/3xx/4xx/5xx) and returns hourly cached
+   * requests so callers can plot a cache-hit-rate line. Resilient: returns
+   * null on any failure (missing Analytics scope, empty dataset, query error).
    */
   private async zoneTrafficSeries(
     token: string,
     zoneTag: string,
-  ): Promise<{ requests: number[]; bytes: number[] } | null> {
+  ): Promise<{
+    requests: number[];
+    bytes: number[];
+    cached: number[];
+    status: { s2xx: number[]; s3xx: number[]; s4xx: number[]; s5xx: number[] };
+    labels: string[];
+  } | null> {
     const now = new Date();
     const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const query = `query ($zoneTag: String!, $since: String!, $until: String!) {
@@ -194,7 +202,12 @@ class CloudflarePlugin implements StackPlugin {
             orderBy: [datetime_ASC]
           ) {
             dimensions { datetime }
-            sum { requests bytes }
+            sum {
+              requests
+              bytes
+              cachedRequests
+              responseStatusMap { edgeResponseStatus requests }
+            }
           }
         }
       }
@@ -219,7 +232,16 @@ class CloudflarePlugin implements StackPlugin {
           viewer?: {
             zones?: Array<{
               httpRequests1hGroups?: Array<{
-                sum?: { requests?: number; bytes?: number };
+                dimensions?: { datetime?: string };
+                sum?: {
+                  requests?: number;
+                  bytes?: number;
+                  cachedRequests?: number;
+                  responseStatusMap?: Array<{
+                    edgeResponseStatus?: number;
+                    requests?: number;
+                  }>;
+                };
               }>;
             }>;
           };
@@ -230,7 +252,117 @@ class CloudflarePlugin implements StackPlugin {
       if (!groups.length) return null;
       const requests = groups.map((g) => g.sum?.requests ?? 0);
       const bytes = groups.map((g) => g.sum?.bytes ?? 0);
-      return { requests, bytes };
+      const cached = groups.map((g) => g.sum?.cachedRequests ?? 0);
+      const s2xx: number[] = [];
+      const s3xx: number[] = [];
+      const s4xx: number[] = [];
+      const s5xx: number[] = [];
+      for (const g of groups) {
+        let b2 = 0,
+          b3 = 0,
+          b4 = 0,
+          b5 = 0;
+        for (const s of g.sum?.responseStatusMap ?? []) {
+          const code = s.edgeResponseStatus ?? 0;
+          const n = s.requests ?? 0;
+          if (code >= 200 && code < 300) b2 += n;
+          else if (code >= 300 && code < 400) b3 += n;
+          else if (code >= 400 && code < 500) b4 += n;
+          else if (code >= 500 && code < 600) b5 += n;
+        }
+        s2xx.push(b2);
+        s3xx.push(b3);
+        s4xx.push(b4);
+        s5xx.push(b5);
+      }
+      // Hour labels: "24h" … "1h" … "now" (oldest→newest).
+      const labels = groups.map((_, i) => {
+        const back = groups.length - 1 - i;
+        return back === 0 ? 'now' : `${back}h`;
+      });
+      return {
+        requests,
+        bytes,
+        cached,
+        status: { s2xx, s3xx, s4xx, s5xx },
+        labels,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Hourly Workers invocations for the last 24h via the GraphQL analytics API
+   * (workersInvocationsAdaptive), aggregated across all scripts per hour.
+   * Returns per-hour requests/errors arrays (oldest→newest). Resilient:
+   * returns null if the account has no Workers, the token lacks scope, or the
+   * query errors.
+   */
+  private async workersSeries(
+    token: string,
+    accountTag: string,
+  ): Promise<{ requests: number[]; errors: number[] } | null> {
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const query = `query ($accountTag: String!, $since: Time!) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          workersInvocationsAdaptive(
+            limit: 1000
+            filter: { datetime_geq: $since }
+            orderBy: [datetime_ASC]
+          ) {
+            dimensions { datetime }
+            sum { requests errors }
+          }
+        }
+      }
+    }`;
+    try {
+      const res = await fetch(`${API}/graphql`, {
+        method: 'POST',
+        headers: cfHeaders(token),
+        body: JSON.stringify({
+          query,
+          variables: { accountTag, since: since.toISOString() },
+        }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        errors?: unknown[];
+        data?: {
+          viewer?: {
+            accounts?: Array<{
+              workersInvocationsAdaptive?: Array<{
+                dimensions?: { datetime?: string };
+                sum?: { requests?: number; errors?: number };
+              }>;
+            }>;
+          };
+        };
+      };
+      if (json.errors?.length) return null;
+      const rows =
+        json.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? [];
+      if (!rows.length) return null;
+      // Bucket by hour across all scripts (rows may be per-script per-hour).
+      const buckets = new Map<string, { requests: number; errors: number }>();
+      for (const r of rows) {
+        const dt = r.dimensions?.datetime;
+        if (!dt) continue;
+        // Truncate to the hour so multiple scripts share a bucket.
+        const key = dt.slice(0, 13);
+        const b = buckets.get(key) ?? { requests: 0, errors: 0 };
+        b.requests += r.sum?.requests ?? 0;
+        b.errors += r.sum?.errors ?? 0;
+        buckets.set(key, b);
+      }
+      const keys = [...buckets.keys()].sort();
+      if (!keys.length) return null;
+      const requests = keys.map((k) => buckets.get(k)!.requests);
+      const errors = keys.map((k) => buckets.get(k)!.errors);
+      return { requests, errors };
     } catch {
       return null;
     }
@@ -710,13 +842,24 @@ class CloudflarePlugin implements StackPlugin {
           // Hourly sparkline series for the last 24h (best-effort — omitted on
           // failure so the metric still shows its aggregate value).
           const hourly = await this.zoneTrafficSeries(apiToken, primaryZone.id);
+          const labels = hourly?.labels?.length ? hourly.labels : undefined;
           metrics.push({
             label: 'Requests 24h',
             value: compact(t.requests),
             hint: primaryZone.name,
             section: 'usage',
             ...(hourly?.requests.length
-              ? { series: hourly.requests, seriesKind: 'line' as const }
+              ? {
+                  series: hourly.requests,
+                  seriesKind: 'area' as const,
+                  ...(labels ? { seriesLabels: labels } : {}),
+                  seriesMulti: [
+                    { label: '2xx', values: hourly.status.s2xx },
+                    { label: '3xx', values: hourly.status.s3xx },
+                    { label: '4xx', values: hourly.status.s4xx },
+                    { label: '5xx', values: hourly.status.s5xx },
+                  ],
+                }
               : {}),
           });
           metrics.push({
@@ -725,16 +868,64 @@ class CloudflarePlugin implements StackPlugin {
             hint: primaryZone.name,
             section: 'usage',
             ...(hourly?.bytes.length
-              ? { series: hourly.bytes, seriesKind: 'line' as const }
+              ? {
+                  series: hourly.bytes,
+                  seriesKind: 'area' as const,
+                  ...(labels ? { seriesLabels: labels } : {}),
+                }
               : {}),
           });
+
+          // Error rate over the 24h window from the hourly status split.
+          if (hourly?.requests.length) {
+            const total = hourly.requests.reduce((a, b) => a + b, 0);
+            if (total > 0) {
+              const errs = hourly.status.s4xx
+                .map((v, i) => v + (hourly.status.s5xx[i] ?? 0))
+                .reduce((a, b) => a + b, 0);
+              const pct = (errs / total) * 100;
+              // Hourly error% line (0 when an hour had no requests).
+              const errSeries = hourly.requests.map((req, i) => {
+                if (!req) return 0;
+                const e =
+                  (hourly.status.s4xx[i] ?? 0) + (hourly.status.s5xx[i] ?? 0);
+                return Math.round((e / req) * 1000) / 10;
+              });
+              metrics.push({
+                label: 'Error rate',
+                value: `${pct.toFixed(1)}%`,
+                state: pct > 15 ? 'down' : pct > 5 ? 'warn' : 'ok',
+                section: 'usage',
+                series: errSeries,
+                seriesKind: 'line' as const,
+                unit: '%',
+                ...(labels ? { seriesLabels: labels } : {}),
+              });
+            }
+          }
+
           if (t.requests > 0) {
             const cachedPct = Math.round((t.cachedRequests / t.requests) * 100);
+            // Hourly cache-hit-rate line (0 when an hour had no requests).
+            const cacheSeries = hourly?.requests.length
+              ? hourly.requests.map((req, i) => {
+                  if (!req) return 0;
+                  return Math.round(((hourly.cached[i] ?? 0) / req) * 100);
+                })
+              : undefined;
             metrics.push({
               label: 'Cached',
               value: `${cachedPct}%`,
               state: cachedPct >= 50 ? 'ok' : 'warn',
               section: 'details',
+              ...(cacheSeries
+                ? {
+                    series: cacheSeries,
+                    seriesKind: 'line' as const,
+                    unit: '%',
+                    ...(labels ? { seriesLabels: labels } : {}),
+                  }
+                : {}),
             });
           }
           metrics.push({
@@ -789,11 +980,29 @@ class CloudflarePlugin implements StackPlugin {
         if (filtered)
           scripts = scripts.filter((s) => selWorkers.has(s.id as string));
         if (scripts.length) {
+          // Hourly invocation series across all scripts (best-effort). Omitted
+          // if the account has no Workers analytics / token lacks scope.
+          const wseries = await this.workersSeries(apiToken, accountId);
           metrics.push({
             label: 'Workers',
             value: String(scripts.length),
             section: 'details',
+            ...(wseries?.requests.length
+              ? { series: wseries.requests, seriesKind: 'area' as const }
+              : {}),
           });
+          // Separate Workers error series only when there are actual errors.
+          if (wseries?.errors.length && wseries.errors.some((e) => e > 0)) {
+            const totalErr = wseries.errors.reduce((a, b) => a + b, 0);
+            metrics.push({
+              label: 'Worker errors 24h',
+              value: compact(totalErr),
+              state: 'warn',
+              section: 'details',
+              series: wseries.errors,
+              seriesKind: 'line' as const,
+            });
+          }
           // Show the freshest few workers with their last-modified time.
           const ranked = [...scripts].sort(
             (a, b) =>

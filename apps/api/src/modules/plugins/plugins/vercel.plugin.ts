@@ -162,6 +162,49 @@ class VercelPlugin implements StackPlugin {
     return res.json();
   }
 
+  /**
+   * Web Analytics daily visits for a project over the last 14 days. Only returns
+   * data if the project has Web Analytics enabled; on 403 / error / empty
+   * response (the common case — WA off), returns null so nothing is fabricated.
+   */
+  private async webAnalytics(
+    c: VercelConfig,
+    projectId: string,
+  ): Promise<{ pageviews: number[]; visitors: number[] } | null> {
+    try {
+      const now = Date.now();
+      const since = now - 14 * 24 * 60 * 60 * 1000;
+      const path = this.withTeam(
+        c,
+        `/v1/query/web-analytics/visits/aggregate?projectId=${encodeURIComponent(
+          projectId,
+        )}&since=${since}&until=${now}&by=day`,
+      );
+      const res = await fetch(`${API}${path}`, {
+        headers: { Authorization: `Bearer ${c.apiToken}` },
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        data?: Array<{
+          timestamp?: number | string;
+          pageviews?: number;
+          visitors?: number;
+        }>;
+      };
+      const rows = json?.data ?? [];
+      if (!rows.length) return null;
+      const pageviews = rows.map((r) => r.pageviews ?? 0);
+      const visitors = rows.map((r) => r.visitors ?? 0);
+      // Guard against an all-zero / malformed payload masquerading as data.
+      if (!pageviews.some((v) => v > 0) && !visitors.some((v) => v > 0)) {
+        return null;
+      }
+      return { pageviews, visitors };
+    } catch {
+      return null;
+    }
+  }
+
   async testConnection(config: PluginConfig) {
     const c = this.cfg(config);
     if (!c.apiToken) return { ok: false, error: 'An API token is required.' };
@@ -302,6 +345,35 @@ class VercelPlugin implements StackPlugin {
             target: latest.name,
             confirm: true,
           });
+        }
+
+        // --- Web Analytics (only when the project has WA enabled) ---
+        // Conditional/honest: the query returns null on 403/empty (WA off),
+        // so these metrics simply don't appear rather than showing fake zeros.
+        const projectId = (proj.id as string) || (proj.name as string);
+        if (projectId) {
+          const wa = await this.webAnalytics(c, projectId);
+          if (wa) {
+            const totalViews = wa.pageviews.reduce((a, b) => a + b, 0);
+            const totalVisitors = wa.visitors.reduce((a, b) => a + b, 0);
+            metrics.push({
+              label: 'Pageviews',
+              value: String(totalViews),
+              section: 'usage',
+              series: wa.pageviews,
+              seriesKind: 'area' as const,
+              unit: 'views',
+              hint: 'last 14d',
+            });
+            metrics.push({
+              label: 'Visitors',
+              value: String(totalVisitors),
+              section: 'usage',
+              series: wa.visitors,
+              seriesKind: 'area' as const,
+              hint: 'last 14d',
+            });
+          }
         }
       }
 

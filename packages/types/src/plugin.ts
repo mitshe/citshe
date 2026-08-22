@@ -37,10 +37,31 @@ export interface PluginMetric {
    * omitted the UI classifies by label.
    */
   section?: "hero" | "details" | "usage";
-  /** Time-series values for a sparkline (oldest→newest). */
+  /** Time-series values for a chart (oldest→newest). */
   series?: number[];
-  /** Sparkline style; default 'line'. */
-  seriesKind?: "line" | "bar";
+  /**
+   * Chart style. `area` = filled line for continuous traffic, `line` = plain
+   * line for rates, `bar` = discrete counts per bucket (deploys/day, ops/hour).
+   * ('line' kept for back-compat; treated as area-or-line by the renderer.)
+   */
+  seriesKind?: "area" | "line" | "bar";
+  /**
+   * Multiple named series sharing one X axis (e.g. HTTP status split
+   * 2xx/3xx/4xx/5xx, or requests+errors). Rendered as a stacked area / multi
+   * line. When set, takes precedence over `series` for the chart.
+   */
+  seriesMulti?: { label: string; values: number[]; color?: string }[];
+  /** Per-point time labels for the X axis (same length as the series). */
+  seriesLabels?: string[];
+  /**
+   * Change vs the previous period, for a big-number tile (e.g. "+1.7%"). The
+   * sign drives the up/down tint. Purely presentational.
+   */
+  delta?: string;
+  /** Whether `delta` is a good or bad direction (green vs red). */
+  deltaGood?: boolean;
+  /** Optional unit shown after the value / in the chart tooltip. */
+  unit?: string;
 }
 
 export interface PluginLink {

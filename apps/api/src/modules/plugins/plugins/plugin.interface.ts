@@ -9,10 +9,20 @@ export interface PluginMetric {
   state?: HealthState;
   /** UI placement hint: 'hero' | 'details' | 'usage'. Omit to auto-classify. */
   section?: 'hero' | 'details' | 'usage';
-  /** Time-series values for a sparkline (oldest→newest). */
+  /** Time-series values for a chart (oldest→newest). */
   series?: number[];
-  /** Sparkline style; default 'line'. */
-  seriesKind?: 'line' | 'bar';
+  /** Chart style: 'area' (traffic) | 'line' (rates) | 'bar' (discrete counts). */
+  seriesKind?: 'area' | 'line' | 'bar';
+  /** Multiple named series sharing one X axis (status split, requests+errors). */
+  seriesMulti?: { label: string; values: number[]; color?: string }[];
+  /** Per-point time labels for the X axis. */
+  seriesLabels?: string[];
+  /** Change vs previous period for a big-number tile (e.g. "+1.7%"). */
+  delta?: string;
+  /** Whether `delta` is a good direction (green) or bad (red). */
+  deltaGood?: boolean;
+  /** Optional unit shown after the value / in the chart tooltip. */
+  unit?: string;
 }
 
 export interface PluginItem {
