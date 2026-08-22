@@ -1,14 +1,25 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 const API_URL = process.env.BACKEND_URL || "http://localhost:3001";
 
+// Monorepo root (two levels up from apps/web). Next/Turbopack can't reliably
+// infer the workspace root inside the Docker build, so pin it explicitly.
+const workspaceRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
+
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // Set turbopack root for monorepo builds (needed in Docker)
+  // Pin turbopack + output tracing root for monorepo builds (needed in Docker).
   turbopack: {
-    root: process.env.TURBO_ROOT || undefined,
+    root: workspaceRoot,
   },
+  outputFileTracingRoot: workspaceRoot,
   httpAgentOptions: {
     keepAlive: true,
   },
