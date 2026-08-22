@@ -37,6 +37,10 @@ export interface PluginMetric {
    * omitted the UI classifies by label.
    */
   section?: "hero" | "details" | "usage";
+  /** Time-series values for a sparkline (oldest→newest). */
+  series?: number[];
+  /** Sparkline style; default 'line'. */
+  seriesKind?: "line" | "bar";
 }
 
 export interface PluginLink {

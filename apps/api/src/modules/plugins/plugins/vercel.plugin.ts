@@ -315,13 +315,37 @@ class VercelPlugin implements StackPlugin {
 
     // --- Recent deployments: total + production count + failure signal ---
     try {
-      const json = await this.get(c, '/v6/deployments?limit=20');
+      const json = await this.get(c, '/v6/deployments?limit=100');
       const deployments: Array<Record<string, unknown>> =
         json?.deployments ?? [];
+      // Deploys-per-day for the last 14 days (oldest→newest, zero-filled) for a
+      // sparkline. Best-effort: omit the series if bucketing fails.
+      let deploySeries: number[] | undefined;
+      try {
+        const DAYS = 14;
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        // Bucket by local-day boundary so "today" lands in the last slot.
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const windowStart = startOfToday.getTime() - (DAYS - 1) * DAY_MS;
+        const buckets = new Array<number>(DAYS).fill(0);
+        for (const d of deployments) {
+          const created = d.createdAt as number | undefined;
+          if (typeof created !== 'number') continue;
+          const idx = Math.floor((created - windowStart) / DAY_MS);
+          if (idx >= 0 && idx < DAYS) buckets[idx] += 1;
+        }
+        deploySeries = buckets;
+      } catch {
+        deploySeries = undefined;
+      }
       metrics.push({
         label: 'Deployments',
         value: String(deployments.length),
         section: 'details',
+        ...(deploySeries
+          ? { series: deploySeries, seriesKind: 'bar' as const }
+          : {}),
       });
 
       const prod = deployments.filter((d) => d.target === 'production').length;

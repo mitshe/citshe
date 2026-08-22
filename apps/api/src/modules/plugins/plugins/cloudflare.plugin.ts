@@ -173,6 +173,69 @@ class CloudflarePlugin implements StackPlugin {
     }
   }
 
+  /**
+   * Hourly request/byte series for the last 24h via the GraphQL analytics API
+   * (httpRequests1hGroups). Returns per-hour arrays (oldest→newest) so the UI
+   * can draw a sparkline. Resilient: returns null on any failure (missing
+   * Analytics scope, empty dataset, query error).
+   */
+  private async zoneTrafficSeries(
+    token: string,
+    zoneTag: string,
+  ): Promise<{ requests: number[]; bytes: number[] } | null> {
+    const now = new Date();
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const query = `query ($zoneTag: String!, $since: String!, $until: String!) {
+      viewer {
+        zones(filter: { zoneTag: $zoneTag }) {
+          httpRequests1hGroups(
+            limit: 24
+            filter: { datetime_geq: $since, datetime_lt: $until }
+            orderBy: [datetime_ASC]
+          ) {
+            dimensions { datetime }
+            sum { requests bytes }
+          }
+        }
+      }
+    }`;
+    try {
+      const res = await fetch(`${API}/graphql`, {
+        method: 'POST',
+        headers: cfHeaders(token),
+        body: JSON.stringify({
+          query,
+          variables: {
+            zoneTag,
+            since: since.toISOString(),
+            until: now.toISOString(),
+          },
+        }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        errors?: unknown[];
+        data?: {
+          viewer?: {
+            zones?: Array<{
+              httpRequests1hGroups?: Array<{
+                sum?: { requests?: number; bytes?: number };
+              }>;
+            }>;
+          };
+        };
+      };
+      if (json.errors?.length) return null;
+      const groups = json.data?.viewer?.zones?.[0]?.httpRequests1hGroups ?? [];
+      if (!groups.length) return null;
+      const requests = groups.map((g) => g.sum?.requests ?? 0);
+      const bytes = groups.map((g) => g.sum?.bytes ?? 0);
+      return { requests, bytes };
+    } catch {
+      return null;
+    }
+  }
+
   /** Resolve the account id — explicit, else the first account the token sees. */
   private async resolveAccount(config: CfConfig): Promise<string> {
     if (config.accountId) return config.accountId;
@@ -644,17 +707,26 @@ class CloudflarePlugin implements StackPlugin {
       try {
         const t = await this.zoneTraffic(apiToken, primaryZone.id);
         if (t) {
+          // Hourly sparkline series for the last 24h (best-effort — omitted on
+          // failure so the metric still shows its aggregate value).
+          const hourly = await this.zoneTrafficSeries(apiToken, primaryZone.id);
           metrics.push({
             label: 'Requests 24h',
             value: compact(t.requests),
             hint: primaryZone.name,
             section: 'usage',
+            ...(hourly?.requests.length
+              ? { series: hourly.requests, seriesKind: 'line' as const }
+              : {}),
           });
           metrics.push({
             label: 'Bandwidth 24h',
             value: humanBytes(t.bytes),
             hint: primaryZone.name,
             section: 'usage',
+            ...(hourly?.bytes.length
+              ? { series: hourly.bytes, seriesKind: 'line' as const }
+              : {}),
           });
           if (t.requests > 0) {
             const cachedPct = Math.round((t.cachedRequests / t.requests) * 100);

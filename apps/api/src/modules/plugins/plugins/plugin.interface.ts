@@ -9,6 +9,10 @@ export interface PluginMetric {
   state?: HealthState;
   /** UI placement hint: 'hero' | 'details' | 'usage'. Omit to auto-classify. */
   section?: 'hero' | 'details' | 'usage';
+  /** Time-series values for a sparkline (oldest→newest). */
+  series?: number[];
+  /** Sparkline style; default 'line'. */
+  seriesKind?: 'line' | 'bar';
 }
 
 export interface PluginItem {

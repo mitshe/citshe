@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Sparkline } from "@/components/ui/sparkline";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -472,6 +473,8 @@ function PluginDashboard({
                     value={m.value}
                     state={m.state}
                     hint={m.hint}
+                    series={m.series}
+                    seriesKind={m.seriesKind}
                   />
                 ))}
               </RailBlock>
@@ -486,6 +489,8 @@ function PluginDashboard({
                     value={m.value}
                     state={m.state}
                     hint={m.hint}
+                    series={m.series}
+                    seriesKind={m.seriesKind}
                   />
                 ))}
               </RailBlock>
@@ -816,6 +821,14 @@ function StatStrip({ metrics }: { metrics: PluginMetric[] }) {
           >
             {m.value}
           </div>
+          {m.series && m.series.length > 1 && (
+            <Sparkline
+              values={m.series}
+              kind={m.seriesKind ?? "line"}
+              aria-label={`${m.label} trend`}
+              className="mt-1.5 h-6 text-primary/70"
+            />
+          )}
         </div>
       ))}
     </div>
@@ -862,11 +875,15 @@ function KV({
   value,
   state,
   hint,
+  series,
+  seriesKind,
 }: {
   label: string;
   value: string;
   state?: HealthState;
   hint?: string;
+  series?: number[];
+  seriesKind?: "line" | "bar";
 }) {
   return (
     <div className="flex items-start justify-between gap-3 px-4 py-2 not-last:border-b not-last:border-border">
@@ -883,6 +900,14 @@ function KV({
             {value}
           </span>
         </span>
+        {series && series.length > 1 && (
+          <Sparkline
+            values={series}
+            kind={seriesKind ?? "line"}
+            aria-label={`${label} trend`}
+            className="ml-auto mt-1 h-5 w-16 text-muted-foreground"
+          />
+        )}
         {hint && (
           <span className="mt-0.5 block text-[11px] text-text-subtle">
             {hint}
