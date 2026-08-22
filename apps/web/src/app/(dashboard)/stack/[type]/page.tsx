@@ -31,7 +31,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Chart } from "@/components/ui/chart";
+import { Chart, ChartLegend } from "@/components/ui/chart";
+import { StatTile } from "@/components/ui/stat-tile";
+import { UsageBar } from "@/components/ui/usage-bar";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -124,15 +127,7 @@ export default function StackToolPage({
                 {def.name}
               </h1>
               {connected && !statusLoading && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 text-xs font-medium",
-                    healthText[state],
-                  )}
-                >
-                  <StatusDot state={state} size={8} />
-                  {status?.headline.label ?? "—"}
-                </span>
+                <StatusPill state={state} label={status?.headline.label} />
               )}
             </div>
             <p className="text-sm text-muted-foreground">{def.tagline}</p>
@@ -256,39 +251,102 @@ export default function StackToolPage({
 // ============================================================================
 
 /**
- * Decide where a metric belongs in the 2-column layout. Respects an explicit
- * `metric.section` hint from the plugin; otherwise classifies by label keyword
- * (case-insensitive). HERO = the top "what's live" strip. USAGE = the right
- * rail "Usage" block (storage / compute used / transfer / traffic). DETAILS =
- * everything else (region / plan / version / counts) → right rail "Details".
+ * classifyMetric v2 — decide a metric's ROLE in the Overview hierarchy:
+ *   - `trend`   → has a series/seriesMulti → big chart in the Trends band.
+ *   - `tile`    → a headline (hero) or an important standalone count/state →
+ *                 big-number StatTile in the tiles row.
+ *   - `usage`   → a quota/consumption property → right-rail (UsageBar or KV).
+ *   - `detail`  → a plain property (region / plan / version / id) → rail KV.
+ * Respects an explicit `metric.section` hint, but a series ALWAYS wins (a
+ * series metric can never end up as a tiny rail sparkline).
  */
-function classifyMetric(m: PluginMetric): "hero" | "details" | "usage" {
-  if (m.section) return m.section;
-  const l = m.label.toLowerCase();
+type MetricRole = "trend" | "tile" | "usage" | "detail";
 
-  // HERO — headline state of the thing right now.
+function hasSeries(m: PluginMetric): boolean {
+  return (
+    (Array.isArray(m.series) && m.series.length > 1) ||
+    (Array.isArray(m.seriesMulti) &&
+      m.seriesMulti.some((s) => s.values.length > 1))
+  );
+}
+
+function classifyMetric(m: PluginMetric): MetricRole {
+  if (hasSeries(m)) return "trend";
+
+  const l = m.label.toLowerCase();
+  const isUsage =
+    m.section === "usage" ||
+    l.includes("storage") ||
+    l.includes("compute used") ||
+    l.includes("data transfer") ||
+    l.includes("bandwidth") ||
+    l.includes("size") ||
+    /\br2\b/.test(l);
+
+  if (isUsage) return "usage";
+
+  if (m.section === "hero") return "tile";
+  if (m.section === "details") return "detail";
+
+  // No explicit hint — headline-ish states & key counts become tiles.
   if (
     l.includes("last deploy") ||
     l.includes("compute state") ||
+    l.includes("last activity") ||
     /\bup\b/.test(l) ||
-    l.includes("connected")
-  )
-    return "hero";
-
-  // USAGE — consumption over a billing period / traffic volume.
-  if (
+    l.includes("connected") ||
+    l.includes("error rate") ||
+    l.includes("cache") ||
+    l.includes("cached") ||
     l.includes("requests") ||
-    l.includes("bandwidth") ||
-    l.includes("compute used") ||
-    l.includes("data transfer") ||
-    l.includes("storage") ||
-    l.includes("size") ||
-    l.includes("network")
+    l.includes("deployments") ||
+    l.includes("projects") ||
+    l.includes("domains") ||
+    l.includes("branches") ||
+    l.includes("servers") ||
+    l.includes("workers")
   )
-    return "usage";
+    return "tile";
 
-  // DETAILS — properties and counts.
-  return "details";
+  return "detail";
+}
+
+/**
+ * Best-effort parse of a "used / total" quota out of a metric value + hint so
+ * we can render a UsageBar. Returns null when no total is discernible (caller
+ * falls back to a KV row). Handles "12.4 GB", "12.4 / 20 GB", "42%".
+ */
+function parseQuota(
+  m: PluginMetric,
+): { used: number; total: number; usedLabel: string; totalLabel: string } | null {
+  const text = `${m.value} ${m.hint ?? ""}`;
+
+  // Percentage → used = pct, total = 100.
+  const pctMatch = m.value.match(/^(\d+(?:\.\d+)?)\s*%$/);
+  if (pctMatch) {
+    const used = parseFloat(pctMatch[1]);
+    return { used, total: 100, usedLabel: `${used}%`, totalLabel: "100%" };
+  }
+
+  // "12.4 / 20 GB" or "12.4 GB of 20 GB".
+  const pair = text.match(
+    /(\d+(?:\.\d+)?)\s*([a-z%]*)\s*(?:\/|of|out of)\s*(\d+(?:\.\d+)?)\s*([a-z%]*)/i,
+  );
+  if (pair) {
+    const used = parseFloat(pair[1]);
+    const total = parseFloat(pair[3]);
+    const unit = pair[4] || pair[2] || "";
+    if (total > 0) {
+      return {
+        used,
+        total,
+        usedLabel: `${pair[1]}${unit ? ` ${unit}` : ""}`,
+        totalLabel: `${pair[3]}${unit ? ` ${unit}` : ""}`,
+      };
+    }
+  }
+
+  return null;
 }
 
 function PluginDashboard({
@@ -321,37 +379,20 @@ function PluginDashboard({
     );
   }
 
-  // Time-series metrics own the "Monitoring" block (big charts, left column).
-  // They are pulled OUT of the hero / rail / stat-strip buckets so a series
-  // metric never also renders as a tiny sparkline.
-  const seriesMetrics = metrics.filter(
-    (m) => Array.isArray(m.series) && m.series.length > 1,
-  );
-  const plainMetrics = metrics.filter(
-    (m) => !(Array.isArray(m.series) && m.series.length > 1),
-  );
+  // --- classifyMetric v2: strict tiers ---------------------------------
+  // A series metric ALWAYS becomes a big Trends chart — never a rail sparkline.
+  const trendMetrics = metrics.filter((m) => classifyMetric(m) === "trend");
+  // Cap the Overview trends band at 3 charts to avoid a chart wall.
+  const overviewTrends = trendMetrics.slice(0, 3);
 
-  // Metric classification for the hero strip + right rail blocks (non-series).
-  const heroMetrics = plainMetrics.filter((m) => classifyMetric(m) === "hero");
-  const detailMetrics = plainMetrics.filter(
-    (m) => classifyMetric(m) === "details",
-  );
-  const usageMetrics = plainMetrics.filter(
-    (m) => classifyMetric(m) === "usage",
-  );
+  // Big-number tiles: hero + important counts/state. Cap at 5.
+  const tileMetrics = metrics
+    .filter((m) => classifyMetric(m) === "tile")
+    .slice(0, 5);
 
-  // "Last 24h" style traffic metrics — a slim stat strip in the left column.
-  // These are the usage metrics that read as point-in-time counts (Cloudflare
-  // requests / bandwidth / cached / threats), not billing-period totals.
-  const trafficMetrics = usageMetrics.filter((m) => {
-    const l = m.label.toLowerCase();
-    return (
-      l.includes("requests") ||
-      l.includes("bandwidth") ||
-      l.includes("cached") ||
-      l.includes("threats")
-    );
-  });
+  // Right rail: usage quotas (bar or KV) + plain details.
+  const usageMetrics = metrics.filter((m) => classifyMetric(m) === "usage");
+  const detailMetrics = metrics.filter((m) => classifyMetric(m) === "detail");
 
   // Resource groups: pull deployments out to lead the left column; the VPS
   // "servers" group is rendered by its own managed section.
@@ -369,6 +410,26 @@ function PluginDashboard({
   );
 
   const primaryLink = links[0];
+
+  // Status-strip meta line: region / account / plan / last-checked from the
+  // detail metrics (best-effort, first 3 that read as context).
+  const metaLine =
+    detailMetrics
+      .filter((m) => {
+        const l = m.label.toLowerCase();
+        return (
+          l.includes("region") ||
+          l.includes("account") ||
+          l.includes("plan") ||
+          l.includes("last") ||
+          l.includes("checked") ||
+          l.includes("sync")
+        );
+      })
+      .slice(0, 3)
+      .map((m) => `${m.label}: ${m.value}`)
+      .join("  ·  ") || undefined;
+
   const railHasContent =
     detailMetrics.length > 0 || usageMetrics.length > 0 || links.length > 0;
 
@@ -376,21 +437,44 @@ function PluginDashboard({
     return <DashboardSkeleton />;
   }
 
+  const hasTrends = overviewTrends.length > 0;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       {/* ===================== LEFT (main) ===================== */}
       <div className="min-w-0 space-y-6">
-        {/* HERO — what's live right now. */}
+        {/* TIER 1 — Status strip (what's live right now). */}
         {statusLoading ? (
           <HeroSkeleton />
         ) : (
           <HeroBlock
             headline={status?.headline}
-            heroMetrics={heroMetrics}
+            metaLine={metaLine}
             activeDeployment={activeDeployment}
             activePreview={activePreview}
             primaryLink={primaryLink}
           />
+        )}
+
+        {/* TIER 2 — Big-number tiles. Headline metrics + key counts/state. */}
+        {statusLoading ? (
+          <TilesSkeleton />
+        ) : (
+          tileMetrics.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {tileMetrics.map((m, i) => (
+                <StatTile
+                  key={i}
+                  label={m.label}
+                  value={m.value}
+                  unit={m.unit}
+                  delta={m.delta}
+                  deltaGood={m.deltaGood}
+                  state={m.state}
+                />
+              ))}
+            </div>
+          )
         )}
 
         {/* Actions surfaced from status. */}
@@ -404,30 +488,24 @@ function PluginDashboard({
           </Block>
         )}
 
-        {/* Monitoring — big time-series charts (Neon / Cloudflare / Vercel). */}
-        {seriesMetrics.length > 0 && (
+        {/* TIER 3 — Trends band: big charts (area traffic / line rates / bar
+            discrete). Capped at 3; empty band hidden. */}
+        {hasTrends && (
           <Block title="Monitoring">
             <div
               className={cn(
                 "grid gap-px bg-border",
-                seriesMetrics.length > 1 && "sm:grid-cols-2",
+                overviewTrends.length > 1 && "sm:grid-cols-2",
               )}
             >
-              {seriesMetrics.map((m, i) => (
+              {overviewTrends.map((m, i) => (
                 <MonitoringCard key={i} metric={m} />
               ))}
             </div>
           </Block>
         )}
 
-        {/* Last 24h traffic strip (Cloudflare). */}
-        {trafficMetrics.length > 0 && (
-          <Block title="Last 24h">
-            <StatStrip metrics={trafficMetrics} />
-          </Block>
-        )}
-
-        {/* Deployments — previews + the deployments resource group. */}
+        {/* TIER 4 — Resources teaser. Deployments — previews + resource group. */}
         {(previewsLoading ||
           previews.length > 0 ||
           (deploymentsGroup?.items.length ?? 0) > 0) && (
@@ -510,15 +588,27 @@ function PluginDashboard({
 
             {usageMetrics.length > 0 && (
               <RailBlock title="Usage">
-                {usageMetrics.map((m, i) => (
-                  <KV
-                    key={i}
-                    label={m.label}
-                    value={m.value}
-                    state={m.state}
-                    hint={m.hint}
-                  />
-                ))}
+                {usageMetrics.map((m, i) => {
+                  const quota = parseQuota(m);
+                  return quota ? (
+                    <UsageBar
+                      key={i}
+                      label={m.label}
+                      used={quota.used}
+                      total={quota.total}
+                      usedLabel={quota.usedLabel}
+                      totalLabel={quota.totalLabel}
+                    />
+                  ) : (
+                    <KV
+                      key={i}
+                      label={m.label}
+                      value={m.value}
+                      state={m.state}
+                      hint={m.hint}
+                    />
+                  );
+                })}
               </RailBlock>
             )}
 
@@ -539,21 +629,21 @@ function PluginDashboard({
 // ---- Hero ------------------------------------------------------------------
 
 /**
- * The top "what's live" block. If there's an active deployment (resource group
- * or a ready preview) it leads with the commit message + Live badge + branch ·
- * #sha · author · when and the primary link. Otherwise it shows the health
- * headline plus any HERO-classified metrics inline. Never empty — the headline
- * is always shown.
+ * TIER 1 — the compact Status strip. Leads with the health pill. If there's an
+ * active deployment (resource group or a ready preview) it shows the commit
+ * message + Live badge + branch · #sha · author · when and the primary link.
+ * Otherwise it shows the health headline plus an optional meta line (region /
+ * account / last-checked). Never empty — the headline is always shown.
  */
 function HeroBlock({
   headline,
-  heroMetrics,
+  metaLine,
   activeDeployment,
   activePreview,
   primaryLink,
 }: {
   headline?: { label: string; state: HealthState };
-  heroMetrics: PluginMetric[];
+  metaLine?: string;
   activeDeployment?: PluginResourceItem;
   activePreview?: PreviewDeployment;
   primaryLink?: { label: string; url: string };
@@ -586,15 +676,7 @@ function HeroBlock({
     <div className="rounded-lg border border-border bg-surface-card">
       <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <Eyebrow>Overview</Eyebrow>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 text-xs font-medium",
-            healthText[state],
-          )}
-        >
-          <StatusDot state={state} size={7} />
-          {headline?.label ?? "—"}
-        </span>
+        <StatusPill state={state} label={headline?.label} />
       </div>
 
       <div className="space-y-3 p-4">
@@ -638,27 +720,8 @@ function HeroBlock({
                 {headline?.label ?? "—"}
               </span>
             </div>
-            {heroMetrics.length > 0 && (
-              <dl className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                {heroMetrics.map((m, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
-                    {m.state && m.state !== "idle" && (
-                      <StatusDot state={m.state} size={6} />
-                    )}
-                    <dt className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-                      {m.label}
-                    </dt>
-                    <dd
-                      className={cn(
-                        "font-medium tabular-nums",
-                        m.state ? metricText[m.state] : "text-foreground",
-                      )}
-                    >
-                      {m.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+            {metaLine && (
+              <p className="text-xs text-text-subtle">{metaLine}</p>
             )}
           </>
         )}
@@ -856,13 +919,21 @@ function deriveXLabels(m: PluginMetric): string[] | undefined {
 }
 
 /**
- * One big chart card in the Monitoring block: metric label heading, the current
- * value (big, + hint), then a full recharts Chart below. Mirrors Neon "Postgres
- * Monitoring" / Vercel "Edge Requests" cards.
+ * One big chart card in the Trends band: metric label heading, the current
+ * value (big, + hint), then a full recharts Chart below. Chart language:
+ *   area → traffic, line → rates, bar → discrete counts. Multi-series metrics
+ * render a stacked area / multi-line with a small muted legend. Mirrors Neon /
+ * Cloudflare / Vercel monitoring cards.
  */
 function MonitoringCard({ metric: m }: { metric: PluginMetric }) {
-  const kind = m.seriesKind === "bar" ? "bar" : "area";
+  const kind: "area" | "line" | "bar" =
+    m.seriesKind === "bar" ? "bar" : m.seriesKind === "line" ? "line" : "area";
   const xLabels = deriveXLabels(m);
+  const multi =
+    Array.isArray(m.seriesMulti) && m.seriesMulti.length > 0
+      ? m.seriesMulti
+      : undefined;
+
   return (
     <div className="bg-surface-card p-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -886,39 +957,18 @@ function MonitoringCard({ metric: m }: { metric: PluginMetric }) {
         )}
       </div>
       <Chart
-        data={m.series!}
+        data={m.series}
+        series={multi}
         kind={kind}
         label={m.label}
+        unit={m.unit}
         xLabels={xLabels}
         className="mt-3"
         height={180}
+        emptyTitle="No data yet"
+        emptyHint="Appears once there's traffic"
       />
-    </div>
-  );
-}
-
-/**
- * A slim horizontal stat strip for "Last 24h" style traffic metrics: label
- * above a big-ish number, laid out in a responsive row inside a block body.
- */
-function StatStrip({ metrics }: { metrics: PluginMetric[] }) {
-  return (
-    <div className="grid grid-cols-2 divide-x divide-border sm:grid-cols-4">
-      {metrics.map((m, i) => (
-        <div key={i} className="px-4 py-3">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
-            {m.label}
-          </div>
-          <div
-            className={cn(
-              "mt-0.5 text-lg font-semibold tabular-nums",
-              m.state ? metricText[m.state] : "text-foreground",
-            )}
-          >
-            {m.value}
-          </div>
-        </div>
-      ))}
+      {multi && <ChartLegend series={multi} className="mt-2" />}
     </div>
   );
 }
@@ -1429,6 +1479,22 @@ function SectionRowsSkeleton() {
         </div>
       ))}
     </>
+  );
+}
+
+function TilesSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex flex-col gap-3 rounded-lg border border-border bg-surface-card p-4"
+        >
+          <div className="h-3 w-16 animate-pulse rounded bg-surface-hover" />
+          <div className="h-7 w-20 animate-pulse rounded bg-surface-hover" />
+        </div>
+      ))}
+    </div>
   );
 }
 
