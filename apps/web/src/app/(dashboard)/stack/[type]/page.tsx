@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Sparkline } from "@/components/ui/sparkline";
+import { Chart } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -321,10 +321,24 @@ function PluginDashboard({
     );
   }
 
-  // Metric classification for the hero strip + right rail blocks.
-  const heroMetrics = metrics.filter((m) => classifyMetric(m) === "hero");
-  const detailMetrics = metrics.filter((m) => classifyMetric(m) === "details");
-  const usageMetrics = metrics.filter((m) => classifyMetric(m) === "usage");
+  // Time-series metrics own the "Monitoring" block (big charts, left column).
+  // They are pulled OUT of the hero / rail / stat-strip buckets so a series
+  // metric never also renders as a tiny sparkline.
+  const seriesMetrics = metrics.filter(
+    (m) => Array.isArray(m.series) && m.series.length > 1,
+  );
+  const plainMetrics = metrics.filter(
+    (m) => !(Array.isArray(m.series) && m.series.length > 1),
+  );
+
+  // Metric classification for the hero strip + right rail blocks (non-series).
+  const heroMetrics = plainMetrics.filter((m) => classifyMetric(m) === "hero");
+  const detailMetrics = plainMetrics.filter(
+    (m) => classifyMetric(m) === "details",
+  );
+  const usageMetrics = plainMetrics.filter(
+    (m) => classifyMetric(m) === "usage",
+  );
 
   // "Last 24h" style traffic metrics — a slim stat strip in the left column.
   // These are the usage metrics that read as point-in-time counts (Cloudflare
@@ -385,6 +399,22 @@ function PluginDashboard({
             <div className="flex flex-wrap gap-2 p-4">
               {actions.map((a) => (
                 <PluginActionButton key={a.id} type={type} action={a} />
+              ))}
+            </div>
+          </Block>
+        )}
+
+        {/* Monitoring — big time-series charts (Neon / Cloudflare / Vercel). */}
+        {seriesMetrics.length > 0 && (
+          <Block title="Monitoring">
+            <div
+              className={cn(
+                "grid gap-px bg-border",
+                seriesMetrics.length > 1 && "sm:grid-cols-2",
+              )}
+            >
+              {seriesMetrics.map((m, i) => (
+                <MonitoringCard key={i} metric={m} />
               ))}
             </div>
           </Block>
@@ -473,8 +503,6 @@ function PluginDashboard({
                     value={m.value}
                     state={m.state}
                     hint={m.hint}
-                    series={m.series}
-                    seriesKind={m.seriesKind}
                   />
                 ))}
               </RailBlock>
@@ -489,8 +517,6 @@ function PluginDashboard({
                     value={m.value}
                     state={m.state}
                     hint={m.hint}
-                    series={m.series}
-                    seriesKind={m.seriesKind}
                   />
                 ))}
               </RailBlock>
@@ -802,6 +828,76 @@ function ResourceGroupBlock({
 }
 
 /**
+ * Derive X-axis labels for a series from the metric hint. Reads a duration like
+ * "48h" / "24h" / "14d" out of the label/hint and produces "<n> ago" … "now"
+ * anchored to the first & last points; middle points get "". Falls back to
+ * "start" … "now" when no duration is found.
+ */
+function deriveXLabels(m: PluginMetric): string[] | undefined {
+  const n = m.series?.length ?? 0;
+  if (n < 2) return undefined;
+  const text = `${m.label} ${m.hint ?? ""}`.toLowerCase();
+  const match = text.match(/(\d+)\s*(h|hr|hrs|hour|hours|d|day|days|m|min)/);
+  const labels = new Array(n).fill("");
+  labels[n - 1] = "now";
+  if (match) {
+    const span = match[1];
+    const unitRaw = match[2];
+    const unit = unitRaw.startsWith("h")
+      ? "h"
+      : unitRaw.startsWith("d")
+        ? "d"
+        : "m";
+    labels[0] = `${span}${unit} ago`;
+  } else {
+    labels[0] = "start";
+  }
+  return labels;
+}
+
+/**
+ * One big chart card in the Monitoring block: metric label heading, the current
+ * value (big, + hint), then a full recharts Chart below. Mirrors Neon "Postgres
+ * Monitoring" / Vercel "Edge Requests" cards.
+ */
+function MonitoringCard({ metric: m }: { metric: PluginMetric }) {
+  const kind = m.seriesKind === "bar" ? "bar" : "area";
+  const xLabels = deriveXLabels(m);
+  return (
+    <div className="bg-surface-card p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-text-subtle">
+            {m.label}
+          </div>
+          <div
+            className={cn(
+              "mt-0.5 text-xl font-semibold tabular-nums",
+              m.state ? metricText[m.state] : "text-foreground",
+            )}
+          >
+            {m.value}
+          </div>
+        </div>
+        {m.hint && (
+          <span className="shrink-0 text-[11px] text-text-subtle">
+            {m.hint}
+          </span>
+        )}
+      </div>
+      <Chart
+        data={m.series!}
+        kind={kind}
+        label={m.label}
+        xLabels={xLabels}
+        className="mt-3"
+        height={180}
+      />
+    </div>
+  );
+}
+
+/**
  * A slim horizontal stat strip for "Last 24h" style traffic metrics: label
  * above a big-ish number, laid out in a responsive row inside a block body.
  */
@@ -821,14 +917,6 @@ function StatStrip({ metrics }: { metrics: PluginMetric[] }) {
           >
             {m.value}
           </div>
-          {m.series && m.series.length > 1 && (
-            <Sparkline
-              values={m.series}
-              kind={m.seriesKind ?? "line"}
-              aria-label={`${m.label} trend`}
-              className="mt-1.5 h-6 text-primary/70"
-            />
-          )}
         </div>
       ))}
     </div>
@@ -875,15 +963,11 @@ function KV({
   value,
   state,
   hint,
-  series,
-  seriesKind,
 }: {
   label: string;
   value: string;
   state?: HealthState;
   hint?: string;
-  series?: number[];
-  seriesKind?: "line" | "bar";
 }) {
   return (
     <div className="flex items-start justify-between gap-3 px-4 py-2 not-last:border-b not-last:border-border">
@@ -900,14 +984,6 @@ function KV({
             {value}
           </span>
         </span>
-        {series && series.length > 1 && (
-          <Sparkline
-            values={series}
-            kind={seriesKind ?? "line"}
-            aria-label={`${label} trend`}
-            className="ml-auto mt-1 h-5 w-16 text-muted-foreground"
-          />
-        )}
         {hint && (
           <span className="mt-0.5 block text-[11px] text-text-subtle">
             {hint}
