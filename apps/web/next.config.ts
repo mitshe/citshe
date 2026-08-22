@@ -55,6 +55,14 @@ const nextConfig: NextConfig = {
     const apiUrl = process.env.BACKEND_URL || "http://localhost:3001";
     return [
       {
+        // Proxy the socket.io endpoint (terminals + live status) to the API.
+        // The tunnel sends everything to web:3000, but socket.io lives on the
+        // API — without this the WS lands on Next (308) and terminal input is
+        // never delivered. Covers both the polling handshake and the WS upgrade.
+        source: "/socket.io/:path*",
+        destination: `${apiUrl}/socket.io/:path*`,
+      },
+      {
         // Proxy /api/v1/* requests to NestJS backend
         source: "/api/v1/:path*",
         destination: `${apiUrl}/api/v1/:path*`,
