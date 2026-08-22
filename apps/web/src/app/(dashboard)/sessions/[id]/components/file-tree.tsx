@@ -7,8 +7,11 @@ import {
   FolderOpen,
   ChevronRight,
   ChevronDown,
+  FolderGit2,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
 import { showContextMenu, type ContextMenuItem } from "./context-menu";
 
 export interface FileTreeNode {
@@ -338,13 +341,28 @@ export function FileTree({
       >
         <div className="py-1">
           {fileTree.length === 0 ? (
-            <p className="text-xs text-text-subtle text-center px-3 py-4 leading-relaxed">
-              {isLoading
-                ? "Loading files…"
-                : hasRepo
-                  ? "No files"
-                  : "This terminal has no repo attached"}
-            </p>
+            isLoading ? (
+              <div className="flex items-center justify-center gap-2 px-3 py-6 text-xs text-text-subtle">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading files…
+              </div>
+            ) : hasRepo ? (
+              <EmptyState
+                align="center"
+                className="px-3 py-6"
+                icon={<FileText className="h-5 w-5" />}
+                title="No files yet"
+                description="This workspace is empty."
+              />
+            ) : (
+              <EmptyState
+                align="center"
+                className="px-3 py-6"
+                icon={<FolderGit2 className="h-5 w-5" />}
+                title="No repo attached"
+                description="Attach a repo to browse and edit files, or just use the terminal."
+              />
+            )
           ) : (
             fileTree.map((node) => (
               <FileTreeItem

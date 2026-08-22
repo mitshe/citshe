@@ -1098,7 +1098,12 @@ export default function SessionDetailPage() {
                   }}
                 >
                   {isRunning ? (
-                    <BrowserView sessionId={sessionId} />
+                    // Only mount (and thus start) the browser once its tab is
+                    // actually opened — it's a heavy Chromium/VNC session that
+                    // Claude uses to test, not something to spin up on load.
+                    activeTabId === tab.id ? (
+                      <BrowserView sessionId={sessionId} />
+                    ) : null
                   ) : isCreating ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
                       <div className="text-center">
