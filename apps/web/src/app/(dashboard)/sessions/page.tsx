@@ -49,7 +49,7 @@ import {
   Search,
   MoreHorizontal,
   CheckSquare,
-  GitBranch,
+  FolderGit2,
   Container,
 } from "lucide-react";
 import {
@@ -514,16 +514,28 @@ export default function SessionsPage() {
             </span>
           </div>
           <div className="flex items-center gap-2.5 text-xs text-text-subtle mt-0.5 leading-tight min-w-0">
+            {(() => {
+              const repoNames = (session.repositories ?? [])
+                .map((r) => r.repository?.name || "")
+                .filter(Boolean);
+              return repoNames.length > 0 ? (
+                <span className="flex items-center gap-1 truncate max-w-[150px] sm:max-w-[220px]">
+                  <FolderGit2 className="w-3 h-3 shrink-0" />
+                  <span className="truncate font-mono">
+                    {repoNames.join(", ")}
+                    {session.branch ? `:${session.branch}` : ""}
+                  </span>
+                </span>
+              ) : (
+                // Never leave the row empty — a repo-less terminal is still a
+                // useful thing, say so plainly.
+                <span className="shrink-0">terminal · no repo</span>
+              );
+            })()}
             {session.aiCredential && (
               <span className="truncate hidden sm:inline">
                 {providerLabels[session.aiCredential.provider] ||
                   session.aiCredential.provider}
-              </span>
-            )}
-            {session.branch && (
-              <span className="hidden sm:flex items-center gap-1 font-mono shrink-0 min-w-0">
-                <GitBranch className="w-3 h-3 shrink-0" />
-                <span className="truncate">{session.branch}</span>
               </span>
             )}
             {session.enableDocker && (
@@ -532,16 +544,9 @@ export default function SessionsPage() {
                 Docker
               </span>
             )}
-            {session.repositories && session.repositories.length > 0 && (
-              <span className="truncate max-w-[160px] sm:max-w-[200px]">
-                {session.repositories
-                  .map((r) => r.repository?.name || "")
-                  .filter(Boolean)
-                  .join(", ")}
-              </span>
-            )}
             <span className="flex items-center gap-1 shrink-0">
               <Clock className="w-3 h-3 shrink-0" />
+              {session.status === "RUNNING" ? "up " : ""}
               {formatDistanceToNow(new Date(session.lastActiveAt))}
             </span>
           </div>
@@ -552,11 +557,21 @@ export default function SessionsPage() {
             className="flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Open is always visible — it's the primary action for a row. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => router.push(`/sessions/${session.id}`)}
+            >
+              <Play className="w-3.5 h-3.5 mr-1" />
+              Open
+            </Button>
             {session.status === "RUNNING" && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 hidden sm:inline-flex text-muted-foreground hover:text-foreground opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-linear"
+                className="h-8 hidden text-muted-foreground hover:text-foreground sm:inline-flex"
                 onClick={(e) => handleStop(e, session.id)}
               >
                 <Square className="w-3.5 h-3.5 mr-1" />
