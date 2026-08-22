@@ -511,6 +511,14 @@ export class OrchestrationService {
       ? [task.repositoryId]
       : await this.defaultRepositoryIds(organizationId);
 
+    // Attach the org's connected GitHub integration(s) so the worker can
+    // clone and push a PR.
+    const gitIntegrations = await this.prisma.integration.findMany({
+      where: { organizationId, type: 'GITHUB', status: 'CONNECTED' },
+      select: { id: true },
+    });
+    const integrationIds = gitIntegrations.map((i) => i.id);
+
     // Create the worker thread (same container path as terminals/sessions).
     const session = await this.sessionsService.create(
       organizationId,
@@ -518,6 +526,7 @@ export class OrchestrationService {
       {
         name: `worker: ${task.title}`.slice(0, 80),
         repositoryIds,
+        integrationIds,
         instructions: this.buildWorkerInstructions(
           task.title,
           task.description,
@@ -534,6 +543,62 @@ export class OrchestrationService {
       status: TaskStatus.IN_PROGRESS,
       message: 'Worker starting…',
     });
+
+    // Actually spin up the container and flip the session to RUNNING — the
+    // service's create() only writes the DB row (the HTTP controller normally
+    // does this part), so without it the worker sat in CREATING forever
+    // ("did not become ready in time").
+    try {
+      const [repos, integrationConfigs] = await Promise.all([
+        this.sessionsService.buildRepoConfigs(
+          session.repositories,
+          organizationId,
+        ),
+        this.sessionsService.resolveIntegrationConfigs(
+          integrationIds,
+          organizationId,
+          undefined,
+          session.id,
+        ),
+      ]);
+
+      const containerId = await this.containerService.createAndStart(
+        {
+          sessionId: session.id,
+          organizationId,
+          repos,
+          instructions: session.instructions,
+          provider: session.aiCredential?.provider,
+          enableDocker: session.enableDocker,
+          enableBrowser: session.enableBrowser,
+          integrations:
+            integrationConfigs.length > 0 ? integrationConfigs : undefined,
+        },
+        async (cid) => {
+          await this.sessionsService.updateContainerId(session.id, cid);
+        },
+      );
+
+      await this.sessionsService.updateStatus(
+        session.id,
+        'RUNNING',
+        containerId,
+      );
+      this.eventsGateway.emitSessionStatus(
+        organizationId,
+        session.id,
+        'RUNNING',
+      );
+    } catch (err) {
+      await this.sessionsService.updateStatus(session.id, 'FAILED');
+      this.eventsGateway.emitSessionStatus(
+        organizationId,
+        session.id,
+        'FAILED',
+        (err as Error).message,
+      );
+      throw err;
+    }
 
     // Awaits, and re-throws on failure (see runWorker { rethrow: true }).
     await this.runWorker(organizationId, taskId, session.id, task, {
