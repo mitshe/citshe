@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Menu, LogOut, Settings } from "lucide-react";
+import {
+  Search,
+  Menu,
+  LogOut,
+  Settings,
+  Sun,
+  Moon,
+  Monitor,
+  Check,
+} from "lucide-react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -16,12 +26,15 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarBody } from "./sidebar";
 import { OPEN_COMMAND_EVENT } from "./command-palette";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuthContext } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 function userInitials(name: string | null, email: string | null): string {
   const src = (name || email || "?").trim();
@@ -34,9 +47,16 @@ function openCommand() {
   window.dispatchEvent(new Event(OPEN_COMMAND_EVENT));
 }
 
+const THEMES = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
 export function Topbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { userName, userEmail, signOut } = useAuthContext();
+  const { theme, setTheme } = useTheme();
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
@@ -66,8 +86,6 @@ export function Topbar() {
           <Search className="h-4 w-4" />
         </Button>
 
-        <ThemeToggle />
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex h-8 items-center gap-2 rounded-md border border-border px-1.5 pr-2 text-sm transition-linear hover:bg-surface-hover">
@@ -90,6 +108,31 @@ export function Topbar() {
                 Settings
               </Link>
             </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2">
+                <Sun className="h-4 w-4" />
+                Theme
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {THEMES.map((t) => (
+                  <DropdownMenuItem
+                    key={t.value}
+                    onClick={() => setTheme(t.value)}
+                    className="gap-2"
+                  >
+                    <t.icon className="h-4 w-4" />
+                    {t.label}
+                    <Check
+                      className={cn(
+                        "ml-auto h-4 w-4",
+                        theme === t.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut()} className="gap-2">
               <LogOut className="h-4 w-4" />
               Sign out
