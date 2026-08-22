@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useState } from "react";
-import { useRouter } from "next/navigation";
+import { use, useCallback, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -35,6 +35,7 @@ import { Chart, ChartLegend } from "@/components/ui/chart";
 import { StatTile } from "@/components/ui/stat-tile";
 import { UsageBar } from "@/components/ui/usage-bar";
 import { StatusPill } from "@/components/ui/status-pill";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -204,6 +205,9 @@ export default function StackToolPage({
           type={type}
           statusLoading={statusLoading}
           status={status}
+          configurable={!!def.configurable}
+          onConfigure={() => setConfiguring(true)}
+          onDisconnect={() => setConfirmRemove(true)}
         />
       )}
 
@@ -349,18 +353,45 @@ function parseQuota(
   return null;
 }
 
+type TabKey = "overview" | "resources" | "metrics" | "settings";
+
 function PluginDashboard({
   type,
   status,
   statusLoading,
+  configurable,
+  onConfigure,
+  onDisconnect,
 }: {
   type: PluginType;
   status: ReturnType<typeof usePluginStatus>["data"];
   statusLoading: boolean;
+  configurable: boolean;
+  onConfigure: () => void;
+  onDisconnect: () => void;
 }) {
   const { data: resources, isLoading: resourcesLoading } =
     usePluginResources(type);
   const { data: previews = [], isLoading: previewsLoading } = usePreviews();
+
+  // Tab state lives in the URL (?tab=) so tabs are linkable + back-button works.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawTab = searchParams?.get("tab") ?? undefined;
+  const setTab = useCallback(
+    (tab: TabKey) => {
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : "",
+      );
+      if (tab === "overview") params.delete("tab");
+      else params.set("tab", tab);
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : window.location.pathname, {
+        scroll: false,
+      });
+    },
+    [router],
+  );
 
   const metrics = status?.metrics ?? [];
   const items = status?.items ?? [];
@@ -433,148 +464,478 @@ function PluginDashboard({
   const railHasContent =
     detailMetrics.length > 0 || usageMetrics.length > 0 || links.length > 0;
 
+  // --- Tab conditions (data-driven, generic) ---------------------------
+  // The Overview already teases the PRIMARY group (deployments, or the first
+  // "other" group). The Resources tab holds everything else in full.
+  const resourceGroupsForTab = deploymentsGroup
+    ? otherGroups // deployments led the teaser → all other groups go to the tab
+    : otherGroups.slice(1); // first other group led the teaser
+  // Count distinct groups with items (across everything except VPS servers,
+  // which are managed inline) and total items beyond the teased primary group.
+  const groupsWithItems = otherGroups.filter((g) => g.items.length > 0);
+  const nonPrimaryItemCount = resourceGroupsForTab.reduce(
+    (n, g) => n + g.items.length,
+    0,
+  );
+  // Rule of thumb: >3 non-primary items OR ≥2 distinct groups with items →
+  // a plugin has enough resources to warrant its own tab.
+  const hasResourcesTab =
+    type !== "VPS" &&
+    (nonPrimaryItemCount > 3 || groupsWithItems.length >= 2);
+
+  // Overview caps trends at 3. If there are strictly more series, the full
+  // grid lives in a Metrics tab; otherwise every series is already on Overview.
+  const hasMetricsTab = trendMetrics.length > 3;
+
+  const showTabs = hasResourcesTab || hasMetricsTab;
+
+  // Resolve the active tab from the URL, guarding against tabs that don't
+  // exist for this plugin (e.g. ?tab=metrics on a plugin with ≤3 series).
+  let activeTab: TabKey = "overview";
+  if (showTabs) {
+    if (rawTab === "resources" && hasResourcesTab) activeTab = "resources";
+    else if (rawTab === "metrics" && hasMetricsTab) activeTab = "metrics";
+    else if (rawTab === "settings") activeTab = "settings";
+  }
+
   if (statusLoading && resourcesLoading) {
     return <DashboardSkeleton />;
   }
 
   const hasTrends = overviewTrends.length > 0;
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-      {/* ===================== LEFT (main) ===================== */}
-      <div className="min-w-0 space-y-6">
-        {/* TIER 1 — Status strip (what's live right now). */}
-        {statusLoading ? (
-          <HeroSkeleton />
+  const selectedFor = (kind: string) =>
+    (resources?.selected as Record<string, string[]> | undefined)?.[kind]
+      ?.length;
+
+  // ---- Overview pieces (shared with the no-tabs layout) -----------------
+  const heroEl = statusLoading ? (
+    <HeroSkeleton />
+  ) : (
+    <HeroBlock
+      headline={status?.headline}
+      metaLine={metaLine}
+      activeDeployment={activeDeployment}
+      activePreview={activePreview}
+      primaryLink={primaryLink}
+    />
+  );
+
+  const tilesEl = statusLoading ? (
+    <TilesSkeleton />
+  ) : tileMetrics.length > 0 ? (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {tileMetrics.map((m, i) => (
+        <StatTile
+          key={i}
+          label={m.label}
+          value={m.value}
+          unit={m.unit}
+          delta={m.delta}
+          deltaGood={m.deltaGood}
+          state={m.state}
+        />
+      ))}
+    </div>
+  ) : null;
+
+  const actionsEl =
+    actions.length > 0 ? (
+      <Block title="Actions">
+        <div className="flex flex-wrap gap-2 p-4">
+          {actions.map((a) => (
+            <PluginActionButton key={a.id} type={type} action={a} />
+          ))}
+        </div>
+      </Block>
+    ) : null;
+
+  // Overview trends band (capped at 3). When there's a Metrics tab, invite
+  // the reader to the full grid.
+  const trendsEl = hasTrends ? (
+    <Block title="Monitoring">
+      <div
+        className={cn(
+          "grid gap-px bg-border",
+          overviewTrends.length > 1 && "sm:grid-cols-2",
+        )}
+      >
+        {overviewTrends.map((m, i) => (
+          <MonitoringCard key={i} metric={m} />
+        ))}
+      </div>
+      {hasMetricsTab && (
+        <ViewAllFooter
+          label={`View all metrics (${trendMetrics.length})`}
+          onClick={() => setTab("metrics")}
+        />
+      )}
+    </Block>
+  ) : null;
+
+  // TIER 4 — Resources teaser (deployments / previews). When there's a
+  // Resources tab, the "View all →" jumps to it.
+  const deploymentsTeaserEl =
+    previewsLoading ||
+    previews.length > 0 ||
+    (deploymentsGroup?.items.length ?? 0) > 0 ? (
+      <Block
+        title="Deployments"
+        icon={<Rocket className="h-4 w-4" />}
+        count={
+          previews.length + (deploymentsGroup?.items.length ?? 0) || undefined
+        }
+      >
+        {previewsLoading && previews.length === 0 && !deploymentsGroup ? (
+          <SectionRowsSkeleton />
         ) : (
-          <HeroBlock
-            headline={status?.headline}
-            metaLine={metaLine}
-            activeDeployment={activeDeployment}
-            activePreview={activePreview}
-            primaryLink={primaryLink}
+          <DeploymentsBody previews={previews} group={deploymentsGroup} />
+        )}
+      </Block>
+    ) : null;
+
+  // On Overview with tabs, if deployments AREN'T the primary teaser but there
+  // is one, tease the first "other" group (5 rows + View all →).
+  const teasedGroup = deploymentsGroup ? undefined : otherGroups[0];
+  const groupTeaserEl =
+    showTabs && teasedGroup && teasedGroup.items.length > 0 ? (
+      <Block title={teasedGroup.label} count={teasedGroup.items.length}>
+        {teasedGroup.items.slice(0, DEFAULT_VISIBLE).map((it) => (
+          <ResourceRow
+            key={it.id}
+            name={it.name}
+            state={it.state ?? "idle"}
+            meta={it.meta}
+          />
+        ))}
+        {hasResourcesTab && (
+          <ViewAllFooter
+            label="View all resources"
+            onClick={() => setTab("resources")}
           />
         )}
+      </Block>
+    ) : null;
 
-        {/* TIER 2 — Big-number tiles. Headline metrics + key counts/state. */}
-        {statusLoading ? (
-          <TilesSkeleton />
-        ) : (
-          tileMetrics.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {tileMetrics.map((m, i) => (
-                <StatTile
+  const vpsEl =
+    type === "VPS" ? (
+      <VpsServersSection
+        group={groups.find((g) => g.kind === "servers")}
+        loading={resourcesLoading}
+      />
+    ) : null;
+
+  const statusItemsEl =
+    items.length > 0 ? (
+      <Block title="Status" count={items.length}>
+        <CollapsibleListBody
+          items={items}
+          renderItem={(it, i) => <StatusItemRow key={i} item={it} />}
+        />
+      </Block>
+    ) : null;
+
+  // Full resource groups (used inline when NO tabs, or inside the Resources
+  // tab when there are tabs).
+  const fullGroupsEl =
+    resourcesLoading && otherGroups.length === 0 && type !== "VPS" ? (
+      <Block title="Resources">
+        <SectionRowsSkeleton />
+      </Block>
+    ) : (
+      otherGroups.map((g) => (
+        <ResourceGroupBlock
+          key={g.kind}
+          group={g}
+          selectedCount={selectedFor(g.kind)}
+        />
+      ))
+    );
+
+  const railEl = statusLoading ? (
+    <RailSkeleton />
+  ) : !railHasContent ? null : (
+    <>
+      {detailMetrics.length > 0 && (
+        <RailBlock title="Details">
+          {detailMetrics.map((m, i) => (
+            <KV
+              key={i}
+              label={m.label}
+              value={m.value}
+              state={m.state}
+              hint={m.hint}
+            />
+          ))}
+        </RailBlock>
+      )}
+
+      {usageMetrics.length > 0 && (
+        <RailBlock title="Usage">
+          {usageMetrics.map((m, i) => {
+            const quota = parseQuota(m);
+            return quota ? (
+              <UsageBar
+                key={i}
+                label={m.label}
+                used={quota.used}
+                total={quota.total}
+                usedLabel={quota.usedLabel}
+                totalLabel={quota.totalLabel}
+              />
+            ) : (
+              <KV
+                key={i}
+                label={m.label}
+                value={m.value}
+                state={m.state}
+                hint={m.hint}
+              />
+            );
+          })}
+        </RailBlock>
+      )}
+
+      {links.length > 0 && (
+        <RailBlock title="Links">
+          {links.map((l, i) => (
+            <KVLink key={i} label={l.label} url={l.url} />
+          ))}
+        </RailBlock>
+      )}
+    </>
+  );
+
+  // --- No tabs (VPS / sparse plugins): the single Overview, exactly as before.
+  if (!showTabs) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="min-w-0 space-y-6">
+          {heroEl}
+          {tilesEl}
+          {actionsEl}
+          {trendsEl}
+          {deploymentsTeaserEl}
+          {vpsEl}
+          {statusItemsEl}
+          {fullGroupsEl}
+        </div>
+        <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+          {railEl}
+        </aside>
+      </div>
+    );
+  }
+
+  // --- Tabbed layout -----------------------------------------------------
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    ...(hasResourcesTab
+      ? ([{ key: "resources", label: "Resources" }] as const)
+      : []),
+    ...(hasMetricsTab
+      ? ([{ key: "metrics", label: "Metrics" }] as const)
+      : []),
+    { key: "settings", label: "Settings" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <TabBar tabs={tabs} active={activeTab} onSelect={setTab} />
+
+      {activeTab === "overview" && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <div className="min-w-0 space-y-6">
+            {heroEl}
+            {tilesEl}
+            {actionsEl}
+            {trendsEl}
+            {deploymentsTeaserEl}
+            {groupTeaserEl}
+            {statusItemsEl}
+          </div>
+          <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+            {railEl}
+          </aside>
+        </div>
+      )}
+
+      {activeTab === "resources" && (
+        <ResourcesTab groups={groupsWithItems} selectedFor={selectedFor} />
+      )}
+
+      {activeTab === "metrics" && (
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+          {trendMetrics.map((m, i) => (
+            <MonitoringCard key={i} metric={m} />
+          ))}
+        </div>
+      )}
+
+      {activeTab === "settings" && (
+        <SettingsTab
+          detailMetrics={detailMetrics}
+          usageMetrics={usageMetrics}
+          links={links}
+          configurable={configurable}
+          onConfigure={onConfigure}
+          onDisconnect={onDisconnect}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- Tabs ------------------------------------------------------------------
+
+/**
+ * A clean underline tab row (Vercel / Cloudflare style): thin border-b, active
+ * tab = foreground text + a blue underline, inactive = muted. Only rendered
+ * when a plugin has earned tabs (see hasResourcesTab / hasMetricsTab).
+ */
+function TabBar({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: { key: TabKey; label: string }[];
+  active: TabKey;
+  onSelect: (tab: TabKey) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Plugin sections"
+      className="flex items-center gap-1 border-b border-border"
+    >
+      {tabs.map((t) => {
+        const isActive = t.key === active;
+        const lowEmphasis = t.key === "settings";
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onSelect(t.key)}
+            className={cn(
+              "relative -mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-linear",
+              isActive
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+              lowEmphasis && !isActive && "text-text-subtle",
+            )}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Resources tab — full resource lists. With multiple groups it leads with a
+ * segmented control to switch between kinds; each shows the full
+ * CollapsibleList for that group.
+ */
+function ResourcesTab({
+  groups,
+  selectedFor,
+}: {
+  groups: PluginResourceGroup[];
+  selectedFor: (kind: string) => number | undefined;
+}) {
+  const [active, setActive] = useState(groups[0]?.kind ?? "");
+  if (groups.length === 0) {
+    return (
+      <EmptyState
+        icon={<Boxes />}
+        title="No resources"
+        description="This plugin doesn't expose any resources yet."
+      />
+    );
+  }
+
+  const single = groups.length === 1;
+  const current = groups.find((g) => g.kind === active) ?? groups[0];
+
+  return (
+    <div className="space-y-4">
+      {!single && (
+        <SegmentedControl
+          aria-label="Resource group"
+          value={current.kind}
+          onChange={setActive}
+          options={groups.map((g) => ({
+            value: g.kind,
+            label: `${g.label} (${g.items.length})`,
+          }))}
+          className="flex max-w-full overflow-x-auto"
+        />
+      )}
+      <ResourceGroupBlock
+        group={current}
+        selectedCount={selectedFor(current.kind)}
+      />
+    </div>
+  );
+}
+
+/**
+ * Settings tab (low-emphasis) — the fuller version of the rail: connection
+ * details + usage KV, plus Configure resources and Disconnect. The rail stays
+ * on Overview for quick facts; this is the complete surface.
+ */
+function SettingsTab({
+  detailMetrics,
+  usageMetrics,
+  links,
+  configurable,
+  onConfigure,
+  onDisconnect,
+}: {
+  detailMetrics: PluginMetric[];
+  usageMetrics: PluginMetric[];
+  links: { label: string; url: string }[];
+  configurable: boolean;
+  onConfigure: () => void;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
+        {detailMetrics.length > 0 && (
+          <Block title="Connection details">
+            <dl>
+              {detailMetrics.map((m, i) => (
+                <KV
                   key={i}
                   label={m.label}
                   value={m.value}
-                  unit={m.unit}
-                  delta={m.delta}
-                  deltaGood={m.deltaGood}
                   state={m.state}
+                  hint={m.hint}
                 />
               ))}
-            </div>
-          )
-        )}
-
-        {/* Actions surfaced from status. */}
-        {actions.length > 0 && (
-          <Block title="Actions">
-            <div className="flex flex-wrap gap-2 p-4">
-              {actions.map((a) => (
-                <PluginActionButton key={a.id} type={type} action={a} />
-              ))}
-            </div>
+            </dl>
           </Block>
         )}
 
-        {/* TIER 3 — Trends band: big charts (area traffic / line rates / bar
-            discrete). Capped at 3; empty band hidden. */}
-        {hasTrends && (
-          <Block title="Monitoring">
-            <div
-              className={cn(
-                "grid gap-px bg-border",
-                overviewTrends.length > 1 && "sm:grid-cols-2",
-              )}
-            >
-              {overviewTrends.map((m, i) => (
-                <MonitoringCard key={i} metric={m} />
-              ))}
-            </div>
-          </Block>
-        )}
-
-        {/* TIER 4 — Resources teaser. Deployments — previews + resource group. */}
-        {(previewsLoading ||
-          previews.length > 0 ||
-          (deploymentsGroup?.items.length ?? 0) > 0) && (
-          <Block
-            title="Deployments"
-            icon={<Rocket className="h-4 w-4" />}
-            count={
-              previews.length + (deploymentsGroup?.items.length ?? 0) ||
-              undefined
-            }
-          >
-            {previewsLoading && previews.length === 0 && !deploymentsGroup ? (
-              <SectionRowsSkeleton />
-            ) : (
-              <DeploymentsBody
-                previews={previews}
-                group={deploymentsGroup}
-              />
-            )}
-          </Block>
-        )}
-
-        {/* VPS: managed list of servers (add / remove). */}
-        {type === "VPS" && (
-          <VpsServersSection
-            group={groups.find((g) => g.kind === "servers")}
-            loading={resourcesLoading}
-          />
-        )}
-
-        {/* Status items — per-domain / per-zone health rows. */}
-        {items.length > 0 && (
-          <Block title="Status" count={items.length}>
-            <CollapsibleListBody
-              items={items}
-              renderItem={(it, i) => <StatusItemRow key={i} item={it} />}
-            />
-          </Block>
-        )}
-
-        {/* Remaining resource groups, each as its own titled block. */}
-        {resourcesLoading && otherGroups.length === 0 && type !== "VPS" ? (
-          <Block title="Resources">
-            <SectionRowsSkeleton />
-          </Block>
-        ) : (
-          otherGroups.map((g) => (
-            <ResourceGroupBlock
-              key={g.kind}
-              group={g}
-              selectedCount={
-                (resources?.selected as Record<string, string[]> | undefined)?.[
-                  g.kind
-                ]?.length
-              }
-            />
-          ))
-        )}
-      </div>
-
-      {/* ===================== RIGHT (rail) ===================== */}
-      <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-        {statusLoading ? (
-          <RailSkeleton />
-        ) : !railHasContent ? null : (
-          <>
-            {detailMetrics.length > 0 && (
-              <RailBlock title="Details">
-                {detailMetrics.map((m, i) => (
+        {usageMetrics.length > 0 && (
+          <Block title="Usage">
+            <div className="p-4">
+              {usageMetrics.map((m, i) => {
+                const quota = parseQuota(m);
+                return quota ? (
+                  <UsageBar
+                    key={i}
+                    label={m.label}
+                    used={quota.used}
+                    total={quota.total}
+                    usedLabel={quota.usedLabel}
+                    totalLabel={quota.totalLabel}
+                  />
+                ) : (
                   <KV
                     key={i}
                     label={m.label}
@@ -582,47 +943,76 @@ function PluginDashboard({
                     state={m.state}
                     hint={m.hint}
                   />
-                ))}
-              </RailBlock>
-            )}
-
-            {usageMetrics.length > 0 && (
-              <RailBlock title="Usage">
-                {usageMetrics.map((m, i) => {
-                  const quota = parseQuota(m);
-                  return quota ? (
-                    <UsageBar
-                      key={i}
-                      label={m.label}
-                      used={quota.used}
-                      total={quota.total}
-                      usedLabel={quota.usedLabel}
-                      totalLabel={quota.totalLabel}
-                    />
-                  ) : (
-                    <KV
-                      key={i}
-                      label={m.label}
-                      value={m.value}
-                      state={m.state}
-                      hint={m.hint}
-                    />
-                  );
-                })}
-              </RailBlock>
-            )}
-
-            {links.length > 0 && (
-              <RailBlock title="Links">
-                {links.map((l, i) => (
-                  <KVLink key={i} label={l.label} url={l.url} />
-                ))}
-              </RailBlock>
-            )}
-          </>
+                );
+              })}
+            </div>
+          </Block>
         )}
-      </aside>
+
+        {links.length > 0 && (
+          <Block title="Links">
+            <dl>
+              {links.map((l, i) => (
+                <KVLink key={i} label={l.label} url={l.url} />
+              ))}
+            </dl>
+          </Block>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        {configurable && (
+          <Block title="Resources">
+            <div className="space-y-3 p-4">
+              <p className="text-sm text-muted-foreground">
+                Choose which resources citshe tracks for this portal.
+              </p>
+              <Button variant="outline" size="sm" onClick={onConfigure}>
+                <SlidersHorizontal className="h-4 w-4" />
+                Configure resources
+              </Button>
+            </div>
+          </Block>
+        )}
+
+        <Block title="Danger zone">
+          <div className="space-y-3 p-4">
+            <p className="text-sm text-muted-foreground">
+              Stop reading status from this provider for this portal.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDisconnect}
+              className="text-danger hover:text-danger"
+            >
+              <Trash2 className="h-4 w-4" />
+              Disconnect
+            </Button>
+          </div>
+        </Block>
+      </div>
     </div>
+  );
+}
+
+/** A card footer that jumps to another tab ("View all →"). */
+function ViewAllFooter({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2 text-xs font-medium text-primary transition-linear hover:bg-surface-hover"
+    >
+      {label}
+      <ArrowUpRight className="h-3.5 w-3.5" />
+    </button>
   );
 }
 
