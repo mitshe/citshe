@@ -233,6 +233,8 @@ enum PluginType {
   NEON
   GOOGLE_ADS
   VPS
+  EXPO
+  APPLE_DEVELOPER
 }
 
 model Plugin {
@@ -281,9 +283,6 @@ model Repository {
   defaultBranch String  @default("main") @map("default_branch")
   cloneUrl      String  @map("clone_url") // SSH or HTTPS clone URL
   webUrl        String  @map("web_url") // Browser URL
-
-  // Branch naming convention for this repo
-  branchPattern String? @map("branch_pattern") // e.g., "feature/{{task.key}}-{{task.title|slug}}"
 
   // Auto-analysis (populated after connecting the repo, via the git provider API)
   stack          Json?     // detected framework/language/package manager

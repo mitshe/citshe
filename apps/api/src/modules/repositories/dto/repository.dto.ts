@@ -9,10 +9,6 @@ export class UpdateRepositoryDto {
 
   @IsOptional()
   @IsString()
-  branchPattern?: string;
-
-  @IsOptional()
-  @IsString()
   defaultBranch?: string;
 }
 
@@ -55,12 +51,6 @@ export class RepositoryResponseDto {
 
   @ApiProperty({ description: 'Web URL to view repository' })
   webUrl: string;
-
-  @ApiPropertyOptional({
-    description: 'Branch pattern for filtering',
-    nullable: true,
-  })
-  branchPattern: string | null;
 
   @ApiProperty({ description: 'Whether the repository is active' })
   isActive: boolean;

@@ -141,23 +141,23 @@ describe('RepositoriesService', () => {
         name: 'frontend',
         organizationId: 'org-123',
         isActive: true,
-        branchPattern: 'feature/{{task.key}}',
+        defaultBranch: 'main',
       };
 
       mockPrismaService.repository.findFirst.mockResolvedValue(mockRepo);
       mockPrismaService.repository.update.mockResolvedValue({
         ...mockRepo,
         isActive: false,
-        branchPattern: 'fix/{{task.key}}',
+        defaultBranch: 'develop',
       });
 
       const result = await service.update('org-123', 'repo-1', {
         isActive: false,
-        branchPattern: 'fix/{{task.key}}',
+        defaultBranch: 'develop',
       });
 
       expect(result.isActive).toBe(false);
-      expect(result.branchPattern).toBe('fix/{{task.key}}');
+      expect(result.defaultBranch).toBe('develop');
     });
 
     it('should throw NotFoundException for non-existent repository', async () => {

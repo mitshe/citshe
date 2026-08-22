@@ -17,6 +17,8 @@ import '../plugins/vercel.plugin';
 import '../plugins/neon.plugin';
 import '../plugins/google-ads.plugin';
 import '../plugins/vps.plugin';
+import '../plugins/expo.plugin';
+import '../plugins/apple-developer.plugin';
 
 interface CachedStatus {
   status: PluginStatus;

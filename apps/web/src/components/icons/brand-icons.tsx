@@ -15,6 +15,8 @@ import {
   SiVercel,
   SiCloudflare,
   SiGoogleads,
+  SiExpo,
+  SiApple,
 } from "react-icons/si";
 import { TbWebhook } from "react-icons/tb";
 import { AiFillApi } from "react-icons/ai";
@@ -89,6 +91,22 @@ export function NeonIcon({ className }: IconProps) {
       <path d="M24 0V24l-9.365-8.045V24H0V0ZM2.942 21.087h8.751V9.563l9.365 8.204V2.919L2.942 2.914Z" />
     </svg>
   );
+}
+
+/**
+ * Expo — the mark is black (invisible on the dark sidebar), so tint it to the
+ * theme foreground (white on dark), matching how Vercel is handled.
+ */
+export function ExpoIcon({ className }: IconProps) {
+  return <SiExpo className={cn("w-5 h-5 text-foreground", className)} />;
+}
+
+/**
+ * Apple — the logomark is black; tint to theme foreground so it shows on the
+ * dark/muted nav. Used for the Apple Developer (App Store Connect) plugin.
+ */
+export function AppleIcon({ className }: IconProps) {
+  return <SiApple className={cn("w-5 h-5 text-foreground", className)} />;
 }
 
 // ============================================================================

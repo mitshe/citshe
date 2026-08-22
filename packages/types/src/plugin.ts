@@ -5,7 +5,9 @@ export type PluginType =
   | "VERCEL"
   | "NEON"
   | "GOOGLE_ADS"
-  | "VPS";
+  | "VPS"
+  | "EXPO"
+  | "APPLE_DEVELOPER";
 
 export type PluginConnStatus = "CONNECTED" | "ERROR" | "DISCONNECTED";
 

@@ -30,6 +30,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   FolderGit2,
   Loader2,
   Plus,
@@ -38,10 +45,14 @@ import {
   GitBranch,
   Check,
   RefreshCw,
+  RotateCw,
   Github,
   Rocket,
   Trash2,
   Search,
+  MoreVertical,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import {
   useRepositories,
@@ -49,6 +60,8 @@ import {
   useSyncSelectiveRepositories,
   useAnalyzeRepo,
   useDeleteRepository,
+  useSyncOneRepository,
+  useUpdateRepository,
   useIntegrations,
   useGithubAppStart,
   usePreviews,
@@ -254,6 +267,8 @@ export default function ReposPage() {
 function RepoCard({ repo }: { repo: Repository }) {
   const analyze = useAnalyzeRepo();
   const deleteRepo = useDeleteRepository();
+  const syncOne = useSyncOneRepository();
+  const updateRepo = useUpdateRepository();
   const quickLaunch = useQuickLaunch();
   const analyzing = repo.analysisStatus === "analyzing" || analyze.isPending;
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -267,6 +282,29 @@ function RepoCard({ repo }: { repo: Repository }) {
     }
   };
 
+  // Sync = refresh metadata from the remote (distinct from AI analysis).
+  const runSync = async () => {
+    try {
+      await syncOne.mutateAsync(repo.id);
+      toast.success("Synced from remote");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sync failed");
+    }
+  };
+
+  // isActive gates orchestration (getAvailableRepositories filters isActive).
+  const toggleActive = async () => {
+    try {
+      await updateRepo.mutateAsync({
+        id: repo.id,
+        data: { isActive: !repo.isActive },
+      });
+      toast.success(repo.isActive ? "Repo disabled" : "Repo enabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update repo");
+    }
+  };
+
   const disconnect = async () => {
     try {
       await deleteRepo.mutateAsync(repo.id);
@@ -277,7 +315,12 @@ function RepoCard({ repo }: { repo: Repository }) {
   };
 
   return (
-    <div className="rounded-md border border-border bg-surface-card p-4 transition-linear hover:bg-surface-hover hover:border-border-strong">
+    <div
+      className={cn(
+        "rounded-md border border-border bg-surface-card p-4 transition-linear hover:bg-surface-hover hover:border-border-strong",
+        !repo.isActive && "opacity-60",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -286,6 +329,11 @@ function RepoCard({ repo }: { repo: Repository }) {
             {repo.fullPath.includes("/") && (
               <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {repo.fullPath.split("/")[0]}
+              </span>
+            )}
+            {!repo.isActive && (
+              <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Disabled
               </span>
             )}
           </div>
@@ -339,16 +387,52 @@ function RepoCard({ repo }: { repo: Repository }) {
               <RefreshCw className="h-3.5 w-3.5" />
             )}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-9 px-2.5 text-muted-foreground hover:text-danger"
-            onClick={() => setDisconnectOpen(true)}
-            title="Disconnect this repo"
-            aria-label="Disconnect this repo"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-9 px-2.5"
+                title="More actions"
+                aria-label="More actions"
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => void runSync()}
+                disabled={syncOne.isPending}
+              >
+                <RotateCw className="mr-2 h-3.5 w-3.5" />
+                Sync from remote
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void toggleActive()}
+                disabled={updateRepo.isPending}
+              >
+                {repo.isActive ? (
+                  <>
+                    <PowerOff className="mr-2 h-3.5 w-3.5" />
+                    Disable
+                  </>
+                ) : (
+                  <>
+                    <Power className="mr-2 h-3.5 w-3.5" />
+                    Enable
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setDisconnectOpen(true)}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Disconnect
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

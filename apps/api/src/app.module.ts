@@ -15,7 +15,6 @@ import { PrismaModule } from './infrastructure/persistence/prisma/prisma.module'
 import { WebSocketModule } from './infrastructure/websocket/websocket.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { AdaptersModule } from './infrastructure/adapters/adapters.module';
-import { GitModule } from './infrastructure/git/git.module';
 import { SentryModule } from './infrastructure/sentry/sentry.module';
 
 // Shared
@@ -141,7 +140,6 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     WebSocketModule,
     QueueModule,
     AdaptersModule,
-    GitModule,
     SharedModule,
     AuthModule,
     AuditModule,

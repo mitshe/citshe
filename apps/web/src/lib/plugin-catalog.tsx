@@ -5,6 +5,8 @@ import {
   CloudflareIcon,
   NeonIcon,
   GoogleAdsIcon,
+  ExpoIcon,
+  AppleIcon,
 } from "@/components/icons/brand-icons";
 
 export interface PluginField {
@@ -135,6 +137,68 @@ export const pluginCatalog: PluginDef[] = [
         key: "loginCustomerId",
         label: "Login Customer ID",
         placeholder: "manager account (optional)",
+      },
+    ],
+  },
+  {
+    type: "EXPO",
+    name: "Expo (EAS)",
+    tagline: "EAS builds & projects — did my build pass?",
+    icon: <ExpoIcon className="h-5 w-5" />,
+    accent: "text-foreground",
+    configurable: true,
+    docsUrl: "https://expo.dev/accounts/[account]/settings/access-tokens",
+    fields: [
+      {
+        key: "token",
+        label: "Access Token",
+        placeholder: "Expo personal access token",
+        type: "password",
+        required: true,
+        helpText:
+          "A personal access token from Expo (Account settings → Access tokens). citshe lists the account's projects and recent EAS builds.",
+      },
+      {
+        key: "accountName",
+        label: "Account",
+        placeholder: "account slug (optional)",
+        helpText:
+          "Only needed if the token can see multiple accounts. Leave blank to use the first one.",
+      },
+    ],
+  },
+  {
+    type: "APPLE_DEVELOPER",
+    name: "Apple Developer",
+    tagline: "Certs & profiles — is my signing about to break?",
+    icon: <AppleIcon className="h-5 w-5" />,
+    accent: "text-foreground",
+    configurable: true,
+    docsUrl:
+      "https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api",
+    fields: [
+      {
+        key: "keyId",
+        label: "Key ID",
+        placeholder: "e.g. 2X9R4HXF34",
+        required: true,
+        helpText:
+          "From App Store Connect → Users and Access → Integrations → App Store Connect API.",
+      },
+      {
+        key: "issuerId",
+        label: "Issuer ID",
+        placeholder: "e.g. 57246542-96fe-1a63-e053-0824d011072a",
+        required: true,
+      },
+      {
+        key: "privateKey",
+        label: "Private key (.p8)",
+        placeholder: "-----BEGIN PRIVATE KEY-----\n…",
+        type: "textarea",
+        required: true,
+        helpText:
+          "Paste the full contents of the AuthKey_XXXX.p8 you downloaded. citshe mints a short-lived ES256 JWT from it — the key never leaves your server. Certs/profiles expiring within 30 days are flagged.",
       },
     ],
   },

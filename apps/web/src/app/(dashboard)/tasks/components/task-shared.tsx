@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -301,6 +302,7 @@ export function TaskCard({
   repoName,
   onDelete,
   onLabelClick,
+  onOpenTask,
   draggable,
   onDragStart,
   onDragEnd,
@@ -309,19 +311,50 @@ export function TaskCard({
   repoName: string;
   onDelete: (task: Task) => void;
   onLabelClick: (label: string) => void;
+  onOpenTask?: (id: string) => void;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
 }) {
   const link = prUrl(task);
+  // Drag guard: a real drag sets this true so the trailing click (fired after
+  // dragend) doesn't open the slide-over.
+  const draggedRef = useRef(false);
+
+  // Open the sheet on click, unless the click landed on an interactive child
+  // (menu, PR link, label chip) or was the tail of a drag.
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!onOpenTask) return;
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
+    if ((e.target as HTMLElement).closest("a,button,[data-no-open]")) return;
+    onOpenTask(task.id);
+  };
 
   return (
     <div
       draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      onDragStart={(e) => {
+        draggedRef.current = true;
+        onDragStart?.(e);
+      }}
+      onDragEnd={(e) => {
+        onDragEnd?.(e);
+      }}
+      onClick={handleCardClick}
+      role={onOpenTask ? "button" : undefined}
+      tabIndex={onOpenTask ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (onOpenTask && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onOpenTask(task.id);
+        }
+      }}
       className={cn(
         "group rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0",
+        onOpenTask && "cursor-pointer",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
@@ -336,12 +369,9 @@ export function TaskCard({
       </div>
 
       {/* Title */}
-      <Link
-        href={`/tasks/${task.id}`}
-        className="block text-sm font-medium leading-snug text-foreground hover:underline"
-      >
+      <p className="block text-sm font-medium leading-snug text-foreground">
         {task.title}
-      </Link>
+      </p>
 
       {/* Labels */}
       {(task.labels ?? []).length > 0 && (
@@ -388,26 +418,42 @@ export function TaskRow({
   repoName,
   onDelete,
   onLabelClick,
+  onOpenTask,
 }: {
   task: Task;
   repoName: string;
   onDelete: (task: Task) => void;
   onLabelClick: (label: string) => void;
+  onOpenTask?: (id: string) => void;
 }) {
   const priority = task.priority ? getPriority(task.priority) : null;
   const link = prUrl(task);
 
+  // Open the sheet on row click, unless the click hit an interactive child.
+  const handleRowClick = (e: React.MouseEvent) => {
+    if (!onOpenTask) return;
+    if ((e.target as HTMLElement).closest("a,button,[data-no-open]")) return;
+    onOpenTask(task.id);
+  };
+
   return (
-    <tr className="group border-b border-border last:border-0 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
+    <tr
+      onClick={handleRowClick}
+      className={cn(
+        "group border-b border-border last:border-0 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0",
+        onOpenTask && "cursor-pointer",
+      )}
+    >
       {/* Title */}
       <td className="max-w-0 px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <Link
-            href={`/tasks/${task.id}`}
-            className="truncate text-sm font-medium text-foreground hover:underline"
+          <button
+            type="button"
+            onClick={() => onOpenTask?.(task.id)}
+            className="truncate text-left text-sm font-medium text-foreground hover:underline"
           >
             {task.title}
-          </Link>
+          </button>
           {link && (
             <a
               href={link}

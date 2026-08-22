@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ import type { Task, RefinedTask } from "@/lib/api/types";
 import { isClosed } from "./components/task-shared";
 import { TaskBoardView } from "./components/task-board-view";
 import { TaskListView } from "./components/task-list-view";
+import { TaskSheet } from "./components/task-sheet";
 
 type ViewMode = "board" | "list";
 const VIEW_STORAGE_KEY = "citshe.tasks.view";
@@ -74,6 +76,41 @@ export default function TasksPage() {
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+
+  // Slide-over (Jira-style). The selected task id lives here; the board/list
+  // cards call `openTask`. We sync it to `?task=<id>` so the panel is
+  // shareable and the back button closes it.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // Hydrate from the URL (?task=<id>) on load / when it changes externally
+  // (e.g. back/forward navigation).
+  useEffect(() => {
+    setSelectedTaskId(searchParams.get("task"));
+  }, [searchParams]);
+
+  const openTask = useCallback(
+    (id: string) => {
+      setSelectedTaskId(id);
+      const params = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : "",
+      );
+      params.set("task", id);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
+
+  const closeTask = useCallback(() => {
+    setSelectedTaskId(null);
+    const params = new URLSearchParams(
+      typeof window !== "undefined" ? window.location.search : "",
+    );
+    params.delete("task");
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  }, [router]);
 
   // View toggle — persisted in localStorage, SSR-safe (default "board").
   const [view, setView] = useState<ViewMode>("board");
@@ -239,6 +276,7 @@ export default function TasksPage() {
           repoName={repoName}
           onDelete={setDeleteTarget}
           onLabelClick={setActiveLabel}
+          onOpenTask={openTask}
           showClosed={showClosed}
         />
       ) : (
@@ -247,8 +285,17 @@ export default function TasksPage() {
           repoName={repoName}
           onDelete={setDeleteTarget}
           onLabelClick={setActiveLabel}
+          onOpenTask={openTask}
         />
       )}
+
+      <TaskSheet
+        taskId={selectedTaskId}
+        open={!!selectedTaskId}
+        onOpenChange={(o) => {
+          if (!o) closeTask();
+        }}
+      />
 
       <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} repos={repos} />
 

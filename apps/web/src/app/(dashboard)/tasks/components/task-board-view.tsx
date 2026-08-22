@@ -21,12 +21,14 @@ export function TaskBoardView({
   repoName,
   onDelete,
   onLabelClick,
+  onOpenTask,
   showClosed,
 }: {
   tasks: Task[];
   repoName: (id: string | null | undefined) => string;
   onDelete: (task: Task) => void;
   onLabelClick: (label: string) => void;
+  onOpenTask?: (id: string) => void;
   showClosed: boolean;
 }) {
   const updateTask = useUpdateTask();
@@ -126,6 +128,7 @@ export function TaskBoardView({
                     repoName={repoName(task.repositoryId)}
                     onDelete={onDelete}
                     onLabelClick={onLabelClick}
+                    onOpenTask={onOpenTask}
                     draggable={col.id !== "closed"}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(DND_TASK_ID, task.id);

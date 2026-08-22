@@ -5,12 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bot,
   Plug,
-  Zap,
   Building2,
   Users,
   Key,
   Settings,
-  FolderGit2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,8 +29,6 @@ const navGroups: SettingsNavGroup[] = [
     items: [
       { title: "AI", href: "/settings/ai", icon: Bot },
       { title: "GitHub", href: "/settings/integrations", icon: Plug },
-      { title: "Repositories", href: "/settings/repositories", icon: FolderGit2 },
-      { title: "Skills", href: "/skills", icon: Zap },
     ],
   },
   {

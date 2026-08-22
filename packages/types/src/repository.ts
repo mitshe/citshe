@@ -33,7 +33,6 @@ export interface Repository {
   defaultBranch: string;
   cloneUrl: string;
   webUrl: string;
-  branchPattern: string | null;
   // Auto-analysis
   stack?: RepoStack | null;
   ciSummary?: RepoCiSummary | null;
@@ -72,7 +71,6 @@ export interface RepoAnalysisResult {
 
 export interface UpdateRepositoryDto {
   isActive?: boolean;
-  branchPattern?: string;
   defaultBranch?: string;
 }
 

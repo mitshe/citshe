@@ -7,6 +7,7 @@ import {
   ListTodo,
   FolderGit2,
   SquareTerminal,
+  Zap,
   Cog,
   Plus,
   Search,
@@ -43,6 +44,7 @@ const primaryNav: NavItem[] = [
     icon: SquareTerminal,
     tourId: "nav-sessions",
   },
+  { title: "Skills", href: "/skills", icon: Zap, tourId: "nav-skills" },
 ];
 
 function openCommand() {

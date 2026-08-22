@@ -9,11 +9,13 @@ export function TaskListView({
   repoName,
   onDelete,
   onLabelClick,
+  onOpenTask,
 }: {
   tasks: Task[];
   repoName: (id: string | null | undefined) => string;
   onDelete: (task: Task) => void;
   onLabelClick: (label: string) => void;
+  onOpenTask?: (id: string) => void;
 }) {
   const sorted = useMemo(
     () =>
@@ -46,6 +48,7 @@ export function TaskListView({
                 repoName={repoName(task.repositoryId)}
                 onDelete={onDelete}
                 onLabelClick={onLabelClick}
+                onOpenTask={onOpenTask}
               />
             ))}
           </tbody>

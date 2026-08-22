@@ -50,8 +50,8 @@ Launch your first Workspace thread in 5 minutes.
 ## Step 1: Connect a repository
 
 1. Go to [Settings → Integrations](/settings/integrations) and connect GitHub
-2. Go to [Settings → Repositories](/settings/repositories) and sync your repos
-3. Toggle on the repository you want to work with
+2. Go to [Repos](/repos) and connect your repos
+3. Enable the repository you want to work with
 
 ## Step 2: Start a thread
 
@@ -168,7 +168,7 @@ Automate Git operations — branches, commits, pull requests.
 
 ### Enable Repositories
 
-1. Go to [Settings → Repositories](/settings/repositories)
+1. Go to [Repos](/repos)
 2. Click **Sync from GitHub**
 3. Toggle on repos you want to use
 :::
@@ -278,7 +278,7 @@ Automate Git operations with GitLab — branches, merge requests, pipelines.
 
 ### Enable Projects
 
-1. Go to [Settings → Repositories](/settings/repositories)
+1. Go to [Repos](/repos)
 2. Click **Sync from GitLab**
 3. Toggle on projects you want to use
 :::
