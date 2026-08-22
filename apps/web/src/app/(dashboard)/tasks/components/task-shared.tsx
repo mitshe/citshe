@@ -397,7 +397,9 @@ export function TaskCard({
               {queueOrderIndex}
             </span>
           )}
-          <StatusPill status={task.status} />
+          {/* In the Queue column the order badge already conveys membership,
+              so the "Queued" pill would just restate it — hide it there. */}
+          {queueOrderIndex == null && <StatusPill status={task.status} />}
         </div>
         <TaskMenu
           task={task}

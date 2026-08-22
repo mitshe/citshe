@@ -818,7 +818,7 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onSelect(t.key)}
             className={cn(
-              "relative -mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-linear",
+              "relative -mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-linear focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
               isActive
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",

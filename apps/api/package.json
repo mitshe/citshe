@@ -41,6 +41,7 @@
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/websockets": "^11.1.9",
+    "@citshe/types": "workspace:*",
     "@prisma/client": "^6.19.0",
     "@sentry/nestjs": "^10.28.0",
     "@sentry/node": "^10.28.0",

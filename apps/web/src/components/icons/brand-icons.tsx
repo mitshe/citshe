@@ -31,11 +31,11 @@ interface IconProps {
 // ============================================================================
 
 export function DiscordIcon({ className }: IconProps) {
-  return <SiDiscord className={cn("w-5 h-5", className)} />;
+  return <SiDiscord className={className} />;
 }
 
 export function TelegramIcon({ className }: IconProps) {
-  return <SiTelegram className={cn("w-5 h-5", className)} />;
+  return <SiTelegram className={className} />;
 }
 
 // ============================================================================
@@ -43,7 +43,7 @@ export function TelegramIcon({ className }: IconProps) {
 // ============================================================================
 
 export function GitHubIcon({ className }: IconProps) {
-  return <SiGithub className={cn("w-5 h-5", className)} />;
+  return <SiGithub className={className} />;
 }
 
 /**
@@ -52,11 +52,11 @@ export function GitHubIcon({ className }: IconProps) {
  * so it overrides the muted nav-row wrapper.
  */
 export function VercelIcon({ className }: IconProps) {
-  return <SiVercel className={cn("w-5 h-5 text-foreground", className)} />;
+  return <SiVercel className={cn("text-foreground", className)} />;
 }
 
 export function GitLabIcon({ className }: IconProps) {
-  return <SiGitlab className={cn("w-5 h-5", className)} />;
+  return <SiGitlab className={className} />;
 }
 
 // ============================================================================
@@ -65,12 +65,12 @@ export function GitLabIcon({ className }: IconProps) {
 
 /** Cloudflare — brand orange (#F38020). Color baked in so it shows on muted nav. */
 export function CloudflareIcon({ className }: IconProps) {
-  return <SiCloudflare className={cn("w-5 h-5 text-[#F38020]", className)} />;
+  return <SiCloudflare className={cn("text-[#F38020]", className)} />;
 }
 
 /** Google Ads — brand blue (#4285F4). Single-color for a clean nav glyph. */
 export function GoogleAdsIcon({ className }: IconProps) {
-  return <SiGoogleads className={cn("w-5 h-5 text-[#4285F4]", className)} />;
+  return <SiGoogleads className={cn("text-[#4285F4]", className)} />;
 }
 
 /**
@@ -85,7 +85,7 @@ export function NeonIcon({ className }: IconProps) {
       viewBox="0 0 24 24"
       role="img"
       aria-label="Neon"
-      className={cn("w-5 h-5 text-[#34D59A]", className)}
+      className={cn("text-[#34D59A]", className)}
       fill="currentColor"
     >
       <path d="M24 0V24l-9.365-8.045V24H0V0ZM2.942 21.087h8.751V9.563l9.365 8.204V2.919L2.942 2.914Z" />
@@ -98,7 +98,7 @@ export function NeonIcon({ className }: IconProps) {
  * theme foreground (white on dark), matching how Vercel is handled.
  */
 export function ExpoIcon({ className }: IconProps) {
-  return <SiExpo className={cn("w-5 h-5 text-foreground", className)} />;
+  return <SiExpo className={cn("text-foreground", className)} />;
 }
 
 /**
@@ -106,7 +106,7 @@ export function ExpoIcon({ className }: IconProps) {
  * dark/muted nav. Used for the Apple Developer (App Store Connect) plugin.
  */
 export function AppleIcon({ className }: IconProps) {
-  return <SiApple className={cn("w-5 h-5 text-foreground", className)} />;
+  return <SiApple className={cn("text-foreground", className)} />;
 }
 
 // ============================================================================
@@ -114,7 +114,7 @@ export function AppleIcon({ className }: IconProps) {
 // ============================================================================
 
 export function TrelloIcon({ className }: IconProps) {
-  return <SiTrello className={cn("w-5 h-5", className)} />;
+  return <SiTrello className={className} />;
 }
 
 // ============================================================================
@@ -122,7 +122,7 @@ export function TrelloIcon({ className }: IconProps) {
 // ============================================================================
 
 export function ObsidianIcon({ className }: IconProps) {
-  return <SiObsidian className={cn("w-5 h-5", className)} />;
+  return <SiObsidian className={className} />;
 }
 
 // ============================================================================
@@ -130,16 +130,16 @@ export function ObsidianIcon({ className }: IconProps) {
 // ============================================================================
 
 export function AnthropicIcon({ className }: IconProps) {
-  return <SiAnthropic className={cn("w-5 h-5", className)} />;
+  return <SiAnthropic className={className} />;
 }
 
 export function OpenRouterIcon({ className }: IconProps) {
   // OpenRouter aggregates AI providers - use API icon
-  return <AiFillApi className={cn("w-5 h-5", className)} />;
+  return <AiFillApi className={className} />;
 }
 
 export function GoogleIcon({ className }: IconProps) {
-  return <SiGoogle className={cn("w-5 h-5", className)} />;
+  return <SiGoogle className={className} />;
 }
 
 // ============================================================================
@@ -147,9 +147,9 @@ export function GoogleIcon({ className }: IconProps) {
 // ============================================================================
 
 export function WebhookIcon({ className }: IconProps) {
-  return <TbWebhook className={cn("w-5 h-5", className)} />;
+  return <TbWebhook className={className} />;
 }
 
 export function APIIcon({ className }: IconProps) {
-  return <AiFillApi className={cn("w-5 h-5", className)} />;
+  return <AiFillApi className={className} />;
 }

@@ -559,6 +559,134 @@ export class GitHubAdapter implements GitProviderPort {
     }));
   }
 
+  // ========== CI/CD overview helpers ==========
+  // These return lightly-normalized shapes for the repository overview view.
+  // They reuse request()/auth like the rest of the adapter. Callers are
+  // expected to try/catch each one so a failing scope (e.g. no Actions read)
+  // never breaks the whole overview.
+
+  /**
+   * List recent GitHub Actions workflow runs.
+   * GET /repos/{owner}/{repo}/actions/runs?per_page=N
+   */
+  async listWorkflowRuns(
+    repoId: string,
+    limit = 5,
+  ): Promise<
+    Array<{
+      name: string | null;
+      status: string | null;
+      conclusion: string | null;
+      headBranch: string | null;
+      headSha: string;
+      htmlUrl: string;
+      createdAt: string;
+      event: string;
+    }>
+  > {
+    const params = new URLSearchParams({ per_page: String(limit) });
+    const result = await this.request(
+      `/repos/${repoId}/actions/runs?${params}`,
+    );
+    const runs: any[] = result?.workflow_runs || [];
+    return runs.map((r: any) => ({
+      name: r.name ?? null,
+      status: r.status ?? null,
+      conclusion: r.conclusion ?? null,
+      headBranch: r.head_branch ?? null,
+      headSha: r.head_sha || '',
+      htmlUrl: r.html_url || '',
+      createdAt: r.created_at || '',
+      event: r.event || '',
+    }));
+  }
+
+  /**
+   * List recent commits, optionally scoped to a branch/ref.
+   * GET /repos/{owner}/{repo}/commits?per_page=N[&sha=ref]
+   */
+  async listCommits(
+    repoId: string,
+    options?: { sha?: string; limit?: number },
+  ): Promise<
+    Array<{
+      sha: string;
+      message: string;
+      author: string;
+      date: string;
+      htmlUrl: string;
+    }>
+  > {
+    const params = new URLSearchParams({
+      per_page: String(options?.limit || 5),
+    });
+    if (options?.sha) {
+      params.set('sha', options.sha);
+    }
+
+    const commits = await this.request(`/repos/${repoId}/commits?${params}`);
+    return (commits || []).map((c: any) => ({
+      sha: c.sha || '',
+      // Only the first line of the commit message (subject).
+      message: (c.commit?.message || '').split('\n')[0],
+      author: c.commit?.author?.name || c.author?.login || 'unknown',
+      date: c.commit?.author?.date || '',
+      htmlUrl: c.html_url || '',
+    }));
+  }
+
+  /**
+   * List open pull requests (trimmed, includes draft flag).
+   * GET /repos/{owner}/{repo}/pulls?state=open&per_page=N
+   */
+  async listOpenPullRequests(
+    repoId: string,
+    limit = 10,
+  ): Promise<
+    Array<{
+      number: number;
+      title: string;
+      author: string;
+      headRef: string;
+      htmlUrl: string;
+      createdAt: string;
+      draft: boolean;
+    }>
+  > {
+    const params = new URLSearchParams({
+      state: 'open',
+      per_page: String(limit),
+    });
+    const prs = await this.request(`/repos/${repoId}/pulls?${params}`);
+    return (prs || []).map((pr: any) => ({
+      number: pr.number,
+      title: pr.title || '',
+      author: pr.user?.login || 'unknown',
+      headRef: pr.head?.ref || '',
+      htmlUrl: pr.html_url || '',
+      createdAt: pr.created_at || '',
+      draft: pr.draft || false,
+    }));
+  }
+
+  /**
+   * List branches (trimmed: name + protected).
+   * GET /repos/{owner}/{repo}/branches?per_page=N
+   */
+  async listBranchesRaw(
+    repoId: string,
+    limit = 20,
+  ): Promise<Array<{ name: string; protected: boolean }>> {
+    const params = new URLSearchParams({ per_page: String(limit) });
+    const branches = await this.request(
+      `/repos/${repoId}/branches?${params}`,
+    );
+    return (branches || []).map((b: any) => ({
+      name: b.name || '',
+      protected: b.protected || false,
+    }));
+  }
+
   // Private helper methods
 
   private async request(

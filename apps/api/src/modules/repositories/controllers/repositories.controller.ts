@@ -240,6 +240,19 @@ export class RepositoriesController {
     return { branches };
   }
 
+  @Get(':id/overview')
+  @ApiOperation({
+    summary: 'Get repo CI/CD overview (workflow run, commits, PRs, branches)',
+  })
+  @ApiResponse({ status: 200, description: 'Repository overview' })
+  @ApiResponse({ status: 404, description: 'Repository not found' })
+  async getOverview(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.repositoriesService.getOverview(organizationId, id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update repository settings' })
   @ApiResponse({

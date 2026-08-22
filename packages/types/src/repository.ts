@@ -69,6 +69,75 @@ export interface RepoAnalysisResult {
   related: RelatedRepoSuggestion[];
 }
 
+/** CI status derived from the latest GitHub Actions workflow run. */
+export type RepoCiStatus = "passing" | "failing" | "running" | "unknown";
+
+/** A single GitHub Actions workflow run (trimmed). */
+export interface RepoWorkflowRun {
+  name: string | null;
+  branch: string | null;
+  sha: string;
+  url: string;
+  when: string;
+  event: string;
+  status: RepoCiStatus;
+}
+
+/** A recent commit (trimmed). */
+export interface RepoCommit {
+  sha: string;
+  message: string;
+  author: string;
+  when: string;
+  url: string;
+}
+
+/** An open pull request (trimmed). */
+export interface RepoPullRequest {
+  number: number;
+  title: string;
+  author: string;
+  branch: string;
+  url: string;
+  when: string;
+  draft: boolean;
+}
+
+/** A branch (trimmed). */
+export interface RepoBranch {
+  name: string;
+  protected: boolean;
+}
+
+/**
+ * CI/CD overview for a repository detail view. Every section is resilient:
+ * a section is null/empty when the underlying GitHub call fails (e.g. the
+ * token cannot read Actions). `links` are static and always present.
+ */
+export interface RepositoryOverview {
+  ci: {
+    status: RepoCiStatus;
+    run?: RepoWorkflowRun;
+    recent: RepoWorkflowRun[];
+  } | null;
+  commits: RepoCommit[];
+  pulls: {
+    open: number;
+    items: RepoPullRequest[];
+  };
+  branches: {
+    count: number;
+    items: RepoBranch[];
+  };
+  links: {
+    github: string;
+    actions: string;
+    pulls: string;
+    branches: string;
+    commits: string;
+  };
+}
+
 export interface UpdateRepositoryDto {
   isActive?: boolean;
   defaultBranch?: string;

@@ -447,7 +447,10 @@ function RepoCard({ repo }: { repo: Repository }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={disconnect}>
+            <AlertDialogAction
+              onClick={disconnect}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Disconnect
             </AlertDialogAction>
           </AlertDialogFooter>

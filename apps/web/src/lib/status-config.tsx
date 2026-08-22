@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Loader2,
+  CircleDot,
   CheckCircle2,
   XCircle,
   Clock,
@@ -45,7 +45,7 @@ export const taskStatusConfig: Record<
   },
   IN_PROGRESS: {
     label: "In Progress",
-    icon: <Loader2 className="w-4 h-4" />,
+    icon: <CircleDot className="w-4 h-4" />,
     variant: "secondary",
     color: "bg-info/10 text-info border-border",
   },

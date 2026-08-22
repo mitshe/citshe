@@ -65,7 +65,10 @@ function Chip({
           e.stopPropagation();
           onClick();
         }}
-        className={interactive}
+        className={cn(
+          interactive,
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
       >
         {content}
       </button>

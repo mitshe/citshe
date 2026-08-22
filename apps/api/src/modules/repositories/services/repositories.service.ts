@@ -8,11 +8,17 @@ import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma
 import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
 import { GithubAppService } from '../../../infrastructure/adapters/git-provider/github-app.service';
+import { GitHubAdapter } from '../../../infrastructure/adapters/git-provider/github.adapter';
 import {
   IntegrationType,
   GitProvider,
   IntegrationStatus,
 } from '@prisma/client';
+import type {
+  RepositoryOverview,
+  RepoCiStatus,
+  RepoWorkflowRun,
+} from '@citshe/types';
 import {
   UpdateRepositoryDto,
   BulkUpdateRepositoriesDto,
@@ -154,6 +160,189 @@ export class RepositoriesService {
       search,
       limit: 100,
     });
+  }
+
+  /**
+   * Build the static GitHub web links for a repo from its webUrl / fullPath.
+   * These always work (no API call), so they are the resilient fallback when
+   * every dynamic section fails.
+   */
+  private buildLinks(repo: {
+    webUrl: string | null;
+    fullPath: string;
+  }): RepositoryOverview['links'] {
+    const github = (
+      repo.webUrl ||
+      `https://github.com/${repo.fullPath}`
+    ).replace(/\/+$/, '');
+    return {
+      github,
+      actions: `${github}/actions`,
+      pulls: `${github}/pulls`,
+      branches: `${github}/branches`,
+      commits: `${github}/commits`,
+    };
+  }
+
+  /** Map a GitHub Actions run's status/conclusion to a coarse CI status. */
+  private mapCiStatus(
+    status: string | null,
+    conclusion: string | null,
+  ): RepoCiStatus {
+    if (status === 'in_progress' || status === 'queued') {
+      return 'running';
+    }
+    if (conclusion === 'success') {
+      return 'passing';
+    }
+    if (
+      conclusion === 'failure' ||
+      conclusion === 'timed_out' ||
+      conclusion === 'startup_failure'
+    ) {
+      return 'failing';
+    }
+    return 'unknown';
+  }
+
+  /**
+   * Repo detail overview: GitHub CI/CD data (last workflow run, recent commits,
+   * open PRs, branches) plus static quick links.
+   *
+   * Fully resilient: static links are always returned; each dynamic section is
+   * fetched in its own try/catch and set to null/empty on failure so a missing
+   * token scope (e.g. no Actions read) never breaks the whole endpoint. Never
+   * throws except when the repo itself is not found (404) via findOne.
+   */
+  async getOverview(
+    organizationId: string,
+    id: string,
+  ): Promise<RepositoryOverview> {
+    const repo = await this.findOne(organizationId, id);
+
+    const overview: RepositoryOverview = {
+      ci: null,
+      commits: [],
+      pulls: { open: 0, items: [] },
+      branches: { count: 0, items: [] },
+      links: this.buildLinks(repo),
+    };
+
+    // Only GitHub is supported today; other providers get links-only.
+    if (repo.provider !== GitProvider.GITHUB || !repo.integration) {
+      return overview;
+    }
+
+    let adapter: GitHubAdapter;
+    try {
+      const provider =
+        await this.adapterFactory.createGitProviderFromIntegration(
+          organizationId,
+          repo.integration.id,
+        );
+      if (!(provider instanceof GitHubAdapter)) {
+        return overview;
+      }
+      adapter = provider;
+    } catch (error) {
+      // Can't build the client (e.g. integration disconnected) → links only.
+      this.logger.warn(
+        `Overview: failed to build GitHub adapter for repo ${id}: ${(error as Error).message}`,
+      );
+      return overview;
+    }
+
+    const repoId = repo.externalId;
+
+    // 1) CI status from the latest workflow runs.
+    try {
+      const runs = await adapter.listWorkflowRuns(repoId, 5);
+      if (runs.length > 0) {
+        const recent: RepoWorkflowRun[] = runs.map((r) => ({
+          name: r.name,
+          branch: r.headBranch,
+          sha: r.headSha,
+          url: r.htmlUrl,
+          when: r.createdAt,
+          event: r.event,
+          status: this.mapCiStatus(r.status, r.conclusion),
+        }));
+        overview.ci = {
+          status: recent[0].status,
+          run: recent[0],
+          recent,
+        };
+      } else {
+        // No runs at all still counts as a successful read → empty CI section.
+        overview.ci = { status: 'unknown', recent: [] };
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Overview: workflow runs unavailable for repo ${id}: ${(error as Error).message}`,
+      );
+      overview.ci = null;
+    }
+
+    // 2) Recent commits (scoped to the default branch when known).
+    try {
+      const commits = await adapter.listCommits(repoId, {
+        sha: repo.defaultBranch || undefined,
+        limit: 5,
+      });
+      overview.commits = commits.map((c) => ({
+        sha: c.sha,
+        message: c.message,
+        author: c.author,
+        when: c.date,
+        url: c.htmlUrl,
+      }));
+    } catch (error) {
+      this.logger.debug(
+        `Overview: commits unavailable for repo ${id}: ${(error as Error).message}`,
+      );
+      overview.commits = [];
+    }
+
+    // 3) Open pull requests.
+    try {
+      const prs = await adapter.listOpenPullRequests(repoId, 10);
+      overview.pulls = {
+        open: prs.length,
+        items: prs.map((pr) => ({
+          number: pr.number,
+          title: pr.title,
+          author: pr.author,
+          branch: pr.headRef,
+          url: pr.htmlUrl,
+          when: pr.createdAt,
+          draft: pr.draft,
+        })),
+      };
+    } catch (error) {
+      this.logger.debug(
+        `Overview: pull requests unavailable for repo ${id}: ${(error as Error).message}`,
+      );
+      overview.pulls = { open: 0, items: [] };
+    }
+
+    // 4) Branches.
+    try {
+      const branches = await adapter.listBranchesRaw(repoId, 20);
+      overview.branches = {
+        count: branches.length,
+        items: branches.map((b) => ({
+          name: b.name,
+          protected: b.protected,
+        })),
+      };
+    } catch (error) {
+      this.logger.debug(
+        `Overview: branches unavailable for repo ${id}: ${(error as Error).message}`,
+      );
+      overview.branches = { count: 0, items: [] };
+    }
+
+    return overview;
   }
 
   /**

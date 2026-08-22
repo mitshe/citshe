@@ -11,7 +11,7 @@ import { TaskDetail } from "./task-detail";
 
 /**
  * Jira/GitLab-style slide-over. Renders <TaskDetail variant="panel"/> in a
- * right-side sheet — full-width on mobile, ~520px on desktop. Deleting the task
+ * right-side sheet — full-width on mobile, 640px on desktop. Deleting the task
  * or clicking the deep-link closes the sheet.
  */
 export function TaskSheet({
