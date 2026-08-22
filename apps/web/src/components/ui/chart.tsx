@@ -136,12 +136,15 @@ function Chart({
     );
   }
 
-  // Show only first / middle / last X ticks to avoid clutter.
+  // Show only first / middle / last X ticks to avoid clutter. The XAxis uses
+  // the unique index `i` as its category (NOT the label `x` — many points share
+  // the same empty label, which would collide and misalign the tooltip); the
+  // formatter maps that index back to a human label.
   const n = points.length;
   const midIdx = Math.floor((n - 1) / 2);
   const tickIndices = new Set([0, midIdx, n - 1]);
-  const xTickFormatter = (_: unknown, index: number) =>
-    tickIndices.has(index) ? points[index]?.x ?? "" : "";
+  const xTickFormatter = (value: number) =>
+    tickIndices.has(value) ? points[value]?.x ?? "" : "";
 
   const showTime = !!xLabels;
 
@@ -161,7 +164,7 @@ function Chart({
               strokeDasharray="3 3"
             />
             <XAxis
-              dataKey="x"
+              dataKey="i"
               tick={axisTick}
               tickFormatter={xTickFormatter}
               interval={0}
@@ -208,7 +211,7 @@ function Chart({
               strokeDasharray="3 3"
             />
             <XAxis
-              dataKey="x"
+              dataKey="i"
               tick={axisTick}
               tickFormatter={xTickFormatter}
               interval={0}
