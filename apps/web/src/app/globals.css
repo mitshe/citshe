@@ -12,6 +12,18 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  /* The dashboard shell owns the viewport (h-[100dvh]) and scrolls its own
+     <main>. Lock the document only while the shell is mounted so mobile
+     browsers don't add a second, janky body scroll behind the address bar.
+     Docs / auth pages keep normal body scrolling. */
+  body.shell-locked {
+    overflow: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     font-size: 15px;

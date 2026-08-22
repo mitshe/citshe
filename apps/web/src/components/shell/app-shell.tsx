@@ -20,6 +20,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Lock body scroll while the dashboard shell owns the viewport, so mobile
+  // browsers don't add a second body-level scroll behind the address bar.
+  // Removed on unmount so docs / auth pages scroll normally.
+  useEffect(() => {
+    document.body.classList.add("shell-locked");
+    return () => document.body.classList.remove("shell-locked");
+  }, []);
+
   const toggle = () => {
     setCollapsed((prev) => {
       const next = !prev;
@@ -33,7 +41,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-[100dvh] bg-background text-foreground">
       <div className="hidden shrink-0 md:flex">
         <Sidebar collapsed={collapsed} onToggle={toggle} />
       </div>
