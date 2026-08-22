@@ -319,7 +319,9 @@ export class OrchestrationService {
       'run',
       { taskId, organizationId },
       {
-        jobId: `task:${taskId}`,
+        // BullMQ forbids ':' in custom job ids ("Custom Id cannot contain :"),
+        // which made auto-pull 500. Use a dash-delimited id instead.
+        jobId: `task-${taskId}`,
         priority: this.queueOrderToPriority(queueOrder),
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
@@ -332,7 +334,7 @@ export class OrchestrationService {
 
   /** Find a not-yet-active job for a task (used for dedupe / reprioritize). */
   private async findPendingJob(organizationId: string, taskId: string) {
-    const job = await this.taskQueue.getJob(`task:${taskId}`);
+    const job = await this.taskQueue.getJob(`task-${taskId}`);
     if (!job) return null;
     const state = await job.getState();
     if (state === 'active' || state === 'completed') return null;
