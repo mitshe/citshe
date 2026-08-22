@@ -72,6 +72,10 @@ interface ServerHealth {
   details: PluginResourceDetail[];
   /** Numeric load (1m) if read — used for the fleet aggregate. */
   load?: number;
+  /** Load 5m if read — used for the fleet 3-point load-trend sparkline. */
+  load5?: number;
+  /** Load 15m if read — used for the fleet 3-point load-trend sparkline. */
+  load15?: number;
   /** Disk usage % of / if read — used for the "disk > 80%" aggregate. */
   diskPct?: number;
   /** If the server was unreachable, the SSH error message. */
@@ -247,6 +251,10 @@ class VpsPlugin implements StackPlugin {
       const ratio = load / cpus;
       const l5 = loadRaw[1];
       const l15 = loadRaw[2];
+      const l5n = parseFloat(l5 ?? '');
+      const l15n = parseFloat(l15 ?? '');
+      if (!Number.isNaN(l5n)) result.load5 = l5n;
+      if (!Number.isNaN(l15n)) result.load15 = l15n;
       const loadStr =
         l5 && l15 ? `${load.toFixed(2)} ${l5} ${l15}` : load.toFixed(2);
       metrics.push({
@@ -428,10 +436,34 @@ class VpsPlugin implements StackPlugin {
       .filter((n): n is number => typeof n === 'number');
     if (loads.length > 0) {
       const avg = loads.reduce((a, b) => a + b, 0) / loads.length;
+      // 3-point load trend [15m, 5m, 1m] (oldest→newest) as a sparkline — a
+      // legit micro-trend showing whether fleet load is rising or falling.
+      // Only attached when every point averages over servers that reported
+      // all three figures; skipped otherwise (never fabricated).
+      const loads5 = healths
+        .map((h) => h.load5)
+        .filter((n): n is number => typeof n === 'number');
+      const loads15 = healths
+        .map((h) => h.load15)
+        .filter((n): n is number => typeof n === 'number');
+      const avgOf = (arr: number[]) =>
+        arr.reduce((a, b) => a + b, 0) / arr.length;
+      const hasTrend = loads5.length > 0 && loads15.length > 0;
+      const round2 = (n: number) => Math.round(n * 100) / 100;
       metrics.push({
         label: 'Avg load',
         value: avg.toFixed(2),
         section: 'details',
+        ...(hasTrend
+          ? {
+              series: [
+                round2(avgOf(loads15)),
+                round2(avgOf(loads5)),
+                round2(avg),
+              ],
+              seriesKind: 'line' as const,
+            }
+          : {}),
       });
     }
     const diskPressured = healths.filter(

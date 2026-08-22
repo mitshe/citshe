@@ -478,7 +478,7 @@ export default function SessionsPage() {
         key={session.id}
         role="button"
         tabIndex={0}
-        className="group flex items-center gap-3 px-3 py-2.5 bg-surface-card hover:bg-surface-hover transition-linear cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group flex items-center gap-3 px-3 py-2 bg-surface-card hover:bg-surface-hover transition-linear cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         onClick={() =>
           selectMode
             ? toggleSelect(session.id)
@@ -502,16 +502,18 @@ export default function SessionsPage() {
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm truncate">{session.name}</span>
+            <span className="font-medium text-sm truncate leading-tight">
+              {session.name}
+            </span>
             {/* Status = dot + word, never a lone dot. */}
-            <span className="flex items-center gap-1.5 shrink-0">
-              <StatusDot state={config.state} size={7} />
-              <span className={cn("text-[11px] font-medium", config.textColor)}>
+            <span className="flex items-center gap-1 shrink-0">
+              <StatusDot state={config.state} size={6} />
+              <span className={cn("text-[10px] font-medium", config.textColor)}>
                 {config.label}
               </span>
             </span>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+          <div className="flex items-center gap-2.5 text-xs text-text-subtle mt-0.5 leading-tight">
             {session.aiCredential && (
               <span className="truncate">
                 {providerLabels[session.aiCredential.provider] ||
@@ -520,13 +522,13 @@ export default function SessionsPage() {
             )}
             {session.branch && (
               <span className="flex items-center gap-1 font-mono shrink-0">
-                <GitBranch className="w-3 h-3" />
+                <GitBranch className="w-3 h-3 shrink-0" />
                 {session.branch}
               </span>
             )}
             {session.enableDocker && (
               <span className="flex items-center gap-1 shrink-0">
-                <Container className="w-3 h-3" />
+                <Container className="w-3 h-3 shrink-0" />
                 Docker
               </span>
             )}
@@ -538,8 +540,8 @@ export default function SessionsPage() {
                   .join(", ")}
               </span>
             )}
-            <span className="flex items-center gap-1 shrink-0 text-text-subtle">
-              <Clock className="w-3 h-3" />
+            <span className="flex items-center gap-1 shrink-0">
+              <Clock className="w-3 h-3 shrink-0" />
               {formatDistanceToNow(new Date(session.lastActiveAt))}
             </span>
           </div>
@@ -759,7 +761,7 @@ export default function SessionsPage() {
           {isLoading ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-14 rounded-md bg-surface-card animate-pulse" />
+                <div key={i} className="h-12 rounded-md bg-surface-card animate-pulse" />
               ))}
             </div>
           ) : filteredSessions.length === 0 ? (
@@ -775,7 +777,7 @@ export default function SessionsPage() {
               }
             />
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-5">
               {selectMode && (
                 <div className="flex items-center gap-3 px-1 py-1">
                   <Checkbox checked={selectedIds.size === filteredSessions.length && filteredSessions.length > 0} onCheckedChange={toggleSelectAll} className="cursor-pointer" />
@@ -788,7 +790,7 @@ export default function SessionsPage() {
                     <SectionHeader
                       label={label}
                       count={groupSessions.length}
-                      className="px-1 pb-2"
+                      className="px-1 pb-1.5"
                     />
                     <div className="overflow-hidden rounded-lg border border-border divide-y divide-border">
                       {groupSessions.map((session) => renderSessionRow(session))}

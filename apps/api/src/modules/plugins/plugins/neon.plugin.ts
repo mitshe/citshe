@@ -370,10 +370,12 @@ class NeonPlugin implements StackPlugin {
     }
 
     // --- Recent activity via operations → "Last activity" + a small feed ---
+    // Fetch enough operations (limit=100) to cover a 48h compute-activity
+    // histogram; the "Last activity" metric + feed only use the newest few.
     try {
       const json = await this.get(
         apiKey,
-        `/projects/${projectId}/operations?limit=10`,
+        `/projects/${projectId}/operations?limit=100`,
       );
       const ops = (json.operations as Rec[]) ?? [];
       const latest = ops[0];
@@ -392,6 +394,40 @@ class NeonPlugin implements StackPlugin {
           value: timeAgo(op.created_at as string),
           state: opHealth(op.status as string | undefined),
         });
+      }
+
+      // --- Compute activity: ops-per-hour bar sparkline over the last 48h ---
+      // Metrics/consumption API is 403 on free plans, so derive a histogram
+      // from operation timestamps instead. 48 buckets, one per hour,
+      // oldest→newest, ending at the current hour.
+      try {
+        const HOUR_MS = 3600 * 1000;
+        const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+        const windowStart = nowHour - 47 * HOUR_MS;
+        const counts = new Array<number>(48).fill(0);
+        let total = 0;
+        for (const op of ops) {
+          if (!op.created_at) continue;
+          const t = new Date(op.created_at as string).getTime();
+          if (Number.isNaN(t)) continue;
+          const idx = Math.floor((t - windowStart) / HOUR_MS);
+          if (idx < 0 || idx > 47) continue; // outside the 48h window
+          counts[idx]++;
+          total++;
+        }
+        // Only surface the chart when there is real activity in the window.
+        if (total > 0) {
+          metrics.push({
+            label: 'Compute activity',
+            value: `${total} ops`,
+            hint: 'last 48h',
+            series: counts,
+            seriesKind: 'bar',
+            section: 'usage',
+          });
+        }
+      } catch {
+        // histogram optional — never break status on a chart
       }
     } catch {
       // operations optional
