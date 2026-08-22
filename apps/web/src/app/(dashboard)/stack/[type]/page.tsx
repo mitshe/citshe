@@ -288,14 +288,17 @@ function classifyMetric(m: PluginMetric): MetricRole {
 
   if (isUsage) return "usage";
 
-  if (m.section === "hero") return "tile";
+  // Hero metrics are already shown big in the HeroBlock — don't ALSO render
+  // them as a standalone tile (that produced the duplicate "Idle"/"Idle" and
+  // "Last deploy … / LAST DEPLOY …" the header already states). Treat them as
+  // detail rows in the rail instead.
+  if (m.section === "hero") return "detail";
   if (m.section === "details") return "detail";
 
-  // No explicit hint — headline-ish states & key counts become tiles.
+  // No explicit hint — key counts become tiles. NOTE: state-echoing labels
+  // (last deploy / compute state / last activity) are intentionally NOT here —
+  // the HeroBlock already surfaces the headline state, so they'd duplicate it.
   if (
-    l.includes("last deploy") ||
-    l.includes("compute state") ||
-    l.includes("last activity") ||
     /\bup\b/.test(l) ||
     l.includes("connected") ||
     l.includes("error rate") ||
