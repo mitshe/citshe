@@ -35,7 +35,6 @@ import { Chart, ChartLegend } from "@/components/ui/chart";
 import { StatTile } from "@/components/ui/stat-tile";
 import { UsageBar } from "@/components/ui/usage-bar";
 import { StatusPill } from "@/components/ui/status-pill";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -863,16 +862,35 @@ function ResourcesTab({
   return (
     <div className="space-y-4">
       {!single && (
-        <SegmentedControl
+        <div
+          role="tablist"
           aria-label="Resource group"
-          value={current.kind}
-          onChange={setActive}
-          options={groups.map((g) => ({
-            value: g.kind,
-            label: `${g.label} (${g.items.length})`,
-          }))}
-          className="flex max-w-full overflow-x-auto"
-        />
+          className="flex items-center gap-1 overflow-x-auto border-b border-border"
+        >
+          {groups.map((g) => {
+            const isActive = g.kind === current.kind;
+            return (
+              <button
+                key={g.kind}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActive(g.kind)}
+                className={cn(
+                  "-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-linear focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                  isActive
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {g.label}
+                <span className="rounded-md bg-surface-hover px-1.5 text-[11px] tabular-nums text-muted-foreground">
+                  {g.items.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       )}
       <ResourceGroupBlock
         group={current}
