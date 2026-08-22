@@ -71,12 +71,12 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-1.5">
-        {/* Search lives in the sidebar (Vercel-style). Topbar keeps a compact
-            trigger for quick access when the sidebar is a drawer / collapsed. */}
+        {/* Search lives in the sidebar (Vercel-style). Only shown here on
+            mobile, where the sidebar is a closed drawer. */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 md:hidden"
           onClick={openCommand}
           aria-label="Search"
         >

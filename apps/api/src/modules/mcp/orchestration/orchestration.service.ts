@@ -75,8 +75,16 @@ export class OrchestrationService {
           queueOrder: true,
         },
       }),
+      // A "worker" is a running session that was spun up to work a task —
+      // NOT an interactive terminal the user opened by hand. Count only running
+      // sessions that have a task attached, so ad-hoc terminals don't inflate
+      // the worker count.
       this.prisma.agentSession.count({
-        where: { organizationId, status: 'RUNNING' },
+        where: {
+          organizationId,
+          status: 'RUNNING',
+          tasks: { some: {} },
+        },
       }),
     ]);
 

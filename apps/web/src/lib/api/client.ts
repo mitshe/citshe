@@ -100,7 +100,12 @@ async function request<T>(
 export const api = {
   tasks: {
     list: (token: string, repositoryId?: string) => {
-      const params = repositoryId ? `?repositoryId=${repositoryId}` : "";
+      // The board/queue must show ALL tasks (kanban columns can't be paginated
+      // or they'd be incomplete) — ask for the max limit. The API defaults to 20
+      // and caps at 100.
+      const search = new URLSearchParams({ limit: "100" });
+      if (repositoryId) search.set("repositoryId", repositoryId);
+      const params = `?${search.toString()}`;
       return request<{
         data: Task[];
         meta: {
