@@ -60,6 +60,7 @@ import { isClosed } from "./components/task-shared";
 import { TaskBoardView } from "./components/task-board-view";
 import { TaskListView } from "./components/task-list-view";
 import { TaskSheet } from "./components/task-sheet";
+import { QueueStatusBar } from "./components/queue-status-bar";
 
 type ViewMode = "board" | "list";
 const VIEW_STORAGE_KEY = "citshe.tasks.view";
@@ -271,14 +272,17 @@ export default function TasksPage() {
           description="Try a different search, repo, or label."
         />
       ) : view === "board" ? (
-        <TaskBoardView
-          tasks={filtered}
-          repoName={repoName}
-          onDelete={setDeleteTarget}
-          onLabelClick={setActiveLabel}
-          onOpenTask={openTask}
-          showClosed={showClosed}
-        />
+        <>
+          <QueueStatusBar />
+          <TaskBoardView
+            tasks={filtered}
+            repoName={repoName}
+            onDelete={setDeleteTarget}
+            onLabelClick={setActiveLabel}
+            onOpenTask={openTask}
+            showClosed={showClosed}
+          />
+        </>
       ) : (
         <TaskListView
           tasks={filtered}

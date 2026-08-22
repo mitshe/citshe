@@ -34,3 +34,22 @@ export function useSetQueuePaused() {
     },
   });
 }
+
+/** Per-portal auto-pull toggle — workers pull QUEUED tasks when on. */
+export function useSetAutoPull() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (autoPull: boolean) => {
+      const token = await getToken();
+      return api.orchestration.setAutoPull(autoPull, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orchestration.queue(),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}

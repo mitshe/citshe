@@ -127,6 +127,58 @@ export function useCloseTask() {
   });
 }
 
+/** Move a task into the Queue column (status QUEUED + appended queueOrder). */
+export function useEnqueueTask() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getToken();
+      const { task } = await api.tasks.enqueue(id, token);
+      return task;
+    },
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orchestration.queue(),
+      });
+      queryClient.setQueryData(queryKeys.tasks.detail(task.id), task);
+    },
+  });
+}
+
+/** Reorder a task within the Queue column via a fractional queueOrder. */
+export function useReorderQueue() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      queueOrder,
+    }: {
+      taskId: string;
+      queueOrder: number;
+    }) => {
+      const token = await getToken();
+      const { task } = await api.orchestration.reorderQueue(
+        taskId,
+        queueOrder,
+        token,
+      );
+      return task;
+    },
+    onSuccess: (task) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orchestration.queue(),
+      });
+      queryClient.setQueryData(queryKeys.tasks.detail(task.id), task);
+    },
+  });
+}
+
 export function useReopenTask() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

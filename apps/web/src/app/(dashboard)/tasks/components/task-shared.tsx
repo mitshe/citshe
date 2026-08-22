@@ -30,6 +30,7 @@ import {
   useUpdateTask,
   useCloseTask,
   useReopenTask,
+  useEnqueueTask,
 } from "@/lib/api/hooks";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import { getTaskStatus, getPriority } from "@/lib/status-config";
@@ -45,7 +46,7 @@ const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
 // board). Exactly 3 working columns + an optional "Closed" section.
 // ============================================================================
 
-export type ColumnId = "todo" | "in_progress" | "review" | "closed";
+export type ColumnId = "queue" | "todo" | "in_progress" | "review" | "closed";
 
 export interface Column {
   id: ColumnId;
@@ -56,7 +57,8 @@ export interface Column {
 }
 
 export const COLUMNS: Column[] = [
-  { id: "todo", name: "Todo", statuses: ["PENDING", "QUEUED"], moveTo: "PENDING" },
+  { id: "queue", name: "Queue", statuses: ["QUEUED"], moveTo: "QUEUED" },
+  { id: "todo", name: "Todo", statuses: ["PENDING"], moveTo: "PENDING" },
   {
     id: "in_progress",
     name: "In Progress",
@@ -145,12 +147,14 @@ export function useTaskActions(task: Task) {
   const updateTask = useUpdateTask();
   const closeTask = useCloseTask();
   const reopenTask = useReopenTask();
+  const enqueueTask = useEnqueueTask();
 
   const busy =
     processTask.isPending ||
     updateTask.isPending ||
     closeTask.isPending ||
-    reopenTask.isPending;
+    reopenTask.isPending ||
+    enqueueTask.isPending;
 
   const run = async () => {
     try {
@@ -164,7 +168,16 @@ export function useTaskActions(task: Task) {
   const moveTo = async (col: Column) => {
     if (!col.moveTo) return;
     try {
-      await updateTask.mutateAsync({ id: task.id, data: { status: col.moveTo } });
+      // Queue is special: enqueue sets QUEUED + appends a queueOrder so the
+      // pull order is well-defined.
+      if (col.id === "queue") {
+        await enqueueTask.mutateAsync(task.id);
+      } else {
+        await updateTask.mutateAsync({
+          id: task.id,
+          data: { status: col.moveTo },
+        });
+      }
       toast.success(`Moved to ${col.name}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to move task");
@@ -306,6 +319,10 @@ export function TaskCard({
   draggable,
   onDragStart,
   onDragEnd,
+  onDragOver,
+  onDrop,
+  queueOrderIndex,
+  dropHint,
 }: {
   task: Task;
   repoName: string;
@@ -315,6 +332,12 @@ export function TaskCard({
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  /** 1-based pull order shown as a badge in the Queue column. */
+  queueOrderIndex?: number;
+  /** "above" shows an insertion line on top of the card while dragging over it. */
+  dropHint?: "above" | null;
 }) {
   const link = prUrl(task);
   // Drag guard: a real drag sets this true so the trailing click (fired after
@@ -343,6 +366,8 @@ export function TaskCard({
       onDragEnd={(e) => {
         onDragEnd?.(e);
       }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onClick={handleCardClick}
       role={onOpenTask ? "button" : undefined}
       tabIndex={onOpenTask ? 0 : undefined}
@@ -353,14 +378,27 @@ export function TaskCard({
         }
       }}
       className={cn(
-        "group rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0",
+        "group relative rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0",
         onOpenTask && "cursor-pointer",
         draggable && "cursor-grab active:cursor-grabbing",
+        dropHint === "above" &&
+          "before:absolute before:-top-1 before:left-0 before:right-0 before:h-0.5 before:rounded-full before:bg-primary",
       )}
     >
       {/* Status + menu */}
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <StatusPill status={task.status} />
+        <div className="flex min-w-0 items-center gap-1.5">
+          {queueOrderIndex != null && (
+            <span
+              aria-label={`Queue position ${queueOrderIndex}`}
+              title="Pull order — the order the AI takes tasks"
+              className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-semibold tabular-nums text-primary"
+            >
+              {queueOrderIndex}
+            </span>
+          )}
+          <StatusPill status={task.status} />
+        </div>
         <TaskMenu
           task={task}
           onDelete={onDelete}

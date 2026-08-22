@@ -170,6 +170,12 @@ export const api = {
         method: "POST",
         token,
       }),
+
+    enqueue: (id: string, token: string) =>
+      request<{ task: Task }>(`/tasks/${id}/queue`, {
+        method: "POST",
+        token,
+      }),
   },
 
   integrations: {
@@ -585,6 +591,20 @@ export const api = {
       request<{ queuePaused: boolean }>("/orchestration/queue/pause", {
         method: "POST",
         body: JSON.stringify({ paused }),
+        token,
+      }),
+
+    setAutoPull: (autoPull: boolean, token: string) =>
+      request<{ autoPull: boolean }>("/orchestration/queue/auto-pull", {
+        method: "POST",
+        body: JSON.stringify({ autoPull }),
+        token,
+      }),
+
+    reorderQueue: (taskId: string, queueOrder: number, token: string) =>
+      request<{ task: Task }>("/orchestration/queue/reorder", {
+        method: "POST",
+        body: JSON.stringify({ taskId, queueOrder }),
         token,
       }),
   },
