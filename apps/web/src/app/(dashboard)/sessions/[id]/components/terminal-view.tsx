@@ -63,8 +63,12 @@ export function TerminalView({
           "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
         // Smaller on phones so a usable number of columns fits at ~375px.
         fontSize:
-          typeof window !== "undefined" && window.innerWidth < 640 ? 11 : 13,
+          typeof window !== "undefined" && window.innerWidth < 640 ? 12 : 13,
         lineHeight: 1.2,
+        // Generous scrollback so long Claude Code sessions don't lose history.
+        scrollback: 10000,
+        // Keep the viewport pinned to the newest output as it streams in.
+        scrollOnUserInput: true,
         theme: {
           // Aligned to the dark DS: surface-inset bg, accent (indigo) cursor,
           // translucent accent selection.
@@ -96,15 +100,24 @@ export function TerminalView({
       terminal.loadAddon(fitAddon);
       terminal.open(termRef.current!);
 
-      requestAnimationFrame(() => {
-        if (!disposed) {
-          try {
-            fitAddon.fit();
-          } catch {
-            /* ignore */
-          }
+      // The monospace font loads asynchronously; the first fit often lands
+      // before glyph metrics are final, leaving the terminal narrower than the
+      // panel (wasted space). Refit a few times as things settle, and again
+      // once the web font is ready.
+      const refit = () => {
+        if (disposed) return;
+        try {
+          fitAddon.fit();
+        } catch {
+          /* ignore */
         }
-      });
+      };
+      requestAnimationFrame(refit);
+      setTimeout(refit, 60);
+      setTimeout(refit, 250);
+      (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready
+        ?.then(refit)
+        .catch(() => {});
 
       xtermRef.current = terminal;
       fitRef.current = fitAddon;
@@ -166,6 +179,38 @@ export function TerminalView({
       }
     });
   }, [isVisible, terminalReady, socket, terminalId]);
+
+  // Reliability: when the socket reconnects (e.g. the tunnel dropped the WS),
+  // re-subscribe to the session and re-sync the terminal size + scroll so the
+  // TUI (Claude Code) redraws correctly instead of staying frozen/misaligned.
+  useEffect(() => {
+    if (!socket || !sessionId || !terminalReady) return;
+
+    const handleReconnect = () => {
+      subscribeToSession(sessionId);
+      requestAnimationFrame(() => {
+        try {
+          fitRef.current?.fit();
+          const term = xtermRef.current;
+          if (term) {
+            socket.emit("session:resize", {
+              terminalId,
+              cols: term.cols,
+              rows: term.rows,
+            });
+            term.scrollToBottom();
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+    };
+
+    socket.on("connect", handleReconnect);
+    return () => {
+      socket.off("connect", handleReconnect);
+    };
+  }, [socket, sessionId, terminalId, terminalReady, subscribeToSession]);
 
   // Subscribe to terminal output (throttled writes to prevent artifacts)
   useEffect(() => {
@@ -266,11 +311,29 @@ export function TerminalView({
   }, []);
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        background: "#161619",
+      }}
+    >
       <div
         ref={containerRef}
+        onClick={focusTerminal}
         onTouchStart={isTouch ? focusTerminal : undefined}
-        style={{ width: "100%", flex: 1, minHeight: 0, overflow: "hidden" }}
+        // Small breathing room so text isn't glued to the panel edge; the fit
+        // addon accounts for this padding when computing cols/rows.
+        style={{
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          padding: "6px 8px",
+          background: "#161619",
+        }}
       >
         <div ref={termRef} style={{ width: "100%", height: "100%" }} />
       </div>
