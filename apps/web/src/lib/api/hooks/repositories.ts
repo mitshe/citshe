@@ -79,6 +79,25 @@ export function useRepository(id: string) {
   });
 }
 
+/**
+ * CI/CD overview for a repo detail page (Actions status, commits, PRs,
+ * branches). Refetches on an interval so the CI status stays fresh while the
+ * page is open.
+ */
+export function useRepositoryOverview(id: string | undefined) {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: queryKeys.repositories.overview(id ?? ""),
+    queryFn: async () => {
+      const token = await getToken();
+      return api.repositories.overview(id!, token);
+    },
+    enabled: !!id,
+    refetchInterval: 30_000,
+  });
+}
+
 export function useUpdateRepository() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

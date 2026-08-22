@@ -265,6 +265,7 @@ export default function ReposPage() {
 }
 
 function RepoCard({ repo }: { repo: Repository }) {
+  const router = useRouter();
   const analyze = useAnalyzeRepo();
   const deleteRepo = useDeleteRepository();
   const syncOne = useSyncOneRepository();
@@ -314,10 +315,23 @@ function RepoCard({ repo }: { repo: Repository }) {
     }
   };
 
+  // Clicking the card opens the detail page — unless the click landed on an
+  // interactive child (action buttons, the GitHub link, the Analyze button).
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("a,button,[data-no-open]")) return;
+    router.push(`/repos/${repo.id}`);
+  };
+
   return (
     <div
+      onClick={handleCardClick}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") router.push(`/repos/${repo.id}`);
+      }}
       className={cn(
-        "rounded-md border border-border bg-surface-card p-4 transition-linear hover:bg-surface-hover hover:border-border-strong",
+        "group cursor-pointer rounded-md border border-border bg-surface-card p-4 transition-linear hover:bg-surface-hover hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         !repo.isActive && "opacity-60",
       )}
     >
@@ -325,7 +339,12 @@ function RepoCard({ repo }: { repo: Repository }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate font-medium">{repo.name}</span>
+            <Link
+              href={`/repos/${repo.id}`}
+              className="truncate font-medium group-hover:underline"
+            >
+              {repo.name}
+            </Link>
             {repo.fullPath.includes("/") && (
               <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {repo.fullPath.split("/")[0]}

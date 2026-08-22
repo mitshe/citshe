@@ -46,6 +46,8 @@ export const queryKeys = {
     available: () => [...queryKeys.repositories.all, "available"] as const,
     detail: (id: string) =>
       [...queryKeys.repositories.all, "detail", id] as const,
+    overview: (id: string) =>
+      [...queryKeys.repositories.all, "overview", id] as const,
   },
   sessions: {
     all: ["sessions"] as const,

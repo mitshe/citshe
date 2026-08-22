@@ -26,6 +26,7 @@ import type {
   UpdateAICredentialDto,
   OpenRouterCredits,
   Repository,
+  RepositoryOverview,
   RepoAnalysisResult,
   UpdateRepositoryDto,
   BulkUpdateRepositoriesDto,
@@ -319,6 +320,9 @@ export const api = {
 
     get: (id: string, token: string) =>
       request<{ repository: Repository }>(`/repositories/${id}`, { token }),
+
+    overview: (id: string, token: string) =>
+      request<RepositoryOverview>(`/repositories/${id}/overview`, { token }),
 
     update: (id: string, data: UpdateRepositoryDto, token: string) =>
       request<{ repository: Repository }>(`/repositories/${id}`, {
