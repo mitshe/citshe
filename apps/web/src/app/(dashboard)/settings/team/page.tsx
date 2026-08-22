@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -258,14 +259,6 @@ function SelfhostedTeamPage() {
   const currentUserRole = members.find((m) => m.userId === userId)?.role;
   const isAdmin = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -287,7 +280,7 @@ function SelfhostedTeamPage() {
               {createdUser ? (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Member Created</DialogTitle>
+                    <DialogTitle>Member created</DialogTitle>
                     <DialogDescription>
                       Share these credentials with the new team member. The password won&apos;t be shown again.
                     </DialogDescription>
@@ -304,7 +297,7 @@ function SelfhostedTeamPage() {
                   <DialogFooter>
                     <Button variant="outline" onClick={handleCopyCredentials}>
                       {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                      {copied ? "Copied" : "Copy Credentials"}
+                      {copied ? "Copied" : "Copy credentials"}
                     </Button>
                     <Button onClick={() => handleDialogClose(false)}>
                       Done
@@ -314,7 +307,7 @@ function SelfhostedTeamPage() {
               ) : (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Add Team Member</DialogTitle>
+                    <DialogTitle>Add team member</DialogTitle>
                     <DialogDescription>
                       Create an account and add them to your organization
                     </DialogDescription>
@@ -333,7 +326,7 @@ function SelfhostedTeamPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
+                        <Label htmlFor="firstName">First name</Label>
                         <Input
                           id="firstName"
                           value={firstName}
@@ -341,7 +334,7 @@ function SelfhostedTeamPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
+                        <Label htmlFor="lastName">Last name</Label>
                         <Input
                           id="lastName"
                           value={lastName}
@@ -403,7 +396,7 @@ function SelfhostedTeamPage() {
                       ) : (
                         <KeyRound className="w-4 h-4 mr-2" />
                       )}
-                      Create Account
+                      Create account
                     </Button>
                   </DialogFooter>
                 </>
@@ -413,6 +406,32 @@ function SelfhostedTeamPage() {
         )}
       </div>
 
+      {isLoading ? (
+        <>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-3 px-3.5 py-3 ${
+                  i > 0 ? "border-t border-border" : ""
+                }`}
+              >
+                <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-5 w-16 shrink-0 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground sm:gap-6">
         <div className="flex items-center gap-1.5">
           <Users className="h-4 w-4" />
@@ -514,11 +533,13 @@ function SelfhostedTeamPage() {
           );
         })}
       </div>
+        </>
+      )}
 
       <AlertDialog open={!!confirmRemove} onOpenChange={(open) => !open && setConfirmRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
+            <AlertDialogTitle>Remove team member</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to remove {confirmRemove?.name} from this organization?
               They will lose access immediately.

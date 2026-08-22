@@ -319,6 +319,9 @@ function QuickSearch({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQ("");
+          }}
           placeholder="Search tasks, repos, terminals…"
           className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
@@ -411,7 +414,7 @@ function SearchRow({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-foreground transition-linear hover:bg-surface-hover"
+      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-foreground transition-linear hover:bg-surface-hover focus-visible:outline-none focus-visible:bg-surface-hover"
     >
       <span className="shrink-0 text-text-subtle">{icon}</span>
       <span className="truncate">{label}</span>
@@ -422,7 +425,7 @@ function SearchRow({
 /** Small muted placeholder row for empty columns. */
 function EmptyCell({ label }: { label: string }) {
   return (
-    <div className="rounded-md border border-dashed border-border bg-surface-inset/40 px-3.5 py-4 text-center text-xs text-text-subtle">
+    <div className="rounded-md border border-dashed border-border bg-surface-inset/40 px-3.5 py-4 text-left text-xs text-text-subtle">
       {label}
     </div>
   );
@@ -608,18 +611,20 @@ function StackTile({ type }: { type: PluginType }) {
           title={STATUS_LABELS[state]}
         >
           <StatusDot state={state as StatusDotHealth} size={8} />
-          {status?.headline.label ?? "—"}
+          {status?.headline.label ?? "Idle"}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-xs text-muted-foreground">
-          {status
-            ? status.metrics
-                .slice(0, 2)
-                .map((m) => `${m.value} ${m.label.toLowerCase()}`)
-                .join(" · ") || def.tagline
-            : "…"}
-        </p>
+        {status ? (
+          <p className="truncate text-xs text-muted-foreground">
+            {status.metrics
+              .slice(0, 2)
+              .map((m) => `${m.value} ${m.label.toLowerCase()}`)
+              .join(" · ") || def.tagline}
+          </p>
+        ) : (
+          <Skeleton className="h-4 w-24" />
+        )}
         <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-linear group-hover:text-foreground">
           Manage
           <ArrowRight className="h-3.5 w-3.5 transition-linear group-hover:translate-x-0.5" />

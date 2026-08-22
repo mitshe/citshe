@@ -87,7 +87,7 @@ export const pluginCatalog: PluginDef[] = [
     name: "Neon",
     tagline: "Postgres — size, branch, activity",
     icon: <NeonIcon className="h-5 w-5" />,
-    accent: "text-[#00E599]",
+    accent: "text-[#34D59A]",
     docsUrl: "https://console.neon.tech/app/settings/api-keys",
     fields: [
       {

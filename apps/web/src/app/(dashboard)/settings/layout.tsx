@@ -66,7 +66,7 @@ function SubNavRow({
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex h-[34px] items-center gap-3 rounded-md px-2.5 text-[15px] transition-linear",
+        "group flex h-[34px] items-center gap-3 rounded-md px-2.5 text-[15px] transition-linear focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         active
           ? "bg-surface-hover font-semibold text-foreground"
           : "font-medium text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
@@ -141,7 +141,7 @@ export default function SettingsLayout({
 
       {/* Content — left-aligned, generous width, NOT centered */}
       <div className="min-w-0 flex-1 lg:border-l lg:border-border">
-        <div className="w-full max-w-3xl">{children}</div>
+        <div className="w-full max-w-5xl">{children}</div>
       </div>
     </div>
   );

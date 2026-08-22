@@ -162,12 +162,17 @@ export default function OrganizationSettingsPage() {
               Delete organization
             </p>
             <p className="text-xs text-muted-foreground">
-              Permanently delete your organization, all threads, tasks, and data.
+              Permanently delete your organization, all terminals, tasks, and data.
             </p>
           </div>
-          <Button variant="destructive" size="sm" disabled>
-            Delete
-          </Button>
+          <div className="flex flex-col items-end gap-1.5">
+            <Button variant="destructive" size="sm" disabled>
+              Delete
+            </Button>
+            <p className="text-xs text-text-subtle">
+              Contact support to delete this portal.
+            </p>
+          </div>
         </div>
       </section>
     </div>

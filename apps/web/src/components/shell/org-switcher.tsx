@@ -62,7 +62,7 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
             <TooltipTrigger asChild>
               <button
                 onClick={() => setCreateOpen(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -77,7 +77,7 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
       <>
         <button
           onClick={() => setCreateOpen(true)}
-          className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+          className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
           <Plus className="h-4 w-4" />
           <span>Add portal</span>
@@ -88,11 +88,11 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   const trigger = collapsed ? (
-    <button className="flex h-8 w-8 items-center justify-center rounded-md transition-linear hover:bg-surface-hover">
+    <button className="flex h-8 w-8 items-center justify-center rounded-md transition-linear hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
       <OrgSquare id={currentOrg?.id ?? null} name={currentOrg?.name ?? null} />
     </button>
   ) : (
-    <button className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-inset px-2 py-1.5 text-sm transition-linear hover:bg-surface-hover">
+    <button className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-inset px-2 py-1.5 text-sm transition-linear hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
       <OrgSquare id={currentOrg?.id ?? null} name={currentOrg?.name ?? null} />
       <span className="flex-1 truncate text-left font-medium">
         {currentOrg?.name ?? "Select portal"}

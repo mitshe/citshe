@@ -326,7 +326,7 @@ export default function RepositoriesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage Git repositories for your workflows.
+            Manage the GitHub repositories in this portal.
           </p>
         </div>
         <EmptyState
@@ -352,7 +352,7 @@ export default function RepositoriesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage Git repositories for your workflows.
+            Manage the GitHub repositories in this portal.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -454,7 +454,7 @@ export default function RepositoriesPage() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Repositories</AlertDialogTitle>
+                <AlertDialogTitle>Delete repositories</AlertDialogTitle>
                 <AlertDialogDescription>
                   Are you sure you want to delete {selectedIds.length}{" "}
                   {selectedIds.length === 1 ? "repository" : "repositories"}?
@@ -482,8 +482,8 @@ export default function RepositoriesPage() {
         <div>
           <h2 className="text-sm font-medium text-foreground">All repositories</h2>
           <p className="text-xs text-muted-foreground">
-            Enable repositories to use them in workflows. Only enabled
-            repositories can be selected for projects.
+            Enable repositories so agents and tasks can use them. Only enabled
+            repositories can be selected for tasks.
           </p>
         </div>
         <div>
@@ -572,6 +572,7 @@ export default function RepositoriesPage() {
                         onClick={() => handleSyncOne(repo)}
                         disabled={syncOne.isPending}
                         title="Sync from remote"
+                        aria-label={`Sync ${repo.name} from remote`}
                       >
                         {syncOne.isPending ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -583,6 +584,7 @@ export default function RepositoriesPage() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleConfigOpen(repo)}
+                        aria-label={`Configure ${repo.name}`}
                       >
                         <Settings2 className="w-4 h-4" />
                       </Button>
@@ -602,13 +604,14 @@ export default function RepositoriesPage() {
                             variant="ghost"
                             disabled={deleteRepository.isPending}
                             className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            aria-label={`Delete ${repo.name}`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Repository</AlertDialogTitle>
+                            <AlertDialogTitle>Delete repository</AlertDialogTitle>
                             <AlertDialogDescription>
                               Are you sure you want to delete{" "}
                               <strong>{repo.name}</strong>? This will remove the
@@ -647,7 +650,7 @@ export default function RepositoriesPage() {
                     <TableHead>Provider</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Last Synced</TableHead>
+                    <TableHead>Last synced</TableHead>
                     <TableHead className="w-[100px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -723,6 +726,7 @@ export default function RepositoriesPage() {
                             onClick={() => handleSyncOne(repo)}
                             disabled={syncOne.isPending}
                             title="Sync from remote"
+                            aria-label={`Sync ${repo.name} from remote`}
                           >
                             {syncOne.isPending ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -734,6 +738,7 @@ export default function RepositoriesPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleConfigOpen(repo)}
+                            aria-label={`Configure ${repo.name}`}
                           >
                             <Settings2 className="w-4 h-4" />
                           </Button>
@@ -752,6 +757,7 @@ export default function RepositoriesPage() {
                                 variant="ghost"
                                 disabled={deleteRepository.isPending}
                                 className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                aria-label={`Delete ${repo.name}`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -759,7 +765,7 @@ export default function RepositoriesPage() {
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  Delete Repository
+                                  Delete repository
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
                                   Are you sure you want to delete{" "}
@@ -801,7 +807,7 @@ export default function RepositoriesPage() {
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Repository Settings</DialogTitle>
+            <DialogTitle>Repository settings</DialogTitle>
             <DialogDescription>
               Configure branch naming and other settings for{" "}
               {selectedRepo?.name}
@@ -809,7 +815,7 @@ export default function RepositoriesPage() {
           </DialogHeader>
           <DialogBody className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="branchPattern">Branch Pattern</Label>
+              <Label htmlFor="branchPattern">Branch pattern</Label>
               <Input
                 id="branchPattern"
                 value={branchPattern}
@@ -853,7 +859,7 @@ export default function RepositoriesPage() {
       <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Import Repositories</DialogTitle>
+            <DialogTitle>Import repositories</DialogTitle>
             <DialogDescription>
               Select repositories to import from your Git providers.
               Already imported repositories are marked.

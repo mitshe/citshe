@@ -88,7 +88,7 @@ export function Topbar() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex h-8 items-center gap-2 rounded-md border border-border px-1.5 pr-2 text-sm transition-linear hover:bg-surface-hover">
+            <button className="flex h-8 items-center gap-2 rounded-md border border-border px-1.5 pr-2 text-sm transition-linear hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[10px] font-semibold text-primary">
                 {userInitials(userName, userEmail)}
               </span>

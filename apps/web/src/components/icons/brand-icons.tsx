@@ -72,9 +72,10 @@ export function GoogleAdsIcon({ className }: IconProps) {
 }
 
 /**
- * Neon — no Simple Icons glyph in the installed react-icons version, so this is
- * an inline logomark tinted with Neon brand green (#00E599). Rounded-square
- * badge with the Neon "N" cut-out.
+ * Neon — not present in the installed react-icons `si` set, so we embed the
+ * OFFICIAL Simple Icons single-path logomark (the rounded "N" mark).
+ * Source: https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/neon.svg
+ * Brand green per Simple Icons: #34D59A.
  */
 export function NeonIcon({ className }: IconProps) {
   return (
@@ -82,11 +83,10 @@ export function NeonIcon({ className }: IconProps) {
       viewBox="0 0 24 24"
       role="img"
       aria-label="Neon"
-      className={cn("w-5 h-5 text-[#00E599]", className)}
+      className={cn("w-5 h-5 text-[#34D59A]", className)}
       fill="currentColor"
     >
-      <path d="M3.732 2A2.732 2.732 0 0 0 1 4.732v14.535a2.732 2.732 0 0 0 2.732 2.733h4.845a2.19 2.19 0 0 0 1.573-.665V17.35a1.09 1.09 0 0 1 1.09-1.09h.001a1.09 1.09 0 0 1 1.09 1.09v3.53a2.19 2.19 0 0 0 .18.897 2.734 2.734 0 0 0 3.586-2.51V4.732A2.732 2.732 0 0 0 16.905 2H3.732ZM4.82 5.82h8.363a1.09 1.09 0 0 1 1.09 1.09v7.918l-4.914-6.36a2.19 2.19 0 0 0-3.965 1.286v3.63A1.09 1.09 0 0 1 4.82 12.294V5.82Z" />
-      <path d="M21.268 2a2.732 2.732 0 0 1 2.732 2.732v14.536A2.732 2.732 0 0 1 21.268 22h-.09a2.732 2.732 0 0 0 .636-1.755V4.732c0-.64-.22-1.229-.588-1.695A2.72 2.72 0 0 0 20.09 2h1.178Z" opacity="0.5" />
+      <path d="M24 0V24l-9.365-8.045V24H0V0ZM2.942 21.087h8.751V9.563l9.365 8.204V2.919L2.942 2.914Z" />
     </svg>
   );
 }

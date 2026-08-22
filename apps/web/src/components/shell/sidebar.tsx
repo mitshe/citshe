@@ -86,7 +86,7 @@ function NavRow({
       data-tour={tourId}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex h-[38px] items-center rounded-md text-[15px] transition-linear",
+        "group flex h-[38px] items-center rounded-md text-[15px] transition-linear focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         collapsed ? "w-full justify-center" : "gap-3 px-2.5",
         active
           ? "bg-surface-hover font-semibold text-foreground"
@@ -122,7 +122,7 @@ function SidebarSearch({ collapsed }: { collapsed: boolean }) {
         <TooltipTrigger asChild>
           <button
             onClick={openCommand}
-            className="flex h-[38px] w-full items-center justify-center rounded-md text-muted-foreground transition-linear hover:bg-foreground/[0.04] hover:text-foreground"
+            className="flex h-[38px] w-full items-center justify-center rounded-md text-muted-foreground transition-linear hover:bg-foreground/[0.04] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             aria-label="Search"
           >
             <Search className="h-[18px] w-[18px]" />
@@ -136,7 +136,7 @@ function SidebarSearch({ collapsed }: { collapsed: boolean }) {
   return (
     <button
       onClick={openCommand}
-      className="flex h-[38px] w-full items-center gap-2.5 rounded-md border border-border bg-surface-inset px-2.5 text-[15px] text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+      className="flex h-[38px] w-full items-center gap-2.5 rounded-md border border-border bg-surface-inset px-2.5 text-[15px] text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
     >
       <Search className="h-[18px] w-[18px] shrink-0" />
       <span>Search…</span>
@@ -266,7 +266,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
   return (
     <Link
       href="/home"
-      className="flex items-center font-brand text-lg font-semibold tracking-tight text-foreground"
+      className="flex items-center rounded-sm font-brand text-lg font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {collapsed ? "c" : "citshe"}
     </Link>
@@ -300,8 +300,9 @@ export function Sidebar({
         {!collapsed && <Brand collapsed={false} />}
         <button
           onClick={onToggle}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" />

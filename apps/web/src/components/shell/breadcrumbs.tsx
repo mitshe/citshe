@@ -16,12 +16,12 @@ const pathLabels: Record<string, string> = {
   stack: "Stack",
   skills: "Skills",
   settings: "Settings",
-  integrations: "Integrations",
-  ai: "AI Providers",
+  integrations: "GitHub",
+  ai: "AI",
   repositories: "Repositories",
   organization: "Organization",
   team: "Team",
-  "api-keys": "API Keys",
+  "api-keys": "API keys",
   preferences: "Preferences",
   edit: "Edit",
   docs: "Documentation",
@@ -65,7 +65,7 @@ export function Breadcrumbs() {
       if (i === segments.length - 1) {
         const prevSegment = segments[i - 1];
         if (prevSegment === "tasks") {
-          breadcrumbs.push({ label: "Task Details" });
+          breadcrumbs.push({ label: "Task details" });
         } else {
           breadcrumbs.push({ label: "Details" });
         }

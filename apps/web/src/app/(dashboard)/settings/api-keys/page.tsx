@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogBody,
@@ -88,19 +89,11 @@ export default function ApiKeysPage() {
     setShowKey(false);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Manage API keys for programmatic access.
           </p>
@@ -109,13 +102,13 @@ export default function ApiKeysPage() {
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="mr-2 h-4 w-4" />
-              Create API Key
+              Create API key
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {generatedKey ? "API Key Created" : "Create API Key"}
+                {generatedKey ? "API key created" : "Create API key"}
               </DialogTitle>
               <DialogDescription>
                 {generatedKey
@@ -126,7 +119,7 @@ export default function ApiKeysPage() {
             {generatedKey ? (
               <DialogBody className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Your API Key</Label>
+                  <Label>Your API key</Label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Input
@@ -193,7 +186,7 @@ export default function ApiKeysPage() {
                     {createApiKey.isPending && (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     )}
-                    Create Key
+                    Create key
                   </Button>
                 </>
               )}
@@ -202,7 +195,25 @@ export default function ApiKeysPage() {
         </Dialog>
       </div>
 
-      {apiKeys.length === 0 ? (
+      {isLoading ? (
+        <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-3 px-3.5 py-3 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <Skeleton className="size-9 shrink-0 rounded-md" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-56" />
+              </div>
+              <Skeleton className="size-8 shrink-0 rounded-md" />
+            </div>
+          ))}
+        </div>
+      ) : apiKeys.length === 0 ? (
         <EmptyState
           icon={<Key />}
           title="No API keys yet"
@@ -210,7 +221,7 @@ export default function ApiKeysPage() {
           action={
             <Button size="sm" onClick={() => setIsCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create API Key
+              Create API key
             </Button>
           }
         />

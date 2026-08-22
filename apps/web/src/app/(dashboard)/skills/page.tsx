@@ -13,7 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Chip } from "@/components/ui/chip";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -192,7 +193,7 @@ export default function SkillsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
           <p className="text-sm text-muted-foreground">
-            Reusable instructions installed as Claude Code slash commands in threads.
+            Reusable instructions installed as Claude Code slash commands in sessions.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -293,11 +294,31 @@ export default function SkillsPage() {
               </span>
             </div>
           )}
-          {skills.map((skill) => (
+          {skills.map((skill) => {
+            const clickable = selectMode || !skill.isSystem;
+            const activate = () =>
+              selectMode ? toggleSelect(skill.id) : openEdit(skill);
+            return (
             <div
               key={skill.id}
-              className="group flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3 cursor-pointer transition-linear hover:bg-surface-hover"
-              onClick={() => selectMode ? toggleSelect(skill.id) : !skill.isSystem && openEdit(skill)}
+              role={clickable ? "button" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              className={cn(
+                "group flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3 transition-linear hover:bg-surface-hover",
+                clickable &&
+                  "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+              onClick={clickable ? activate : undefined}
+              onKeyDown={
+                clickable
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        activate();
+                      }
+                    }
+                  : undefined
+              }
             >
               {selectMode ? (
                 <Checkbox
@@ -312,13 +333,11 @@ export default function SkillsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{skill.name}</span>
-                  <Badge variant="outline" className="text-[10px]">
+                  <Chip className="text-[10px]">
                     {skill.isSystem ? "Built-in" : "Custom"}
-                  </Badge>
+                  </Chip>
                   {skill.category && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {skill.category}
-                    </Badge>
+                    <Chip className="text-[10px]">{skill.category}</Chip>
                   )}
                 </div>
                 {skill.description && (
@@ -331,14 +350,16 @@ export default function SkillsPage() {
                 className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  onClick={() => openEdit(skill)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
+                {!skill.isSystem && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => openEdit(skill)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 <Button
                   size="icon"
                   variant="ghost"
@@ -349,7 +370,8 @@ export default function SkillsPage() {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -361,7 +383,7 @@ export default function SkillsPage() {
               {editingSkill ? "Edit skill" : "Create skill"}
             </DialogTitle>
             <DialogDescription>
-              Instructions that Claude Code will follow in threads using this
+              Instructions that Claude Code will follow in sessions using this
               skill.
             </DialogDescription>
           </DialogHeader>
@@ -519,7 +541,7 @@ export default function SkillsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteSkill.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {deleteSkill.isPending ? "Deleting..." : "Delete"}
+              {deleteSkill.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -542,7 +564,7 @@ export default function SkillsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Delete
+              {bulkDeleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

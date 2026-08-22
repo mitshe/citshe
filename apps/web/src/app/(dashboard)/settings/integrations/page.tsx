@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { GitHubIcon } from "@/components/icons/brand-icons";
 import { StatusDot } from "@/components/ui/status-dot";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useIntegrations,
   useCreateIntegration,
@@ -219,18 +220,10 @@ export default function IntegrationsPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
     <div className="w-full space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">GitHub</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Connect GitHub so agents can clone repos, push branches, and open pull
           requests.
@@ -238,7 +231,17 @@ export default function IntegrationsPage() {
       </div>
 
       <div className="overflow-hidden rounded-md border border-border bg-surface-card">
-        {integrations.map((integration) => (
+        {isLoading ? (
+          <div className="flex items-center gap-3 px-3.5 py-3">
+            <Skeleton className="size-10 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-64" />
+            </div>
+            <Skeleton className="h-8 w-24 shrink-0 rounded-md" />
+          </div>
+        ) : (
+          integrations.map((integration) => (
           <IntegrationRow
             key={integration.id}
             integration={integration}
@@ -251,10 +254,11 @@ export default function IntegrationsPage() {
               integration.integrationId &&
               handleTest(integration.integrationId, integration.name)
             }
-            isDisconnecting={deleteIntegration.isPending}
-            isTesting={testingId === integration.integrationId}
-          />
-        ))}
+              isDisconnecting={deleteIntegration.isPending}
+              isTesting={testingId === integration.integrationId}
+            />
+          ))
+        )}
       </div>
 
       <Dialog
@@ -267,7 +271,7 @@ export default function IntegrationsPage() {
               {configureDialog && (
                 <div
                   className={cn(
-                    "flex items-center justify-center w-10 h-10 rounded-lg text-white",
+                    "flex items-center justify-center w-10 h-10 rounded-md text-white",
                     configureDialog.color,
                   )}
                 >
@@ -488,6 +492,7 @@ function IntegrationRow({
               onClick={onTest}
               disabled={isTesting}
               title="Test connection"
+              aria-label={`Test ${integration.name} connection`}
             >
               {isTesting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -502,6 +507,7 @@ function IntegrationRow({
               disabled={isDisconnecting}
               className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               title="Disconnect"
+              aria-label={`Disconnect ${integration.name}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

@@ -70,7 +70,7 @@ export function CreateOrgDialog({
           />
         </DialogBody>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={!name.trim() || submitting}>
