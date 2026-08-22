@@ -47,6 +47,7 @@ import {
   ArrowUpRight,
   ArrowLeft,
   ChevronDown,
+  Link as LinkIcon,
 } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -320,6 +321,24 @@ export function TaskDetail({
   const statusMeta = getTaskStatus(task.status);
 
   // -- Small building blocks reused across both layouts --------------------
+
+  const copyLinkButton = (
+    <Button
+      variant="ghost"
+      size={isPanel ? "sm" : "default"}
+      title="Copy link to this task"
+      onClick={() => {
+        const url = `${window.location.origin}/tasks/${taskId}`;
+        void navigator.clipboard
+          .writeText(url)
+          .then(() => toast.success("Task link copied"))
+          .catch(() => toast.error("Couldn't copy the link"));
+      }}
+    >
+      <LinkIcon className="h-4 w-4" />
+      <span className="ml-1.5 hidden sm:inline">Copy link</span>
+    </Button>
+  );
 
   const overflowMenu = (
     <DropdownMenu>
@@ -602,8 +621,9 @@ export function TaskDetail({
       onValueChange={(value: TaskStatus) => void save({ status: value })}
     >
       <SelectTrigger
+        size="sm"
         className={cn(
-          "w-full gap-2 border text-sm font-medium [&>svg]:size-3.5",
+          "h-8 w-auto gap-1.5 rounded-full border px-3 text-sm font-medium [&>svg]:size-3.5",
           statusMeta.color,
         )}
       >
@@ -777,11 +797,12 @@ export function TaskDetail({
   if (isPanel) {
     return (
       <div className="space-y-5">
-        {/* Prominent status at the top, close/reopen + ⋯ on the right. */}
+        {/* Compact status pill on the left; copy-link, close/reopen + ⋯ right. */}
         <div className="flex items-center gap-2">
-          <div className="min-w-[10rem] flex-1">{statusControl}</div>
+          <div className="shrink-0">{statusControl}</div>
           {savingIndicator}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
+            {copyLinkButton}
             {closeReopenButton}
             {overflowMenu}
           </div>
@@ -814,6 +835,7 @@ export function TaskDetail({
         </Link>
         <div className="flex items-center gap-2 shrink-0">
           {savingIndicator}
+          {copyLinkButton}
           {closeReopenButton}
           {overflowMenu}
         </div>

@@ -139,9 +139,9 @@ export function TaskBoardView({
   };
 
   return (
-    // Columns sit side by side and scroll horizontally when there isn't room —
-    // never reflow into a 2×2 grid. Each column has a fixed, comfortable width.
-    <div className="flex gap-4 overflow-x-auto pb-2">
+    // Mobile: columns stack vertically, one under another (1-wide). Desktop:
+    // columns sit side by side and scroll horizontally — never a 2×2 grid.
+    <div className="flex flex-col gap-4 lg:flex-row lg:overflow-x-auto lg:pb-2">
       {columns.map((col) => {
         const droppable = !!col.moveTo; // Closed column is not a drop target.
         const isTarget = dropTarget === col.id;
@@ -171,7 +171,7 @@ export function TaskBoardView({
             }
             onDrop={droppable ? () => handleColumnDrop(col) : undefined}
             className={cn(
-              "flex min-h-0 w-[300px] shrink-0 flex-col rounded-lg border bg-surface-card transition-linear",
+              "flex min-h-0 w-full shrink-0 flex-col rounded-lg border bg-surface-card transition-linear lg:w-[300px]",
               isTarget
                 ? "border-primary/50 bg-primary/[0.04] ring-1 ring-primary/25"
                 : "border-border",
@@ -201,7 +201,11 @@ export function TaskBoardView({
                     onLabelClick={onLabelClick}
                     onOpenTask={onOpenTask}
                     draggable={col.id !== "closed"}
-                    queueOrderIndex={isQueue ? i + 1 : undefined}
+                    // Pull-order only means something when several tasks are
+                    // queued — a lone "1" is just noise, so hide it then.
+                    queueOrderIndex={
+                      isQueue && byColumn[col.id].length > 1 ? i + 1 : undefined
+                    }
                     dropHint={
                       isQueue &&
                       queueDropBeforeId === task.id &&
