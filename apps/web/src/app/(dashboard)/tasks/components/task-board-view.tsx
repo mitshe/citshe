@@ -115,8 +115,8 @@ export function TaskBoardView({
             />
             <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto p-2">
               {byColumn[col.id].length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-text-subtle">
-                  {isTarget ? "Drop here" : "Nothing here."}
+                <p className="px-1 py-3 text-left text-[11px] text-text-subtle">
+                  {isTarget ? "Drop here" : "Nothing here"}
                 </p>
               ) : (
                 byColumn[col.id].map((task) => (

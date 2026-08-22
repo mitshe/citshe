@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
-import { StatusDot } from "@/components/ui/status-dot";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -315,8 +314,6 @@ export function TaskCard({
   onDragEnd?: (e: React.DragEvent) => void;
 }) {
   const link = prUrl(task);
-  const liveWorker =
-    !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
 
   return (
     <div
@@ -324,17 +321,18 @@ export function TaskCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cn(
-        "group rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover",
+        "group rounded-lg border border-border bg-surface-card p-2.5 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
       {/* Status + menu */}
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5">
-          <StatusPill status={task.status} />
-          {liveWorker && <StatusDot state="running" size={8} />}
-        </span>
-        <TaskMenu task={task} onDelete={onDelete} />
+        <StatusPill status={task.status} />
+        <TaskMenu
+          task={task}
+          onDelete={onDelete}
+          triggerClassName="group-hover:opacity-100"
+        />
       </div>
 
       {/* Title */}
@@ -400,7 +398,7 @@ export function TaskRow({
   const link = prUrl(task);
 
   return (
-    <tr className="group border-b border-border last:border-0 transition-linear hover:bg-surface-hover">
+    <tr className="group border-b border-border last:border-0 transition-linear hover:bg-surface-hover focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
       {/* Title */}
       <td className="max-w-0 px-3 py-2">
         <div className="flex items-center gap-1.5">

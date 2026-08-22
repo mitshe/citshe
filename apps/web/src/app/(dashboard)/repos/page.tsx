@@ -277,7 +277,7 @@ function RepoCard({ repo }: { repo: Repository }) {
   };
 
   return (
-    <div className="rounded-md border border-border bg-surface-card p-4 transition-linear">
+    <div className="rounded-md border border-border bg-surface-card p-4 transition-linear hover:bg-surface-hover hover:border-border-strong">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -320,6 +320,7 @@ function RepoCard({ repo }: { repo: Repository }) {
             onClick={() => quickLaunch.launch({ repositoryId: repo.id })}
             disabled={quickLaunch.launching}
             title="Open a terminal on this repo"
+            aria-label="Open a terminal on this repo"
           >
             <Terminal className="h-3.5 w-3.5" />
           </Button>
@@ -330,6 +331,7 @@ function RepoCard({ repo }: { repo: Repository }) {
             onClick={runAnalysis}
             disabled={analyzing}
             title="Re-analyze this repo"
+            aria-label="Re-analyze this repo"
           >
             {analyzing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -343,6 +345,7 @@ function RepoCard({ repo }: { repo: Repository }) {
             className="h-7 px-2 text-muted-foreground hover:text-danger"
             onClick={() => setDisconnectOpen(true)}
             title="Disconnect this repo"
+            aria-label="Disconnect this repo"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -355,7 +358,7 @@ function RepoCard({ repo }: { repo: Repository }) {
             <AlertDialogTitle>Disconnect repo?</AlertDialogTitle>
             <AlertDialogDescription>
               Remove {repo.name} from this portal? This does not delete it on
-              GitHub — tasks and threads keep working.
+              GitHub — tasks and terminals keep working.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -370,7 +373,7 @@ function RepoCard({ repo }: { repo: Repository }) {
       {/* Analysis */}
       <div className="mt-3 space-y-2">
         {analyzing ? (
-          <p className="flex items-center gap-1.5 text-xs text-info">
+          <p className="flex items-center gap-1.5 text-xs text-warn">
             <Sparkles className="h-3.5 w-3.5" />
             Analyzing project…
           </p>

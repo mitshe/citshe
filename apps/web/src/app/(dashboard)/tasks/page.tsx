@@ -52,7 +52,6 @@ import {
   useDeleteTask,
   useRefineTask,
 } from "@/lib/api/hooks";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { Task, RefinedTask } from "@/lib/api/types";
@@ -192,18 +191,13 @@ export default function TasksPage() {
           {allLabels.map((l) => {
             const active = activeLabel === l;
             return (
-              <button
+              <Chip
                 key={l}
+                active={active}
                 onClick={() => setActiveLabel(active ? null : l)}
-                className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-linear",
-                  active
-                    ? "border-transparent bg-primary text-primary-foreground"
-                    : "border-border bg-surface-inset/60 text-muted-foreground hover:border-border-strong hover:text-foreground",
-                )}
               >
                 {l}
-              </button>
+              </Chip>
             );
           })}
           {activeLabel && (

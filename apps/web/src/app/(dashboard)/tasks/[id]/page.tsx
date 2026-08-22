@@ -48,6 +48,8 @@ import {
   GitPullRequest,
 } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Eyebrow } from "@/components/ui/section-header";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import {
   useTask,
@@ -141,10 +143,11 @@ function extractPrUrl(result: Task["result"]): string | null {
 const CLOSED_STATUSES: TaskStatus[] = ["COMPLETED", "CANCELLED", "FAILED"];
 
 // Statuses the user can pick inline (open/working states only).
+// Labels come from status-config so the Select trigger and dropdown agree.
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "PENDING", label: "Todo" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "REVIEW", label: "Review" },
+  { value: "PENDING", label: getTaskStatus("PENDING").label },
+  { value: "IN_PROGRESS", label: getTaskStatus("IN_PROGRESS").label },
+  { value: "REVIEW", label: getTaskStatus("REVIEW").label },
 ];
 
 const PRIORITY_OPTIONS: TaskPriority[] = ["low", "medium", "high", "urgent"];
@@ -231,20 +234,30 @@ export default function TaskDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="w-full max-w-[1400px] px-6 py-6">
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
 
   if (error || !task) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
-        <p className="text-danger mb-2">Task not found</p>
-        <Link href="/tasks">
-          <Button variant="outline">Back to Tasks</Button>
-        </Link>
+      <div className="w-full max-w-[1400px] px-6 py-6">
+        <EmptyState
+          icon={<AlertCircle />}
+          title="Task not found"
+          description="It may have been deleted, or the link is wrong."
+          action={
+            <Link href="/tasks">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                Back to tasks
+              </Button>
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -339,7 +352,7 @@ export default function TaskDetailPage() {
                 className="text-danger"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete Task
+                Delete task
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -381,9 +394,7 @@ export default function TaskDetailPage() {
         <div className="min-w-0 space-y-6">
           {/* Description (inline editable) */}
           <div className="space-y-2">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Description
-            </h2>
+            <Eyebrow>Description</Eyebrow>
             {editingDescription ? (
               <Textarea
                 ref={descriptionRef}
@@ -424,9 +435,7 @@ export default function TaskDetailPage() {
 
           {/* Activity / AI log */}
           <div className="space-y-3">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Activity
-            </h2>
+            <Eyebrow>Activity</Eyebrow>
 
             {resultSummary && (
               <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
@@ -487,9 +496,7 @@ export default function TaskDetailPage() {
         <aside className="space-y-5 lg:border-l lg:border-border lg:pl-6">
           {/* Status */}
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Status
-            </span>
+            <Eyebrow>Status</Eyebrow>
             <Select
               value={task.status}
               onValueChange={(value: TaskStatus) => void save({ status: value })}
@@ -515,9 +522,7 @@ export default function TaskDetailPage() {
 
           {/* Priority */}
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Priority
-            </span>
+            <Eyebrow>Priority</Eyebrow>
             <Select
               value={task.priority ?? "medium"}
               onValueChange={(value: TaskPriority) =>
@@ -539,9 +544,7 @@ export default function TaskDetailPage() {
 
           {/* Repository */}
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Repository
-            </span>
+            <Eyebrow>Repository</Eyebrow>
             {task.repository ? (
               <Link
                 href="/repos"
@@ -557,9 +560,7 @@ export default function TaskDetailPage() {
 
           {/* Labels */}
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Labels
-            </span>
+            <Eyebrow>Labels</Eyebrow>
             <div className="flex flex-wrap items-center gap-1.5">
               {labels.map((label) => (
                 <Chip
@@ -591,9 +592,7 @@ export default function TaskDetailPage() {
 
           {/* Timestamps */}
           <div className="space-y-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-              Timeline
-            </span>
+            <Eyebrow>Timeline</Eyebrow>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 shrink-0" />
@@ -611,9 +610,7 @@ export default function TaskDetailPage() {
           {/* Links */}
           {(prUrl || task.sessionId) && (
             <div className="space-y-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-text-subtle">
-                Links
-              </span>
+              <Eyebrow>Links</Eyebrow>
               <div className="flex flex-col gap-2">
                 {prUrl && (
                   <a href={prUrl} target="_blank" rel="noopener noreferrer">
@@ -672,7 +669,7 @@ export default function TaskDetailPage() {
               {deleteTask.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {deleteTask.isPending ? "Deleting..." : "Delete"}
+              {deleteTask.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StatusDot, type StatusDotState } from "@/components/ui/status-dot";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Kbd } from "@/components/ui/kbd";
 import {
   Loader2,
@@ -679,8 +681,17 @@ export default function SessionDetailPage() {
 
   if (!session) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Terminal not found</p>
+      <div className="flex items-center justify-center h-full p-6">
+        <EmptyState
+          icon={<TerminalIcon />}
+          title="Terminal not found"
+          description="This terminal doesn't exist or was deleted."
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/sessions">Back to terminals</Link>
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -710,11 +721,17 @@ export default function SessionDetailPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <StatusDot
-            state={statusDotStates[sessionStatus] ?? "idle"}
-            pulse={isRunning}
-            className="shrink-0"
-          />
+          {/* Status = dot + word together, never a lone dot. Running keeps the
+              pulsing ripple (the header is the allowed ripple spot). */}
+          <span className="flex items-center gap-1.5 shrink-0">
+            <StatusDot
+              state={statusDotStates[sessionStatus] ?? "idle"}
+              pulse={isRunning}
+            />
+            <span className="text-[11px] text-text-subtle">
+              {statusLabels[sessionStatus] || sessionStatus}
+            </span>
+          </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               {editingName ? (
@@ -731,16 +748,13 @@ export default function SessionDetailPage() {
                 />
               ) : (
                 <h1
-                  className="font-semibold text-sm truncate cursor-text hover:text-foreground/90 transition-linear"
+                  className="font-semibold text-sm truncate cursor-text rounded-sm px-1.5 -mx-1.5 py-0.5 hover:bg-surface-hover transition-linear"
                   title="Click to rename"
                   onClick={startEditName}
                 >
                   {session.name}
                 </h1>
               )}
-              <span className="text-[11px] text-text-subtle shrink-0">
-                {statusLabels[sessionStatus] || sessionStatus}
-              </span>
             </div>
             <p className="text-xs text-muted-foreground truncate">
               {session.repositories?.[0]?.repository?.name || "No repo"}
@@ -1018,21 +1032,32 @@ export default function SessionDetailPage() {
                     </div>
                   ) : isCompleted ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center">
-                        <TerminalIcon className="w-10 h-10 mx-auto mb-4 opacity-40" />
-                        <p className="mb-3 text-sm">Terminal stopped</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleResume}
-                        >
-                          <Play className="w-4 h-4 mr-1" /> Resume
-                        </Button>
+                      <div className="rounded-lg border border-border bg-surface-card px-8 py-7 text-center">
+                        <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-surface-hover text-muted-foreground">
+                          <TerminalIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Terminal stopped</p>
+                        <p className="text-xs mt-1">Resume it to pick up where you left off.</p>
+                        <div className="flex items-center justify-center mt-5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleResume}
+                          >
+                            <Play className="w-4 h-4 mr-1" /> Resume
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <TerminalIcon className="w-10 h-10 opacity-40" />
+                      <div className="rounded-lg border border-border bg-surface-card px-8 py-7 text-center">
+                        <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-surface-hover text-muted-foreground">
+                          <TerminalIcon className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Terminal not running</p>
+                        <p className="text-xs mt-1">Start or resume the terminal to use this workspace.</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1084,9 +1109,12 @@ export default function SessionDetailPage() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center space-y-2">
-                        <Globe className="w-10 h-10 mx-auto opacity-30" />
-                        <p className="text-sm">Terminal must be running to use browser</p>
+                      <div className="rounded-lg border border-border bg-surface-card px-8 py-7 text-center">
+                        <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-surface-hover text-muted-foreground">
+                          <Globe className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Browser unavailable</p>
+                        <p className="text-xs mt-1">The terminal must be running to use the browser.</p>
                       </div>
                     </div>
                   )}

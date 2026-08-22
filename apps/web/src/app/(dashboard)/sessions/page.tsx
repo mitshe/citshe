@@ -50,6 +50,7 @@ import {
   MoreHorizontal,
   CheckSquare,
   GitBranch,
+  Container,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -82,14 +83,6 @@ import { ThreadFormFields } from "./components/thread-form-fields";
 import { useQuickLaunch } from "@/lib/hooks/use-quick-launch";
 import { Terminal as TerminalIcon } from "lucide-react";
 
-const EMPTY_SNAPSHOTS: Array<{
-  id: string;
-  name: string;
-  description?: string | null;
-  status: string;
-  enableDocker?: boolean;
-}> = [];
-
 // Maps a backend SessionStatus → StatusDot state + label. The list uses the
 // STATIC arc for running (no spinner) — the pulsing ripple is reserved for the
 // open-session header.
@@ -107,7 +100,6 @@ const statusConfig: Record<
 export default function SessionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlSnapshotId = searchParams.get("snapshot") || "";
   const urlNewSession = searchParams.get("newSession") === "1";
   const urlTaskName = searchParams.get("taskName") || "";
   const urlTaskInstructions = searchParams.get("taskInstructions") || "";
@@ -137,8 +129,6 @@ export default function SessionsPage() {
   }, [sessions, search, filterStatus]);
   const { data: repositories = [] } = useRepositories();
   const { data: aiCredentials = [] } = useAICredentials();
-  const snapshotsList = EMPTY_SNAPSHOTS;
-  const readySnapshots = EMPTY_SNAPSHOTS;
   const { data: skillsList = [] } = useSkills();
   const { data: connectedIntegrations = [] } = useIntegrations();
 
@@ -218,38 +208,19 @@ export default function SessionsPage() {
     }
   }, [allIntegrationIds.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-open dialog when navigating with ?snapshot=id
-  const [snapshotHandled, setSnapshotHandled] = useState(false);
-  useEffect(() => {
-    if (snapshotHandled || !urlSnapshotId || snapshotsList.length === 0) return;
-    const snap = snapshotsList.find((s: { id: string; status: string }) => s.id === urlSnapshotId && s.status === "READY");
-    if (snap) {
-      setForm((prev) => ({
-        ...prev,
-        baseImageId: urlSnapshotId,
-        name: `Thread from ${(snap as { name: string }).name}`,
-        enableDocker: (snap as { enableDocker?: boolean }).enableDocker ?? prev.enableDocker,
-      }));
-      setIsDialogOpen(true);
-      setSnapshotHandled(true);
-    }
-  }, [urlSnapshotId, snapshotsList, snapshotHandled]);
-
   // Auto-open dialog when navigating with ?newSession=1&taskName=...
   const [taskHandled, setTaskHandled] = useState(false);
   useEffect(() => {
     if (taskHandled || !urlNewSession) return;
-    const autoSnapshot = readySnapshots.length === 1 ? readySnapshots[0].id : '';
     setForm((prev) => ({
       ...prev,
       name: urlTaskName || prev.name,
       instructions: urlTaskInstructions || prev.instructions,
-      baseImageId: autoSnapshot || prev.baseImageId,
       integrationIds: allIntegrationIds.length > 0 ? allIntegrationIds : prev.integrationIds,
     }));
     setIsDialogOpen(true);
     setTaskHandled(true);
-  }, [urlNewSession, urlTaskName, urlTaskInstructions, allIntegrationIds, taskHandled, readySnapshots]);
+  }, [urlNewSession, urlTaskName, urlTaskInstructions, allIntegrationIds, taskHandled]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -505,12 +476,21 @@ export default function SessionsPage() {
     return (
       <div
         key={session.id}
-        className="group flex items-center gap-3 px-3 py-2.5 bg-surface-card hover:bg-surface-hover transition-linear cursor-pointer"
+        role="button"
+        tabIndex={0}
+        className="group flex items-center gap-3 px-3 py-2.5 bg-surface-card hover:bg-surface-hover transition-linear cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={() =>
           selectMode
             ? toggleSelect(session.id)
             : router.push(`/sessions/${session.id}`)
         }
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            selectMode
+              ? toggleSelect(session.id)
+              : router.push(`/sessions/${session.id}`);
+          }
+        }}
       >
         {selectMode && (
           <Checkbox
@@ -544,7 +524,12 @@ export default function SessionsPage() {
                 {session.branch}
               </span>
             )}
-            {session.enableDocker && <span className="shrink-0">Docker</span>}
+            {session.enableDocker && (
+              <span className="flex items-center gap-1 shrink-0">
+                <Container className="w-3 h-3" />
+                Docker
+              </span>
+            )}
             {session.repositories && session.repositories.length > 0 && (
               <span className="truncate max-w-[200px]">
                 {session.repositories
@@ -713,7 +698,7 @@ export default function SessionsPage() {
                 setForm={setForm}
                 configLocked={configLocked}
                 sessionProviders={sessionProviders}
-                readySnapshots={readySnapshots}
+                readySnapshots={[]}
                 activeRepos={activeRepos}
                 repoSearch={repoSearch}
                 setRepoSearch={setRepoSearch}
@@ -758,10 +743,10 @@ export default function SessionsPage() {
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="RUNNING">Running</SelectItem>
             <SelectItem value="COMPLETED">Stopped</SelectItem>
             <SelectItem value="FAILED">Failed</SelectItem>

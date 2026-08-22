@@ -11,6 +11,8 @@ type ChipProps = {
   className?: string;
   /** When set, the chip becomes a clickable button (e.g. label filter). */
   onClick?: () => void;
+  /** Selected/active look — for filter chips that toggle. */
+  active?: boolean;
   /** When set, renders a trailing ✕ that calls this on click. */
   onRemove?: () => void;
   /** Accessible label for the remove button. */
@@ -25,12 +27,14 @@ function Chip({
   children,
   className,
   onClick,
+  active,
   onRemove,
   removeLabel,
 }: ChipProps) {
   const interactive = cn(
     chipBase,
     "transition-linear hover:border-border-strong hover:text-foreground",
+    active && "border-primary/50 bg-primary/10 text-primary hover:text-primary",
     className,
   );
 
