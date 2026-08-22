@@ -28,6 +28,12 @@ RUN pnpm run build
 WORKDIR /build/apps/web
 ENV NEXT_PUBLIC_API_URL=http://localhost:3001
 ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js compiles rewrites() into .next/routes-manifest.json at build time, so
+# BACKEND_URL must be set here (not just at runtime) or the proxy target is
+# baked as localhost:3001 and fails with ECONNREFUSED inside compose. Default
+# to the compose service name; override with --build-arg BACKEND_URL=... .
+ARG BACKEND_URL=http://api:3001
+ENV BACKEND_URL=${BACKEND_URL}
 RUN pnpm run build
 
 # Production
