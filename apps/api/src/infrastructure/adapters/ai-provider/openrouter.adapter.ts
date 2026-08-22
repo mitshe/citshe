@@ -23,7 +23,7 @@ export class OpenRouterAdapter implements AIProviderPort {
 
   constructor(config: { apiKey: string; defaultModel?: string }) {
     this.apiKey = config.apiKey;
-    this.defaultModel = config.defaultModel || 'anthropic/claude-3.5-sonnet';
+    this.defaultModel = config.defaultModel || 'anthropic/claude-3.7-sonnet';
   }
 
   getProviderType(): 'openai' {
@@ -54,7 +54,7 @@ export class OpenRouterAdapter implements AIProviderPort {
 
   listModels(): Promise<string[]> {
     return Promise.resolve([
-      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3.7-sonnet',
       'anthropic/claude-3.5-haiku',
       'openai/gpt-4o-mini',
       'google/gemini-flash-1.5',

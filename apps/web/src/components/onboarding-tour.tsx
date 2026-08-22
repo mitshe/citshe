@@ -53,6 +53,10 @@ export function OnboardingTour() {
     if (!shouldShowTour) return;
 
     const timer = setTimeout(() => {
+      // The tour anchors to sidebar nav items that are `hidden md:flex`.
+      // On phones those targets don't exist, so skip the tour entirely.
+      if (!window.matchMedia("(min-width: 768px)").matches) return;
+
       const driverObj = driver({
         showProgress: true,
         showButtons: ["next", "previous", "close"],

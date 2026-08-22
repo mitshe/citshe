@@ -513,27 +513,27 @@ export default function SessionsPage() {
               </span>
             </span>
           </div>
-          <div className="flex items-center gap-2.5 text-xs text-text-subtle mt-0.5 leading-tight">
+          <div className="flex items-center gap-2.5 text-xs text-text-subtle mt-0.5 leading-tight min-w-0">
             {session.aiCredential && (
-              <span className="truncate">
+              <span className="truncate hidden sm:inline">
                 {providerLabels[session.aiCredential.provider] ||
                   session.aiCredential.provider}
               </span>
             )}
             {session.branch && (
-              <span className="flex items-center gap-1 font-mono shrink-0">
+              <span className="hidden sm:flex items-center gap-1 font-mono shrink-0 min-w-0">
                 <GitBranch className="w-3 h-3 shrink-0" />
-                {session.branch}
+                <span className="truncate">{session.branch}</span>
               </span>
             )}
             {session.enableDocker && (
-              <span className="flex items-center gap-1 shrink-0">
+              <span className="hidden sm:flex items-center gap-1 shrink-0">
                 <Container className="w-3 h-3 shrink-0" />
                 Docker
               </span>
             )}
             {session.repositories && session.repositories.length > 0 && (
-              <span className="truncate max-w-[200px]">
+              <span className="truncate max-w-[160px] sm:max-w-[200px]">
                 {session.repositories
                   .map((r) => r.repository?.name || "")
                   .filter(Boolean)
@@ -556,7 +556,7 @@ export default function SessionsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 hidden sm:inline-flex text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-linear"
+                className="h-8 hidden sm:inline-flex text-muted-foreground hover:text-foreground opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-linear"
                 onClick={(e) => handleStop(e, session.id)}
               >
                 <Square className="w-3.5 h-3.5 mr-1" />
@@ -565,7 +565,7 @@ export default function SessionsPage() {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
+                <Button variant="ghost" size="icon" className="h-9 w-9">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -615,7 +615,7 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Terminals</h1>

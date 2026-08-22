@@ -218,7 +218,7 @@ export function TaskMenu({
         <Button
           size="sm"
           variant="ghost"
-          className={cn("h-6 w-6 p-0 opacity-60 hover:opacity-100", triggerClassName)}
+          className={cn("h-8 w-8 p-0 opacity-60 hover:opacity-100", triggerClassName)}
           onClick={(e) => e.stopPropagation()}
         >
           {busy ? (

@@ -234,7 +234,7 @@ export default function TaskDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-[1400px] px-6 py-6">
+      <div className="w-full max-w-[1400px] px-4 sm:px-6 py-6">
         <div className="flex h-64 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -244,7 +244,7 @@ export default function TaskDetailPage() {
 
   if (error || !task) {
     return (
-      <div className="w-full max-w-[1400px] px-6 py-6">
+      <div className="w-full max-w-[1400px] px-4 sm:px-6 py-6">
         <EmptyState
           icon={<AlertCircle />}
           title="Task not found"
@@ -274,7 +274,7 @@ export default function TaskDetailPage() {
     (task.status === "ANALYZING" || task.status === "IN_PROGRESS");
 
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2">

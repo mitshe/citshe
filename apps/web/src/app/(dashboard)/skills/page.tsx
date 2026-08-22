@@ -188,7 +188,7 @@ export default function SkillsPage() {
   };
 
   return (
-    <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-6 px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
@@ -331,13 +331,15 @@ export default function SkillsPage() {
                 <Zap className="h-4 w-4 text-primary shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{skill.name}</span>
-                  <Chip className="text-[10px]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium text-sm truncate min-w-0">
+                    {skill.name}
+                  </span>
+                  <Chip className="text-[10px] shrink-0">
                     {skill.isSystem ? "Built-in" : "Custom"}
                   </Chip>
                   {skill.category && (
-                    <Chip className="text-[10px]">{skill.category}</Chip>
+                    <Chip className="text-[10px] shrink-0">{skill.category}</Chip>
                   )}
                 </div>
                 {skill.description && (
@@ -347,14 +349,14 @@ export default function SkillsPage() {
                 )}
               </div>
               <div
-                className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 {!skill.isSystem && (
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-9 w-9"
                     onClick={() => openEdit(skill)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -363,7 +365,7 @@ export default function SkillsPage() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7"
+                  className="h-9 w-9"
                   onClick={() => setDeleteTarget(skill)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

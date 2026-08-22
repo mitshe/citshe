@@ -125,7 +125,7 @@ export default function ReposPage() {
   }, [repos, search, filter]);
 
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Repos</h1>
@@ -289,17 +289,17 @@ function RepoCard({ repo }: { repo: Repository }) {
               </span>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-2.5 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
             <span
-              className="inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 shrink-0"
               title={dot.label}
             >
               <StatusDot state={dot.state} size={7} />
               {dot.label}
             </span>
-            <span className="inline-flex items-center gap-1 text-text-subtle">
-              <GitBranch className="h-3 w-3" />
-              {repo.defaultBranch}
+            <span className="inline-flex min-w-0 items-center gap-1 text-text-subtle">
+              <GitBranch className="h-3 w-3 shrink-0" />
+              <span className="truncate">{repo.defaultBranch}</span>
             </span>
             <a
               href={repo.webUrl}
@@ -316,7 +316,7 @@ function RepoCard({ repo }: { repo: Repository }) {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2"
+            className="h-9 px-2.5"
             onClick={() => quickLaunch.launch({ repositoryId: repo.id })}
             disabled={quickLaunch.launching}
             title="Open a terminal on this repo"
@@ -327,7 +327,7 @@ function RepoCard({ repo }: { repo: Repository }) {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2"
+            className="h-9 px-2.5"
             onClick={runAnalysis}
             disabled={analyzing}
             title="Re-analyze this repo"
@@ -342,7 +342,7 @@ function RepoCard({ repo }: { repo: Repository }) {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-muted-foreground hover:text-danger"
+            className="h-9 px-2.5 text-muted-foreground hover:text-danger"
             onClick={() => setDisconnectOpen(true)}
             title="Disconnect this repo"
             aria-label="Disconnect this repo"

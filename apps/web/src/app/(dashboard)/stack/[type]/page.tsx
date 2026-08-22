@@ -100,7 +100,7 @@ export default function StackToolPage({
 
   if (!def) {
     return (
-      <div className="w-full max-w-[1400px] px-6 py-6 sm:py-8">
+      <div className="w-full max-w-[1400px] px-4 sm:px-6 py-6 sm:py-8">
         <p className="text-muted-foreground">Unknown tool.</p>
         <Link href="/stack" className="text-primary hover:underline">
           ← Back to stack
@@ -114,7 +114,7 @@ export default function StackToolPage({
   const extraLinks = status?.links?.slice(1) ?? [];
 
   return (
-    <div className="w-full max-w-[1400px] space-y-6 px-6 py-6 sm:py-8">
+    <div className="w-full max-w-[1400px] space-y-6 px-4 sm:px-6 py-6 sm:py-8">
       {/* Header: brand + name + health · Open in provider + ⋯ menu */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -1682,7 +1682,7 @@ function VpsServerRow({
             aria-label="Remove server"
             onClick={onRemove}
             disabled={removing}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger disabled:opacity-50"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-danger disabled:opacity-50"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

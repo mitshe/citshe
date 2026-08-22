@@ -26,9 +26,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarBody } from "./sidebar";
@@ -108,30 +105,25 @@ export function Topbar() {
                 Settings
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-2">
-                <Sun className="h-4 w-4" />
-                Theme
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {THEMES.map((t) => (
-                  <DropdownMenuItem
-                    key={t.value}
-                    onClick={() => setTheme(t.value)}
-                    className="gap-2"
-                  >
-                    <t.icon className="h-4 w-4" />
-                    {t.label}
-                    <Check
-                      className={cn(
-                        "ml-auto h-4 w-4",
-                        theme === t.value ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              Theme
+            </DropdownMenuLabel>
+            {THEMES.map((t) => (
+              <DropdownMenuItem
+                key={t.value}
+                onClick={() => setTheme(t.value)}
+                className="gap-2"
+              >
+                <t.icon className="h-4 w-4" />
+                {t.label}
+                <Check
+                  className={cn(
+                    "ml-auto h-4 w-4",
+                    theme === t.value ? "opacity-100" : "opacity-0",
+                  )}
+                />
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut()} className="gap-2">
               <LogOut className="h-4 w-4" />

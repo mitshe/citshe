@@ -25,7 +25,6 @@ import {
   usePlugins,
   usePluginStatus,
 } from "@/lib/api/hooks";
-import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -101,11 +100,7 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="w-full max-w-[1400px] px-6 py-6 sm:py-8 space-y-10">
-      {/* Portal selector — mobile only; desktop has it in the sidebar */}
-      <div className="sm:hidden">
-        <OrgSwitcher />
-      </div>
+    <div className="w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 space-y-10">
 
       {/* Header */}
       <header className="space-y-2">
@@ -164,7 +159,7 @@ export default function HomePage() {
                       className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
                     >
                       <FolderGit2 className="h-4 w-4 shrink-0 text-primary" />
-                      <span className="flex-1 truncate text-foreground">
+                      <span className="min-w-0 flex-1 truncate text-foreground">
                         {repo.name}
                       </span>
                     </Link>
@@ -194,7 +189,7 @@ export default function HomePage() {
                       className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
                     >
                       <Terminal className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate text-foreground">
+                      <span className="min-w-0 flex-1 truncate text-foreground">
                         {s.name}
                       </span>
                       <span className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground">
@@ -599,24 +594,24 @@ function StackTile({ type }: { type: PluginType }) {
   return (
     <Link
       href={`/stack/${type.toLowerCase()}`}
-      className="group flex flex-col gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
+      className="group flex min-w-0 flex-col gap-3 overflow-hidden rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
       <div className="flex items-center gap-2.5">
-        <span className="text-muted-foreground">{def.icon}</span>
-        <span className="flex-1 truncate font-medium text-foreground">
+        <span className="shrink-0 text-muted-foreground">{def.icon}</span>
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground">
           {def.name}
         </span>
         <span
-          className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-muted-foreground"
+          className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground"
           title={STATUS_LABELS[state]}
         >
-          <StatusDot state={state as StatusDotHealth} size={8} />
-          {status?.headline.label ?? "Idle"}
+          <StatusDot state={state as StatusDotHealth} size={8} className="shrink-0" />
+          <span className="truncate">{status?.headline.label ?? "Idle"}</span>
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
         {status ? (
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="min-w-0 truncate text-xs text-muted-foreground">
             {status.metrics
               .slice(0, 2)
               .map((m) => `${m.value} ${m.label.toLowerCase()}`)
@@ -676,7 +671,7 @@ function TaskRow({ task }: { task: Task }) {
       className="flex items-center gap-3 rounded-md border border-border bg-surface-card px-4 py-3.5 transition-linear hover:border-border-strong hover:bg-surface-hover"
     >
       <span className={cn("shrink-0", textColor)}>{meta.icon}</span>
-      <span className="flex-1 truncate text-foreground">{task.title}</span>
+      <span className="min-w-0 flex-1 truncate text-foreground">{task.title}</span>
       {stuck && (
         <span
           title="No worker picked this up. Is the executor image built? Run `just executor-build`."

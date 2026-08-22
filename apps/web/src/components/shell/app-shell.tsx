@@ -37,9 +37,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="hidden shrink-0 md:flex">
         <Sidebar collapsed={collapsed} onToggle={toggle} />
       </div>
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar />
-        <main className="relative flex-1 overflow-auto">
+        <main className="relative min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
       </div>
