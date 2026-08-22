@@ -1,71 +1,84 @@
 # citshe
 
-> Slimmed-down agent-orchestration panel: Claude Code + GitHub + terminal in your browser, from your phone.
+> A phone-first command panel for shipping and maintaining a portfolio of web apps.
 
-[![CI](https://github.com/citshe/citshe/actions/workflows/ci.yml/badge.svg)](https://github.com/citshe/citshe/actions/workflows/ci.yml)
+[![CI](https://github.com/mitshe/citshe/actions/workflows/ci.yml/badge.svg)](https://github.com/mitshe/citshe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-citshe is a lean fork of [mitshe](https://github.com/mitshe/mitshe), focused on the essentials: run **Claude Code** in isolated Docker threads, wire them to **GitHub**, and drive the whole thing from an in-browser **terminal** — including from a phone. Every task gets its own thread (an isolated container with Claude Code, terminal, and git). Switch between threads like tabs. Self-hosted, bring your own API keys.
+Delegate work to **Claude Code** workers, run terminals in your browser, and see
+your whole stack live — without opening five dashboards.
 
-## Install
-
-```bash
-docker run -d \
-  --name citshe \
-  -p 3000:3000 \
-  -p 3001:3001 \
-  -v citshe-data:/build/data \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  --restart unless-stopped \
-  ghcr.io/citshe/citshe:latest
-```
-
-Opens **http://localhost:3000** when ready.
-
-## Update
-
-```bash
-docker pull ghcr.io/citshe/citshe:latest
-docker stop citshe && docker rm citshe
-docker run -d \
-  --name citshe \
-  -p 3000:3000 \
-  -p 3001:3001 \
-  -v citshe-data:/build/data \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  --restart unless-stopped \
-  ghcr.io/citshe/citshe:latest
-```
-
-Your data is preserved in the `citshe-data` Docker volume.
+You run several small products. Each has a repo, a deploy target, a database,
+DNS, maybe an app store — checking on them means five browser tabs. citshe pulls
+it into **one portal per project**: connect a repo and your stack tools, and get
+one screen that answers *"is it live, did the deploy pass, did the migration
+run?"* and lets you delegate the next change to an AI worker. All from your phone.
 
 ## Features
 
-- **Threads** — isolated Docker containers per task, with terminal, file editor, git
-- **Mobile-first panel** — manage your portals and threads from the browser, including from a phone
-- **Branch management** — select branch per thread, push & create PRs directly
-- **Integrations** — GitHub
-- **Claude Code** — powered by Claude, BYOK (bring your own API key)
-- **Self-hosted** — your data, your keys, single Docker container with SQLite
+- **Tasks → AI workers** — a kanban board with a **Queue** column. Line tasks up
+  in the order you want them taken, flip **auto-pull** on, and Claude Code
+  workers pull each one, do the work in an isolated container, and open a PR.
+  Turn it off to work through them by hand.
+- **Browser terminals** — one tap opens a real Claude Code terminal in a
+  per-project container, usable from a phone with an on-screen key bar.
+- **Stack at a glance** — connect Cloudflare · Vercel · Neon · VPS · Expo · Apple
+  Developer and see live status, metrics and charts (deploys, traffic, compute
+  activity, certificate expiry) per portal.
+- **Repo overview** — CI status, recent commits, open PRs and branches, with
+  quick links straight to GitHub.
+- **Self-hosted** — your data, your keys (BYOK), JWT auth.
 
-_Planned:_ orchestrator + workers.
+## Two AI pillars
+
+- **Agent engine** — the **Claude Code CLI** runs in a container on your
+  **subscription** (`claude /login`), not per-token API billing.
+- **Panel AI** — an optional bring-your-own key (OpenRouter or Claude API) for
+  small in-panel helpers (task refine, summaries).
+
+## Stack
+
+Turborepo monorepo — **Next.js** (web) · **NestJS** (api) · **Prisma /
+PostgreSQL** · **Redis / BullMQ** · a Docker executor with WebSocket terminals.
 
 ## Develop
 
-```bash
-git clone https://github.com/citshe/citshe.git
-cd citshe
-just setup
+Requires **Node 20+**, **pnpm 9**, **Docker**, and [`just`](https://github.com/casey/just).
 
+```bash
+git clone https://github.com/mitshe/citshe.git
+cd citshe
+
+# copy env templates, then fill in the secrets (see below)
 cp .env.example .env
 cp apps/api/.env.example apps/api/.env
 
-just executor-build
-just dev
+just setup            # install deps + generate the Prisma client
+just executor-build   # build the Claude Code worker/terminal image
+just dev              # start Postgres + Redis + the api & web dev servers
 ```
 
-App: http://localhost:3000 | API: http://localhost:3001 | Run `just` for all commands.
+App: **http://localhost:3000** · API: **http://localhost:3001** · run `just` for
+all commands.
+
+### Secrets
+
+Generate the two required secrets and put them in `.env`:
+
+```bash
+openssl rand -hex 32   # -> ENCRYPTION_KEY
+openssl rand -hex 32   # -> JWT_SECRET
+```
+
+`ENCRYPTION_KEY` encrypts your connected keys (AES-256-GCM) and must stay stable
+— changing it orphans previously encrypted data.
+
+### Using the agent engine
+
+The worker/terminal containers run the Claude Code CLI on **your Claude
+subscription**, not an API key. The first time you open a terminal, run
+`claude /login` inside it once to authenticate; the login persists per portal.
 
 ## License
 
-MIT
+[MIT](./LICENSE)

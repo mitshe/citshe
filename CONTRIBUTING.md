@@ -41,7 +41,7 @@ Import order: external → internal (absolute) → relative.
 [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-feat(api): add Jira webhook handler
+feat(api): add repo overview endpoint
 fix(web): resolve task list pagination
 chore: update dependencies
 ```
@@ -64,8 +64,8 @@ Email/password JWT authentication (selfhosted).
 
 ## Docker Images
 
-- `ghcr.io/citshe/citshe:latest` — all-in-one (SQLite + Redis)
-- `ghcr.io/citshe/citshe-executor:latest` — workflow executor
+- `ghcr.io/citshe/citshe-executor:latest` — the Claude Code worker/terminal
+  executor (built locally with `just executor-build`)
 
 ## License
 
