@@ -150,15 +150,23 @@ enum TaskStatus {
   CANCELLED
 }
 
+// How a worker delivers its work when it finishes a task.
+enum DeliveryMode {
+  PR // commit on a new branch and open a pull request (default)
+  DIRECT_PUSH // commit and push straight to the default branch, no PR
+}
+
 model Task {
   id             String     @id @default(cuid())
   organizationId String     @map("organization_id")
   repositoryId   String?    @map("repository_id")
   title          String
   description    String?
-  status         TaskStatus @default(PENDING)
+  status         TaskStatus   @default(PENDING)
   priority       String?
-  labels         String[]   @default([])
+  labels         String[]     @default([])
+  // How the worker should hand off its work (PR vs push straight to default).
+  deliveryMode   DeliveryMode @default(PR) @map("delivery_mode")
   assigneeId     String?    @map("assignee_id")
   dueDate        DateTime?  @map("due_date")
 

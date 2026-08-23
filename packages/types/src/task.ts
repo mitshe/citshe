@@ -12,6 +12,9 @@ export type TaskStatus =
 
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
+/** How a worker hands off its work when it finishes a task. */
+export type DeliveryMode = "PR" | "DIRECT_PUSH";
+
 export interface Task {
   id: string;
   title: string;
@@ -19,6 +22,7 @@ export interface Task {
   status: TaskStatus;
   priority?: TaskPriority;
   labels?: string[];
+  deliveryMode?: DeliveryMode;
   repositoryId: string | null;
   sessionId?: string | null;
   assigneeId?: string | null;
@@ -73,6 +77,7 @@ export interface CreateTaskDto {
   status?: TaskStatus;
   priority?: TaskPriority;
   labels?: string[];
+  deliveryMode?: DeliveryMode;
   repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
@@ -83,6 +88,7 @@ export interface UpdateTaskDto {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  deliveryMode?: DeliveryMode;
   labels?: string[];
   repositoryId?: string;
   assigneeId?: string;

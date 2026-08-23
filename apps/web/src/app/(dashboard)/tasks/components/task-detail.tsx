@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ import { Eyebrow } from "@/components/ui/section-header";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import {
   useTask,
+  useTasks,
   useUpdateTask,
   useDeleteTask,
   useCloseTask,
@@ -63,8 +64,14 @@ import {
   useProcessTask,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
-import type { Task, TaskStatus, TaskPriority } from "@/lib/api/types";
+import type {
+  Task,
+  TaskStatus,
+  TaskPriority,
+  DeliveryMode,
+} from "@/lib/api/types";
 import { getTaskStatus, getPriority } from "@/lib/status-config";
+import { LabelEditor } from "./label-editor";
 
 // ---------------------------------------------------------------------------
 // Helpers — defensive narrowing of loosely-typed JSON (result / agentLogs)
@@ -208,8 +215,13 @@ export function TaskDetail({
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
-  // Add-label input
-  const [newLabel, setNewLabel] = useState("");
+  // Existing labels across the org's tasks — the pool for the label picker.
+  const { data: allTasks = [] } = useTasks();
+  const allLabels = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allTasks) for (const l of t.labels ?? []) set.add(l);
+    return [...set].sort();
+  }, [allTasks]);
 
   // Collapsible "Details" panel (Jira "Details ∧").
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -242,15 +254,11 @@ export function TaskDetail({
     }
   };
 
-  const addLabel = () => {
-    const value = newLabel.trim();
+  const addLabel = (raw: string) => {
+    const value = raw.trim().toLowerCase().replace(/^#/, "");
     if (!task || !value) return;
     const labels = task.labels ?? [];
-    if (labels.includes(value)) {
-      setNewLabel("");
-      return;
-    }
-    setNewLabel("");
+    if (labels.includes(value)) return;
     void save({ labels: [...labels, value] });
   };
 
@@ -704,23 +712,23 @@ export function TaskDetail({
           {label}
         </Chip>
       ))}
-      <div className="flex items-center gap-1">
-        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addLabel();
-            }
-          }}
-          onBlur={addLabel}
-          placeholder="Add label"
-          className="h-7 w-24 text-xs"
-        />
-      </div>
+      <LabelEditor selected={labels} suggestions={allLabels} onAdd={addLabel} />
     </div>
+  );
+
+  const deliveryValue = (
+    <Select
+      value={task.deliveryMode ?? "PR"}
+      onValueChange={(value: DeliveryMode) => void save({ deliveryMode: value })}
+    >
+      <SelectTrigger size="sm" className="h-8 w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="PR">Open a PR</SelectItem>
+        <SelectItem value="DIRECT_PUSH">Push to default branch</SelectItem>
+      </SelectContent>
+    </Select>
   );
 
   // Collapsible Details panel (Jira "Details ∧").
@@ -742,6 +750,7 @@ export function TaskDetail({
       {detailsOpen && (
         <div className="divide-y divide-border/60 border-t border-border px-3">
           {detailRow("Priority", priorityValue)}
+          {detailRow("Delivery", deliveryValue)}
           {detailRow("Repository", repositoryValue)}
           {detailRow("Labels", labelsValue)}
         </div>

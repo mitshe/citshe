@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { TaskStatus, Prisma } from '@prisma/client';
+import { TaskStatus, Prisma, DeliveryMode } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SessionContainerService } from '../../sessions/services/session-container.service';
@@ -624,7 +624,12 @@ export class OrchestrationService {
     organizationId: string,
     taskId: string,
     sessionId: string,
-    task: { title: string; description: string | null; createdBy: string },
+    task: {
+      title: string;
+      description: string | null;
+      createdBy: string;
+      deliveryMode?: DeliveryMode;
+    },
     opts: { rethrow?: boolean; drain?: boolean } = {},
   ): Promise<void> {
     const { rethrow = false, drain = true } = opts;
@@ -649,7 +654,11 @@ export class OrchestrationService {
         details: { title: task.title },
       });
 
-      const prompt = this.buildWorkerInstructions(task.title, task.description);
+      const prompt = this.buildWorkerInstructions(
+        task.title,
+        task.description,
+        task.deliveryMode ?? 'PR',
+      );
       const promptB64 = Buffer.from(prompt).toString('base64');
       const output = await this.containerService.execCommand(
         session.containerId,
@@ -662,17 +671,26 @@ export class OrchestrationService {
         this.WORKER_EXEC_TIMEOUT_MS,
       );
 
+      const delivery = this.parseDeliveryResult(output);
       await this.prisma.task.update({
         where: { id: taskId },
         data: {
           status: TaskStatus.REVIEW,
-          result: { output: output.slice(0, 20_000) },
+          result: {
+            output: output.slice(0, 20_000),
+            ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
+            ...(delivery.branch ? { branch: delivery.branch } : {}),
+          },
         },
       });
       await this.recordAgentLog(organizationId, taskId, {
         agentName: 'worker',
         action: 'finished',
-        details: { summary: output.slice(0, 2000) },
+        details: {
+          summary: output.slice(0, 2000),
+          ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
+          ...(delivery.branch ? { pushed: delivery.branch } : {}),
+        },
       });
       this.eventsGateway.emitTaskUpdate(organizationId, {
         taskId,
@@ -826,16 +844,46 @@ export class OrchestrationService {
   private buildWorkerInstructions(
     title: string,
     description: string | null,
+    deliveryMode: DeliveryMode = 'PR',
   ): string {
     const body = description?.trim()
       ? `${title}\n\n${description.trim()}`
       : title;
+
+    // The worker prints a machine-readable marker as its LAST line so citshe
+    // can record the real PR link / pushed branch on the task.
+    const delivery =
+      deliveryMode === 'DIRECT_PUSH'
+        ? `When done, commit your changes and push them directly to the default ` +
+          `branch (master/main). Do NOT open a pull request. As the VERY LAST ` +
+          `line of your output, print exactly: PUSHED: <branch>@<short-sha>`
+        : `When done, commit your changes on a new branch named ` +
+          `citshe/<short-slug> and open a pull request against the default ` +
+          `branch. As the VERY LAST line of your output, print exactly: ` +
+          `PR_URL: <full pull request url>`;
+
     return (
       `You are a worker agent. Complete this task end-to-end in the current ` +
-      `repository, then commit your changes on a new branch and open a pull ` +
-      `request. Do not ask for confirmation — make reasonable decisions.\n\n` +
+      `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
+      `${delivery}\n\n` +
       `TASK:\n${body}`
     );
+  }
+
+  /**
+   * Pull the PR url / pushed branch out of the worker's output (the marker it
+   * was told to print last), so the task carries a real link, not a blind
+   * "went to review".
+   */
+  private parseDeliveryResult(output: string): {
+    prUrl?: string;
+    branch?: string;
+  } {
+    const prMatch = output.match(/PR_URL:\s*(\S+)/);
+    if (prMatch) return { prUrl: prMatch[1] };
+    const pushMatch = output.match(/PUSHED:\s*(\S+)/);
+    if (pushMatch) return { branch: pushMatch[1] };
+    return {};
   }
 
   private sleep(ms: number): Promise<void> {

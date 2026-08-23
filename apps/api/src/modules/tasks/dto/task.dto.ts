@@ -13,7 +13,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TaskStatus } from '@prisma/client';
+import { TaskStatus, DeliveryMode } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTaskDto {
@@ -43,6 +43,10 @@ export class CreateTaskDto {
   @IsOptional()
   @MaxLength(100)
   repositoryId?: string;
+
+  @IsEnum(DeliveryMode)
+  @IsOptional()
+  deliveryMode?: DeliveryMode;
 }
 
 export class UpdateTaskDto {
@@ -87,6 +91,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @MaxLength(50)
   dueDate?: string;
+
+  @IsEnum(DeliveryMode)
+  @IsOptional()
+  deliveryMode?: DeliveryMode;
 
   @IsOptional()
   @Type(() => Number)

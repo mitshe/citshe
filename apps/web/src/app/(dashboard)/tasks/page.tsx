@@ -45,6 +45,8 @@ import {
   X,
   LayoutGrid,
   List as ListIcon,
+  GitPullRequest,
+  GitBranch as GitBranchIcon,
 } from "lucide-react";
 import {
   useTasks,
@@ -55,7 +57,8 @@ import {
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import { useDebounce } from "@/lib/hooks/use-debounce";
-import type { Task, RefinedTask } from "@/lib/api/types";
+import type { Task, RefinedTask, DeliveryMode } from "@/lib/api/types";
+import { LabelEditor } from "./components/label-editor";
 import { isClosed } from "./components/task-shared";
 import { TaskBoardView } from "./components/task-board-view";
 import { TaskListView } from "./components/task-list-view";
@@ -305,7 +308,12 @@ export default function TasksPage() {
         }}
       />
 
-      <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} repos={repos} />
+      <NewTaskDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        repos={repos}
+        allLabels={allLabels}
+      />
 
       <AlertDialog
         open={!!deleteTarget}
@@ -369,10 +377,12 @@ function NewTaskDialog({
   open,
   onOpenChange,
   repos,
+  allLabels,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   repos: { id: string; name: string }[];
+  allLabels: string[];
 }) {
   const createTask = useCreateTask();
   const refine = useRefineTask();
@@ -380,16 +390,16 @@ function NewTaskDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [labels, setLabels] = useState<string[]>([]);
-  const [labelDraft, setLabelDraft] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("PR");
   const [suggestion, setSuggestion] = useState<RefinedTask | null>(null);
 
   const reset = () => {
     setTitle("");
     setDescription("");
     setLabels([]);
-    setLabelDraft("");
     setRepositoryId("");
+    setDeliveryMode("PR");
     setSuggestion(null);
   };
 
@@ -398,7 +408,6 @@ function NewTaskDialog({
     if (clean && !labels.includes(clean) && labels.length < 20) {
       setLabels([...labels, clean]);
     }
-    setLabelDraft("");
   };
 
   const handleRefine = async () => {
@@ -432,6 +441,7 @@ function NewTaskDialog({
         description: description.trim() || undefined,
         labels: labels.length ? labels : undefined,
         repositoryId: repositoryId || undefined,
+        deliveryMode,
       });
       toast.success("Task created");
       reset();
@@ -467,8 +477,8 @@ function NewTaskDialog({
             rows={3}
           />
 
-          {/* Labels */}
-          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-2 py-1.5">
+          {/* Labels — pick from existing or create a new one */}
+          <div className="flex flex-wrap items-center gap-1.5">
             {labels.map((l) => (
               <Chip
                 key={l}
@@ -478,18 +488,10 @@ function NewTaskDialog({
                 {l}
               </Chip>
             ))}
-            <input
-              value={labelDraft}
-              onChange={(e) => setLabelDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === ",") && labelDraft.trim()) {
-                  e.preventDefault();
-                  addLabel(labelDraft);
-                }
-              }}
-              onBlur={() => labelDraft.trim() && addLabel(labelDraft)}
-              placeholder={labels.length ? "" : "+ label"}
-              className="min-w-16 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+            <LabelEditor
+              selected={labels}
+              suggestions={allLabels}
+              onAdd={addLabel}
             />
           </div>
 
@@ -512,6 +514,24 @@ function NewTaskDialog({
               </SelectContent>
             </Select>
           )}
+
+          {/* Delivery — how the worker hands off its work */}
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">When the worker finishes</p>
+            <SegmentedControl<DeliveryMode>
+              aria-label="Delivery mode"
+              value={deliveryMode}
+              onChange={setDeliveryMode}
+              options={[
+                { value: "PR", label: "Open a PR", icon: <GitPullRequest /> },
+                {
+                  value: "DIRECT_PUSH",
+                  label: "Push to default",
+                  icon: <GitBranchIcon />,
+                },
+              ]}
+            />
+          </div>
 
           {/* AI suggestion */}
           {suggestion && (
