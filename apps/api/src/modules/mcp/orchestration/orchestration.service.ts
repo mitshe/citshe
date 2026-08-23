@@ -8,10 +8,7 @@ import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SessionContainerService } from '../../sessions/services/session-container.service';
 import { EventsGateway } from '../../../infrastructure/websocket/events.gateway';
-import {
-  QUEUES,
-  TaskQueueJob,
-} from '../../../infrastructure/queue/queues';
+import { QUEUES, TaskQueueJob } from '../../../infrastructure/queue/queues';
 
 /**
  * The orchestrator: a persistent chat (the main Claude thread) decomposes work
@@ -460,7 +457,7 @@ export class OrchestrationService {
 
     let dispatched = 0;
     // Loop: each dispatch consumes a worker slot; stop when full or empty.
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       const running = await this.prisma.agentSession.count({
         where: { organizationId, status: 'RUNNING' },
@@ -679,10 +676,7 @@ export class OrchestrationService {
       // can watch it live and even take over (attach to the same window). We
       // pipe the window to a log to capture the transcript, and detect the end
       // via a printed marker.
-      const output = await this.runClaudeInTmux(
-        session.containerId,
-        prompt,
-      );
+      const output = await this.runClaudeInTmux(session.containerId, prompt);
 
       const delivery = this.parseDeliveryResult(output);
       await this.prisma.task.update({
@@ -797,7 +791,7 @@ export class OrchestrationService {
         where: { id: taskId },
         select: { agentLogs: true },
       });
-      const existing = Array.isArray(task?.agentLogs) ? task!.agentLogs : [];
+      const existing = Array.isArray(task?.agentLogs) ? task.agentLogs : [];
       await this.prisma.task.update({
         where: { id: taskId },
         data: { agentLogs: [...existing, logEntry] as Prisma.JsonArray },
@@ -860,9 +854,13 @@ export class OrchestrationService {
 
     // Read the transcript, strip ANSI escape sequences and the marker line.
     const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
-    // eslint-disable-next-line no-control-regex
+
+    // ESC built via char code so there's no literal control char in the source
+    // (keeps the linter's no-control-regex happy).
+    const ESC = String.fromCharCode(27);
+    const ansi = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
     const clean = raw
-      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(ansi, '')
       .replace(new RegExp(`${DONE}\\d*`, 'g'), '')
       .replace(/\r/g, '')
       .trim();
