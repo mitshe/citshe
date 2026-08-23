@@ -327,6 +327,103 @@ export class PluginsService {
     );
   }
 
+  /**
+   * Environment variables + a short "how to use it" hint for every connected
+   * tool, so a session container can act on the stack directly (wrangler,
+   * vercel, neonctl, eas…). Keys are decrypted here and injected as env at
+   * container start — the sandbox is one-shot, so this is the CI/CD model.
+   * Tools that need more than a token (Apple .p8, per-server SSH) are omitted.
+   */
+  async getSessionEnv(organizationId: string): Promise<{
+    env: Record<string, string>;
+    tools: { type: string; hint: string }[];
+  }> {
+    const plugins = await this.prisma.plugin.findMany({
+      where: { organizationId, status: IntegrationStatus.CONNECTED },
+    });
+
+    const env: Record<string, string> = {};
+    const tools: { type: string; hint: string }[] = [];
+
+    for (const plugin of plugins) {
+      let cfg: Record<string, unknown>;
+      try {
+        cfg = this.decrypt(plugin) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const str = (k: string): string | undefined => {
+        const v = cfg[k];
+        return typeof v === 'string' ? v : undefined;
+      };
+
+      switch (plugin.type) {
+        case PluginType.CLOUDFLARE: {
+          const token = str('apiToken');
+          if (!token) break;
+          env.CLOUDFLARE_API_TOKEN = token;
+          const account = str('accountId');
+          if (account) env.CLOUDFLARE_ACCOUNT_ID = account;
+          tools.push({
+            type: 'Cloudflare',
+            hint: 'Use `wrangler` (CLOUDFLARE_API_TOKEN is set) for Pages/Workers/R2/DNS.',
+          });
+          break;
+        }
+        case PluginType.VERCEL: {
+          const token = str('apiToken');
+          if (!token) break;
+          env.VERCEL_TOKEN = token;
+          const team = str('teamId');
+          if (team) env.VERCEL_ORG_ID = team;
+          tools.push({
+            type: 'Vercel',
+            hint: 'Use `vercel --token $VERCEL_TOKEN` for deploys/projects/domains.',
+          });
+          break;
+        }
+        case PluginType.NEON: {
+          const key = str('apiKey');
+          if (!key) break;
+          env.NEON_API_KEY = key;
+          tools.push({
+            type: 'Neon',
+            hint: 'Use `neonctl` (NEON_API_KEY is set) for Postgres branches/projects.',
+          });
+          break;
+        }
+        case PluginType.EXPO: {
+          const token = str('token');
+          if (!token) break;
+          env.EXPO_TOKEN = token;
+          tools.push({
+            type: 'Expo',
+            hint: 'Use `eas` (EXPO_TOKEN is set) for EAS builds/submits.',
+          });
+          break;
+        }
+        case PluginType.GOOGLE_ADS: {
+          const dev = str('developerToken');
+          if (!dev) break;
+          env.GOOGLE_ADS_DEVELOPER_TOKEN = dev;
+          const customer = str('customerId');
+          if (customer) env.GOOGLE_ADS_CUSTOMER_ID = customer;
+          tools.push({
+            type: 'Google Ads',
+            hint: 'GOOGLE_ADS_* env is set for the Google Ads API (no bundled CLI).',
+          });
+          break;
+        }
+        default:
+          // APPLE_DEVELOPER (p8 key) / VPS (per-server SSH) need more than a
+          // token — skip env injection for those.
+          break;
+      }
+    }
+
+    return { env, tools };
+  }
+
   private toResponse(plugin: Plugin) {
     return {
       id: plugin.id,

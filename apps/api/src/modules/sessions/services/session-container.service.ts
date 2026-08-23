@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Docker from 'dockerode';
 import * as tar from 'tar-fs';
+import { PluginsService } from '../../plugins/services/plugins.service';
 
 export interface SessionContainerConfig {
   sessionId: string;
@@ -47,6 +48,12 @@ export interface SessionContainerConfig {
    * can attach screenshots to it (citshe-shot).
    */
   workerTaskId?: string;
+  /**
+   * Env for connected stack tools (CLOUDFLARE_API_TOKEN, VERCEL_TOKEN, …) so the
+   * session can act on the stack directly (wrangler/vercel/neonctl). Decrypted
+   * from the org's connected plugins.
+   */
+  stackEnv?: Record<string, string>;
 }
 
 /**
@@ -61,7 +68,10 @@ export class SessionContainerService implements OnModuleInit {
   private readonly executorImage: string;
   private readonly containerPrefix = 'citshe-session';
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private readonly pluginsService: PluginsService,
+  ) {
     this.docker = new Docker();
     this.executorImage =
       this.configService.get<string>('EXECUTOR_IMAGE') ||
@@ -79,6 +89,22 @@ export class SessionContainerService implements OnModuleInit {
     onStarted?: (containerId: string) => Promise<void> | void,
   ): Promise<string> {
     const containerName = `${this.containerPrefix}-${config.sessionId}`;
+
+    // Inject connected stack tool credentials (wrangler/vercel/neonctl/…) so the
+    // session can act on the stack directly. Best-effort — never block a
+    // container start on this.
+    if (!config.stackEnv) {
+      try {
+        const { env } = await this.pluginsService.getSessionEnv(
+          config.organizationId,
+        );
+        config = { ...config, stackEnv: env };
+      } catch (err) {
+        this.logger.warn(
+          `Could not resolve stack env for ${config.organizationId}: ${(err as Error).message}`,
+        );
+      }
+    }
 
     const sessionConfig = Buffer.from(
       JSON.stringify({
@@ -122,6 +148,8 @@ export class SessionContainerService implements OnModuleInit {
           ...(config.environment?.variables?.map(
             (v) => `${v.key}=${v.value}`,
           ) || []),
+          // Connected stack tool credentials (wrangler/vercel/neonctl/…).
+          ...Object.entries(config.stackEnv || {}).map(([k, v]) => `${k}=${v}`),
           // Let the worker create follow-up tasks (citshe-task) and attach
           // screenshots to its task (citshe-shot).
           ...(config.workerToken

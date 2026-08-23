@@ -62,6 +62,21 @@ function setupGitCredentialStore() {
   execSilent('git config --global credential.helper store');
 }
 
+/**
+ * Set the git commit author. Defaults to the "3uba" GitHub no-reply identity so
+ * commits are attributed to a real GitHub user (deploy providers like Vercel
+ * reject the placeholder executor@citshe.com). Overridable per portal via
+ * GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL injected by citshe.
+ */
+function configureGitAuthor() {
+  const name = process.env.GIT_AUTHOR_NAME || '3uba';
+  const email =
+    process.env.GIT_AUTHOR_EMAIL || '75246355+3uba@users.noreply.github.com';
+  execSilent(`git config --global user.name ${JSON.stringify(name)}`);
+  execSilent(`git config --global user.email ${JSON.stringify(email)}`);
+  log(`Git author set to ${name} <${email}>`);
+}
+
 function extractAndStoreGitCredentials(cloneUrl) {
   if (!cloneUrl.startsWith('https://')) return;
 
@@ -398,6 +413,18 @@ function installCitsheSkill() {
       '${CLAUDE_SKILL_DIR}/scripts/citshe-task.sh "Short title" "One-line description"',
       '```',
       '',
+      '## Stack tools (deploy / DB / hosting)',
+      'The connected tools for this portal are exposed as environment variables,',
+      'so you can act on the stack directly. Check which are set and use the',
+      'matching CLI:',
+      '- `CLOUDFLARE_API_TOKEN` (+ `CLOUDFLARE_ACCOUNT_ID`) → `wrangler` for Pages/Workers/R2/DNS.',
+      '- `VERCEL_TOKEN` → `vercel --token $VERCEL_TOKEN` for deploys/projects/domains.',
+      '- `NEON_API_KEY` → `neonctl` for Postgres branches/projects.',
+      '- `EXPO_TOKEN` → `eas` for EAS builds/submits.',
+      '- `GOOGLE_ADS_*` → the Google Ads API (no bundled CLI).',
+      'Run `env | grep -E "CLOUDFLARE|VERCEL|NEON|EXPO|GOOGLE_ADS"` to see what is',
+      'available. Only what the user connected in citshe is present.',
+      '',
       'Do not spam — notes and tasks should be meaningful, not play-by-play.',
       '',
     ].join('\n');
@@ -705,6 +732,7 @@ async function setup() {
 
   rewriteSshRemotes(config.integrations);
   writeInstructions(config.instructions, config.provider);
+  configureGitAuthor();
   installSkills(config.skills);
   installCitsheTaskCli();
   installCitsheShotCli();

@@ -104,10 +104,13 @@ RUN printf '%s\n' \
 
 # Git config
 USER executor
+# Default commit identity — the "3uba" GitHub no-reply, so commits attribute to
+# a real GitHub user (Vercel etc. reject placeholder authors). The session
+# server overrides this from GIT_AUTHOR_NAME/EMAIL at setup when provided.
 RUN git config --global init.defaultBranch main \
     && git config --global pull.rebase false \
-    && git config --global user.email "executor@citshe.com" \
-    && git config --global user.name "Citshe Executor"
+    && git config --global user.email "75246355+3uba@users.noreply.github.com" \
+    && git config --global user.name "3uba"
 
 # ============================================================================
 # LITE — terminal only, no browser/GUI (~2GB smaller)
