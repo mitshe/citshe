@@ -718,7 +718,7 @@ export default function SessionDetailPage() {
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden">
       {/* Top Bar */}
-      <div className="flex h-12 items-center justify-between gap-2 px-2 sm:px-4 border-b border-border bg-surface-card shrink-0">
+      <div className="flex h-12 items-center justify-between gap-2 px-2 sm:px-4 border-b border-border bg-surface-card shrink-0 pt-safe">
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           <Button
             variant="ghost"
@@ -766,9 +766,13 @@ export default function SessionDetailPage() {
               </span>
               {" · "}
               {session.repositories?.[0]?.repository?.name || "No repo"}
-              {session.branch && ` · ${session.branch}`}
-              {session.aiCredential &&
-                ` · ${providerLabels[session.aiCredential.provider] || session.aiCredential.provider}`}
+              {/* Branch + provider are extra context — only on wider screens so
+                  the mobile header line stays short and readable. */}
+              <span className="hidden sm:inline">
+                {session.branch && ` · ${session.branch}`}
+                {session.aiCredential &&
+                  ` · ${providerLabels[session.aiCredential.provider] || session.aiCredential.provider}`}
+              </span>
             </p>
           </div>
         </div>

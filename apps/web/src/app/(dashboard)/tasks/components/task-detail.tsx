@@ -613,7 +613,7 @@ export function TaskDetail({
                     )}
                   </div>
                   {details && (
-                    <pre className="mt-1.5 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
+                    <pre className="mt-1.5 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
                       {details}
                     </pre>
                   )}

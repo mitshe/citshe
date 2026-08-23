@@ -338,7 +338,7 @@ function QuickSearch({
               No matches for “{q}”.
             </p>
           ) : (
-            <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
+            <div className="max-h-[min(360px,50vh)] divide-y divide-border overflow-y-auto">
               <SearchGroup label="Tasks" show={results.tasks.length > 0}>
                 {results.tasks.map((t) => (
                   <SearchRow

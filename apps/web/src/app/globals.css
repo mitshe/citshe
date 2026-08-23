@@ -29,6 +29,29 @@
     font-size: 15px;
     line-height: 1.5;
   }
+  /* Smooth momentum scrolling on iOS for every scroll container. */
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Safe-area utilities (notch / home indicator). Used on the app shell + the
+   session header so content isn't tucked under the iPhone status bar. */
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 /* Landing page specific styles */

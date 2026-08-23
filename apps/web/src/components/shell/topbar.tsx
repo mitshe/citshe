@@ -56,16 +56,16 @@ export function Topbar() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3 pt-safe">
       <div className="flex items-center gap-2">
         {/* Mobile hamburger → drawer */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 md:hidden"
+          className="h-10 w-10 md:hidden"
           onClick={() => setMobileOpen(true)}
         >
-          <Menu className="h-4 w-4" />
+          <Menu className="h-5 w-5" />
         </Button>
 
       </div>
@@ -76,7 +76,7 @@ export function Topbar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 md:hidden"
+          className="h-10 w-10 md:hidden"
           onClick={openCommand}
           aria-label="Search"
         >

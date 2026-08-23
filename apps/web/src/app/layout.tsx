@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
 import { Providers } from "@/components/providers";
@@ -25,6 +25,15 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: "citshe",
   description: "Workspace manager for AI coding agents",
+};
+
+// viewport-fit=cover lets us pad around the notch / home indicator with the
+// env(safe-area-inset-*) values (see the .pt-safe/.pb-safe utilities).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#16161a",
 };
 
 export default function RootLayout({
