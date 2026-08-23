@@ -855,6 +855,7 @@ export class OrchestrationService {
   ): Promise<string> {
     const promptB64 = Buffer.from(prompt).toString('base64');
     const LOG = '/tmp/citshe-agent.log';
+    const OUT = '/tmp/citshe-agent.out';
     const PROMPT = '/tmp/citshe-prompt';
     const DONE = '__CITSHE_DONE__';
     const tmux = 'tmux -f /etc/tmux.conf';
@@ -884,11 +885,15 @@ export class OrchestrationService {
         `${tmux} has-session -t citshe 2>/dev/null || ${tmux} new-session -d -s citshe -x 200 -y 50 -c /workspace`,
         `echo '${promptB64}' | base64 -d > ${PROMPT}`,
         `: > ${LOG}`,
+        `: > ${OUT}`,
         // Fresh agent window each run.
         `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
         `${tmux} new-window -t citshe -n agent -c /workspace`,
         `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
-        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; claude --print --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
+        // tee claude's stdout to a CLEAN file (${OUT}) for the summary, while
+        // still showing it in the pane for live watch. The pane capture (${LOG})
+        // is full of terminal control noise; ${OUT} is just Claude's answer.
+        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; claude --print --permission-mode bypassPermissions < ${PROMPT} | tee ${OUT}; echo ${DONE}$?' Enter`,
       ].join('; '),
     );
 
@@ -913,7 +918,10 @@ export class OrchestrationService {
       await this.sleep(3000);
     }
 
-    // Read the raw pane capture and turn it into a clean transcript.
+    // Prefer the clean stdout tee (${OUT}) — it's just Claude's final answer.
+    // Fall back to scrubbing the noisy pane capture if the tee is empty.
+    const out = (await bash(`cat ${OUT} 2>/dev/null || true`)).trim();
+    if (out) return this.cleanTranscript(out, DONE);
     const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
     return this.cleanTranscript(raw, DONE);
   }
@@ -944,8 +952,10 @@ export class OrchestrationService {
       if (!t) return true; // keep blanks for now, collapsed below
       // Drop the shell prompt / the command we injected / the done marker.
       if (/^executor@[^:]+:.*\$\s*/.test(t)) return false;
-      if (t.includes('claude --dangerously-skip-permissions')) return false;
-      if (t.includes(done)) return false;
+      // The launch line (any form of our claude command / the marker echo).
+      if (t.includes('claude --print') || t.includes('claude --dangerously'))
+        return false;
+      if (t.includes('__CITSHE_DONE__') || t.includes(done)) return false;
       return true;
     });
 

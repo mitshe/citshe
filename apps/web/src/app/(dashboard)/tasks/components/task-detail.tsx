@@ -40,7 +40,6 @@ import {
   Sparkles,
   AlertCircle,
   Terminal,
-  Plus,
   CheckCircle2,
   RotateCcw,
   GitPullRequest,
@@ -128,7 +127,8 @@ function screenshotDetails(
 /**
  * Loads a task attachment (screenshot) as an object URL. The GET route is
  * bearer-authed, so an <img src> can't hit it directly — we fetch the blob with
- * the token and render that. Click opens the full image in a new tab.
+ * the token and render that. Click opens an in-page lightbox (a blob: URL can't
+ * be opened in a new tab — it's scoped to this document).
  */
 function AttachmentImage({
   taskId,
@@ -142,6 +142,7 @@ function AttachmentImage({
   const getToken = useAuthToken();
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     let revoked = false;
@@ -168,6 +169,15 @@ function AttachmentImage({
     };
   }, [taskId, attachmentId, getToken]);
 
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoomed(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomed]);
+
   if (failed) {
     return (
       <p className="mt-1.5 text-xs italic text-text-subtle">
@@ -179,14 +189,19 @@ function AttachmentImage({
   return (
     <figure className="mt-1.5">
       {url ? (
-        <a href={url} target="_blank" rel="noopener noreferrer">
+        <button
+          type="button"
+          onClick={() => setZoomed(true)}
+          className="block cursor-zoom-in"
+          aria-label="Open screenshot full size"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={url}
             alt={caption ?? "Screenshot"}
             className="max-h-64 w-auto max-w-full rounded-md border border-border object-contain transition-linear hover:border-border-strong"
           />
-        </a>
+        </button>
       ) : (
         <div className="h-32 w-48 animate-pulse rounded-md border border-border bg-surface-inset" />
       )}
@@ -194,6 +209,23 @@ function AttachmentImage({
         <figcaption className="mt-1 text-xs text-text-subtle">
           {caption}
         </figcaption>
+      )}
+
+      {/* Lightbox — click anywhere / Esc to close. */}
+      {zoomed && url && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setZoomed(false)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={caption ?? "Screenshot"}
+            className="max-h-[92vh] max-w-[92vw] cursor-zoom-out rounded-md object-contain shadow-2xl"
+          />
+        </div>
       )}
     </figure>
   );
@@ -744,8 +776,16 @@ export function TaskDetail({
             const commentText = isComment
               ? asString((entry.details as { text?: unknown })?.text)
               : undefined;
+            // A "finished" entry carries the run summary — render it as prose,
+            // not a raw "summary: …" key/value line.
+            const summaryText =
+              entry.action === "finished"
+                ? asString((entry.details as { summary?: unknown })?.summary)?.trim()
+                : undefined;
             const details =
-              shot || isComment ? null : formatDetails(entry.details);
+              shot || isComment || entry.action === "finished"
+                ? null
+                : formatDetails(entry.details);
             return (
               <li key={index} className="flex gap-3">
                 {isComment ? (
@@ -783,6 +823,11 @@ export function TaskDetail({
                   {commentText && (
                     <p className="mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-foreground">
                       {commentText}
+                    </p>
+                  )}
+                  {summaryText && (
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                      {summaryText}
                     </p>
                   )}
                   {shot && (
