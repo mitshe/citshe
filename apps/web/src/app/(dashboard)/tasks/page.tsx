@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
@@ -395,6 +395,15 @@ export default function TasksPage() {
   );
 }
 
+/** Small uppercase field label used inside the New task dialog. */
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-[11px] font-medium uppercase tracking-wide text-text-subtle">
+      {children}
+    </p>
+  );
+}
+
 function ListSkeleton() {
   return (
     <div className="space-y-2">
@@ -521,59 +530,68 @@ function NewTaskDialog({
           />
 
           {/* Labels — pick from existing or create a new one */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {labels.map((l) => (
-              <Chip
-                key={l}
-                onRemove={() => setLabels(labels.filter((x) => x !== l))}
-                removeLabel={`Remove ${l}`}
-              >
-                {l}
-              </Chip>
-            ))}
-            <LabelEditor
-              selected={labels}
-              suggestions={allLabels}
-              onAdd={addLabel}
-            />
+          <div className="space-y-1.5">
+            <FieldLabel>Labels</FieldLabel>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {labels.map((l) => (
+                <Chip
+                  key={l}
+                  onRemove={() => setLabels(labels.filter((x) => x !== l))}
+                  removeLabel={`Remove ${l}`}
+                >
+                  {l}
+                </Chip>
+              ))}
+              <LabelEditor
+                selected={labels}
+                suggestions={allLabels}
+                onAdd={addLabel}
+              />
+            </div>
           </div>
 
-          {/* Repo */}
-          {repos.length > 0 && (
-            <Select
-              value={repositoryId || "none"}
-              onValueChange={(v) => setRepositoryId(v === "none" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="No repository" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No repository</SelectItem>
-                {repos.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          {/* Repo + delivery share a row on desktop so the dialog reads as a
+              compact form, not a sparse stack. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {repos.length > 0 && (
+              <div className="space-y-1.5">
+                <FieldLabel>Repository</FieldLabel>
+                <Select
+                  value={repositoryId || "none"}
+                  onValueChange={(v) => setRepositoryId(v === "none" ? "" : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="No repository" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No repository</SelectItem>
+                    {repos.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-          {/* Delivery — how the worker hands off its work */}
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">When the worker finishes</p>
-            <SegmentedControl<DeliveryMode>
-              aria-label="Delivery mode"
-              value={deliveryMode}
-              onChange={setDeliveryMode}
-              options={[
-                { value: "PR", label: "Open a PR", icon: <GitPullRequest /> },
-                {
-                  value: "DIRECT_PUSH",
-                  label: "Push to default",
-                  icon: <GitBranchIcon />,
-                },
-              ]}
-            />
+            <div className="space-y-1.5">
+              <FieldLabel>When the worker finishes</FieldLabel>
+              <SegmentedControl<DeliveryMode>
+                aria-label="Delivery mode"
+                value={deliveryMode}
+                onChange={setDeliveryMode}
+                className="w-full"
+                options={[
+                  { value: "PR", label: "Open a PR", icon: <GitPullRequest /> },
+                  {
+                    value: "DIRECT_PUSH",
+                    label: "Push",
+                    icon: <GitBranchIcon />,
+                  },
+                ]}
+              />
+            </div>
           </div>
 
           {/* AI suggestion */}
@@ -616,12 +634,15 @@ function NewTaskDialog({
             </div>
           )}
         </DialogBody>
-        <DialogFooter className="gap-2">
+        {/* Improve-with-AI on the left, the commit action on the right — fills
+            the width so the footer doesn't read as a lopsided cluster. */}
+        <DialogFooter className="sm:justify-between">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={handleRefine}
             disabled={!title.trim() || refine.isPending}
+            className="text-muted-foreground hover:text-foreground"
           >
             {refine.isPending ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

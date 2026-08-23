@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -844,35 +845,8 @@ export default function SessionDetailPage() {
             </Button>
           )}
 
-          {/* Secondary actions: inline on ≥sm, folded into a ⋯ menu on mobile. */}
-          {isRunning && session?.repositories && session.repositories.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden h-8 sm:inline-flex"
-              onClick={handleCreatePR}
-              disabled={pushAndPR.isPending}
-            >
-              {pushAndPR.isPending ? (
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-              ) : (
-                <GitPullRequest className="w-4 h-4 mr-1" />
-              )}
-              Create PR
-            </Button>
-          )}
-          {isRunning && (
-            <Button variant="destructive" size="sm" className="hidden h-8 sm:inline-flex" onClick={handleStop} disabled={stopSession.isPending}>
-              {stopSession.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Stopping...</>
-              ) : (
-                <><Square className="w-4 h-4 mr-1" /> Stop</>
-              )}
-            </Button>
-          )}
-
-          {/* Overflow menu: on mobile holds the secondary actions; on desktop
-              it just holds Delete (secondary actions are already inline). */}
+          {/* Everything secondary lives in one ⋯ menu (same on desktop and
+              mobile) so the header stays to just the primary action + ⋯. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -884,7 +858,6 @@ export default function SessionDetailPage() {
                 session?.repositories &&
                 session.repositories.length > 0 && (
                   <DropdownMenuItem
-                    className="sm:hidden"
                     onClick={handleCreatePR}
                     disabled={pushAndPR.isPending}
                   >
@@ -894,7 +867,6 @@ export default function SessionDetailPage() {
                 )}
               {isRunning && (
                 <DropdownMenuItem
-                  className="sm:hidden"
                   onClick={handleStop}
                   disabled={stopSession.isPending}
                 >
@@ -902,6 +874,7 @@ export default function SessionDetailPage() {
                   Stop
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setDeleteDialogOpen(true)}
                 className="text-danger focus:text-danger"
