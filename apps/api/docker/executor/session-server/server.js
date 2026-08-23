@@ -216,19 +216,40 @@ function installSkills(skills) {
  * container is the sandbox this warning is about, so accepting is correct here.
  */
 function preacceptClaudeBypass() {
+  // The reliable way to skip the interactive "Bypass Permissions mode"
+  // acknowledgment is to make bypass the DEFAULT permission mode in
+  // ~/.claude/settings.json. The older ~/.claude.json flags
+  // (bypassPermissionsModeAccepted / hasTrustDialogAccepted) are not honored by
+  // current Claude Code versions, so relying on them let the dialog reappear.
   try {
-    const file = '/home/executor/.claude.json';
+    const dir = path.join(HOME_DIR, '.claude');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'settings.json');
     let cfg = {};
     try {
       cfg = JSON.parse(fs.readFileSync(file, 'utf-8'));
     } catch {
       cfg = {};
     }
-    cfg.bypassPermissionsModeAccepted = true;
+    cfg.permissions = { ...(cfg.permissions || {}), defaultMode: 'bypassPermissions' };
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf-8');
+    log('Set Claude defaultMode=bypassPermissions (skips the acknowledgment)');
+  } catch (err) {
+    log('Could not configure Claude bypass mode: ' + err.message);
+  }
+
+  // Best-effort: also keep the legacy trust flags for the "trust this folder"
+  // prompt, which is separate from the bypass acknowledgment.
+  try {
+    const file = path.join(HOME_DIR, '.claude.json');
+    let cfg = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    } catch {
+      cfg = {};
+    }
     cfg.hasTrustDialogAccepted = true;
     cfg.hasCompletedProjectOnboarding = true;
-    // Trust the workspace so the "do you trust the files in this folder" prompt
-    // is skipped too.
     cfg.projects = cfg.projects || {};
     cfg.projects['/workspace'] = {
       ...(cfg.projects['/workspace'] || {}),
@@ -236,9 +257,8 @@ function preacceptClaudeBypass() {
       hasCompletedProjectOnboarding: true,
     };
     fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf-8');
-    log('Pre-accepted Claude bypass/trust dialogs');
-  } catch (err) {
-    log('Could not pre-accept Claude dialogs: ' + err.message);
+  } catch {
+    // non-fatal
   }
 }
 
