@@ -12,6 +12,9 @@ export const queryKeys = {
   schedules: {
     all: ["schedules"] as const,
   },
+  cliTokens: {
+    all: ["cli-tokens"] as const,
+  },
   orchestration: {
     all: ["orchestration"] as const,
     queue: () => [...queryKeys.orchestration.all, "queue"] as const,

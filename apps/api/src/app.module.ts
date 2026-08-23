@@ -38,6 +38,7 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { McpModule } from './modules/mcp/mcp.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { SchedulesModule } from './modules/schedules/schedules.module';
+import { CliModule } from './modules/cli/cli.module';
 
 // App
 import { AppController } from './app.controller';
@@ -161,6 +162,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     McpModule,
     SkillsModule,
     SchedulesModule,
+    CliModule,
   ],
   controllers: [AppController],
   providers: [

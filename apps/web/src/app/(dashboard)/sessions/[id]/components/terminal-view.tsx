@@ -137,14 +137,20 @@ export function TerminalView({
       ) as HTMLElement | null;
       if (helper) helper.style.fontSize = "16px";
 
-      // xterm has no native touch scrolling — translate vertical swipes into
-      // scrollback movement so the terminal is usable on a phone. Attach to the
-      // terminal ROOT (not .xterm-viewport): with the WebGL renderer a canvas
-      // overlays the viewport and swallows its touch events, so listening on the
-      // root is the only reliable target across renderers.
+      // Touch scrolling for a tmux terminal. Our terminals ARE tmux windows,
+      // and tmux keeps the real scrollback (xterm only sees a live stream, so
+      // xterm.scrollLines scrolls almost nothing). tmux has `mouse on`, so we
+      // translate a vertical swipe into SGR mouse-wheel events sent to the PTY —
+      // tmux then scrolls its history (enters copy-mode) or passes the wheel to
+      // a full-screen app (Claude Code, vim, less). One unified path.
+      // Attach to the terminal ROOT: with WebGL a canvas overlays the viewport
+      // and swallows its touch events, so the root is the reliable target.
       {
         const root = termRef.current!;
         root.style.setProperty("touch-action", "pan-y");
+        // SGR mouse wheel at cell (1,1): button 64 = wheel up, 65 = wheel down.
+        const wheel = (up: boolean) =>
+          `\x1b[<${up ? 64 : 65};1;1M`;
         let touchStartY = 0;
         let touchAccum = 0;
         const onTouchStart = (e: TouchEvent) => {
@@ -158,29 +164,17 @@ export function TerminalView({
           const dy = touchStartY - y;
           touchStartY = y;
           touchAccum += dy;
-          // One line ≈ the rendered cell height; scroll whole lines as we go.
           const cell =
             (term as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
               ._core?._renderService?.dimensions?.css?.cell?.height || 18;
-          const lines = Math.trunc(touchAccum / cell);
-          if (lines !== 0) {
-            // In a full-screen TUI (Claude Code, vim, less) the alternate
-            // buffer has no scrollback — send arrow keys instead so a swipe
-            // moves the cursor/selection like a scroll would.
-            const isAlt = term.buffer?.active?.type === "alternate";
-            if (isAlt) {
-              const seq = lines > 0 ? "\x1b[B" : "\x1b[A";
-              const steps = Math.min(Math.abs(lines), 6);
-              for (let i = 0; i < steps; i++) {
-                socketRef.current?.emit("session:input", {
-                  terminalId,
-                  input: seq,
-                });
-              }
-            } else {
-              term.scrollLines(lines);
-            }
-            touchAccum -= lines * cell;
+          // One wheel "notch" per ~1.5 cells of drag (a notch = ~3 lines in tmux).
+          const notches = Math.trunc(touchAccum / (cell * 1.5));
+          if (notches !== 0) {
+            const up = notches < 0; // dragging DOWN (finger down) scrolls UP
+            const steps = Math.min(Math.abs(notches), 8);
+            const seq = wheel(up).repeat(steps);
+            socketRef.current?.emit("session:input", { terminalId, input: seq });
+            touchAccum -= notches * cell * 1.5;
             e.preventDefault();
           }
         };

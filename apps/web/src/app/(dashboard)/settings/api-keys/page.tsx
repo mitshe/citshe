@@ -43,8 +43,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Terminal } from "lucide-react";
 import { formatDistanceToNow } from "@/lib/utils";
-import { useApiKeys, useCreateApiKey, useDeleteApiKey } from "@/lib/api/hooks";
+import {
+  useApiKeys,
+  useCreateApiKey,
+  useDeleteApiKey,
+  useCliTokens,
+  useCreateCliToken,
+  useDeleteCliToken,
+} from "@/lib/api/hooks";
 import { toast } from "sonner";
 
 export default function ApiKeysPage() {
@@ -302,6 +310,215 @@ export default function ApiKeysPage() {
                 }
               }}
               disabled={deleteApiKey.isPending}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <CliTokensSection />
+    </div>
+  );
+}
+
+/**
+ * citshe CLI tokens — user-scoped personal access tokens (prefix `ctk_`) that
+ * work across ALL your portals. Used by `citshe login` to attach to sessions
+ * from a local terminal.
+ */
+function CliTokensSection() {
+  const { data: tokens = [], isLoading } = useCliTokens();
+  const createToken = useCreateCliToken();
+  const deleteToken = useDeleteCliToken();
+
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [generated, setGenerated] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
+  const create = async () => {
+    try {
+      const res = await createToken.mutateAsync(name || "CLI");
+      setGenerated(res.token);
+      toast.success("CLI token created");
+    } catch {
+      toast.error("Failed to create token");
+    }
+  };
+
+  const close = () => {
+    setOpen(false);
+    setName("");
+    setGenerated(null);
+  };
+
+  return (
+    <div className="space-y-4 border-t border-border pt-8">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">citshe CLI</h2>
+          <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
+            Continue your sessions from a local terminal. Install once, then use
+            a token below to sign in.
+          </p>
+          <pre className="mt-3 overflow-x-auto rounded-md border border-border bg-surface-inset px-3 py-2 font-mono text-xs text-muted-foreground">
+            {`npm i -g @citshe/cli
+citshe login          # paste a token below
+citshe ls             # list your sessions
+citshe attach <id>    # attach from this terminal`}
+          </pre>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" className="shrink-0">
+              <Plus className="mr-2 h-4 w-4" />
+              New CLI token
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {generated ? "CLI token created" : "New CLI token"}
+              </DialogTitle>
+              <DialogDescription>
+                {generated
+                  ? "Copy it now — it won't be shown again."
+                  : "This token works across all your portals."}
+              </DialogDescription>
+            </DialogHeader>
+            {generated ? (
+              <DialogBody className="space-y-2 py-4">
+                <Label>Your token</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={generated}
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generated);
+                      toast.success("Copied");
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-warn">
+                  Run <code>citshe login {generated.slice(0, 12)}…</code>
+                </p>
+              </DialogBody>
+            ) : (
+              <DialogBody className="space-y-2 py-4">
+                <Label htmlFor="cliName">Name</Label>
+                <Input
+                  id="cliName"
+                  placeholder="Laptop"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </DialogBody>
+            )}
+            <DialogFooter>
+              {generated ? (
+                <Button onClick={close}>Done</Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={close}>
+                    Cancel
+                  </Button>
+                  <Button onClick={create} disabled={createToken.isPending}>
+                    {createToken.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Create
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-16 w-full rounded-md" />
+      ) : tokens.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-border bg-surface-card">
+          {tokens.map((t, i) => (
+            <div
+              key={t.id}
+              className={`flex items-center gap-3 px-3.5 py-3 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset text-muted-foreground">
+                <Terminal className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {t.name}
+                  </span>
+                  <code className="rounded-sm border border-border bg-surface-inset px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    {t.prefix}…
+                  </code>
+                </div>
+                <p className="mt-0.5 text-xs text-text-subtle">
+                  Created {formatDistanceToNow(new Date(t.createdAt))} · Last
+                  used{" "}
+                  {t.lastUsedAt
+                    ? formatDistanceToNow(new Date(t.lastUsedAt))
+                    : "never"}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setRevokeTarget({ id: t.id, name: t.name })}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <AlertDialog
+        open={!!revokeTarget}
+        onOpenChange={() => setRevokeTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke CLI token?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{revokeTarget?.name}&rdquo; will stop working immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteToken.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!revokeTarget) return;
+                try {
+                  await deleteToken.mutateAsync(revokeTarget.id);
+                  toast.success("Token revoked");
+                } catch {
+                  toast.error("Failed to revoke");
+                } finally {
+                  setRevokeTarget(null);
+                }
+              }}
+              disabled={deleteToken.isPending}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               Revoke

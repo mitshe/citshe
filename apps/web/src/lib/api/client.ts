@@ -633,6 +633,31 @@ export const api = {
       }),
   },
 
+  cliTokens: {
+    list: (token: string) =>
+      request<{
+        tokens: {
+          id: string;
+          name: string;
+          prefix: string;
+          lastUsedAt: string | null;
+          createdAt: string;
+        }[];
+      }>("/cli/tokens", { token }),
+
+    create: (name: string, token: string) =>
+      request<{ id: string; name: string; prefix: string; token: string }>(
+        "/cli/tokens",
+        { method: "POST", body: JSON.stringify({ name }), token },
+      ),
+
+    delete: (id: string, token: string) =>
+      request<{ ok: boolean }>(`/cli/tokens/${id}`, {
+        method: "DELETE",
+        token,
+      }),
+  },
+
   orchestration: {
     queue: (token: string) =>
       request<QueueOverview>("/orchestration/queue", { token }),

@@ -20,3 +20,6 @@ coverage/
 *.db-journal
 .cache/
 tmp/
+
+# Local agent worktrees / scratch
+.claude/

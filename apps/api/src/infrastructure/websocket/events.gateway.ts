@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../persistence/prisma/prisma.service';
 import { TerminalManagerService } from '../../modules/sessions/services/terminal-manager.service';
+import { CliService } from '../../modules/cli/services/cli.service';
 
 // Event type definitions
 export interface TaskUpdatePayload {
@@ -50,12 +51,15 @@ export class EventsGateway
       userId?: string;
       authenticated: boolean;
       rooms: Set<string>;
+      // When a CLI (`ctk_`) token authenticated: the org ids it may access.
+      cliOrgIds?: string[];
     }
   >();
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly cliService: CliService,
     @Optional() private readonly terminalManager?: TerminalManagerService,
   ) {
     this.jwtSecret = this.configService.get<string>('JWT_SECRET') || '';
@@ -101,6 +105,21 @@ export class EventsGateway
         event: 'error',
         data: { message: 'Authentication token required' },
       };
+    }
+
+    // CLI personal access token (`ctk_`): user-scoped, all orgs. No org room —
+    // it subscribes to individual sessions verified against its org set.
+    if (data.token.startsWith('ctk_')) {
+      try {
+        const ctx = await this.cliService.resolveToken(data.token);
+        clientData.userId = ctx.userId;
+        clientData.cliOrgIds = ctx.organizationIds;
+        clientData.authenticated = true;
+        this.logger.log(`[WS AUTH] CLI client ${client.id} (${ctx.email})`);
+        return { event: 'authenticated', data: { cli: true } };
+      } catch {
+        return { event: 'error', data: { message: 'Invalid CLI token' } };
+      }
     }
 
     let verifiedOrgId: string | undefined;
@@ -340,23 +359,40 @@ export class EventsGateway
   @SubscribeMessage('subscribe:session')
   async handleSubscribeSession(
     @ConnectedSocket() client: Socket,
-    @MessageBody() sessionId: string,
+    // The web app sends a raw string; the CLI sends `{ sessionId }`.
+    @MessageBody() payload: string | { sessionId: string },
   ) {
     if (!this.isClientAuthenticated(client)) {
       return { event: 'error', data: { message: 'Authentication required' } };
     }
-
-    const clientData = this.connectedClients.get(client.id);
-    if (!clientData?.organizationId) {
-      return { event: 'error', data: { message: 'Organization not set' } };
+    const sessionId =
+      typeof payload === 'string' ? payload : payload?.sessionId;
+    if (!sessionId) {
+      return { event: 'error', data: { message: 'sessionId required' } };
     }
 
-    const session = await this.prisma.agentSession.findFirst({
-      where: { id: sessionId, organizationId: clientData.organizationId },
-      select: { id: true },
-    });
+    const clientData = this.connectedClients.get(client.id);
 
-    if (!session) {
+    // Authorize the session: a panel client is scoped to its org; a CLI client
+    // (ctk_ token) is scoped to all its orgs.
+    let authorized = false;
+    if (clientData?.organizationId) {
+      const s = await this.prisma.agentSession.findFirst({
+        where: { id: sessionId, organizationId: clientData.organizationId },
+        select: { id: true },
+      });
+      authorized = !!s;
+    } else if (clientData?.cliOrgIds && clientData.userId) {
+      const s = await this.prisma.agentSession.findFirst({
+        where: {
+          id: sessionId,
+          organizationId: { in: clientData.cliOrgIds },
+        },
+        select: { id: true },
+      });
+      authorized = !!s;
+    }
+    if (!authorized) {
       return {
         event: 'error',
         data: { message: 'Session not found or not authorized' },
@@ -364,7 +400,7 @@ export class EventsGateway
     }
 
     void client.join(`session:${sessionId}`);
-    clientData.rooms.add(`session:${sessionId}`);
+    clientData?.rooms.add(`session:${sessionId}`);
     this.logger.log(`Client ${client.id} subscribed to session:${sessionId}`);
     return { event: 'subscribed', data: { sessionId } };
   }
@@ -419,6 +455,67 @@ export class EventsGateway
     }
 
     this.terminalManager?.resize(data.terminalId, data.cols, data.rows);
+  }
+
+  /**
+   * Ensure a session's terminal is running and stream it — used by the CLI's
+   * `attach` (the web app uses the REST startTerminal). Requires the client to
+   * already be subscribed to the session. Returns the current buffer so the CLI
+   * shows scrollback on connect.
+   */
+  @SubscribeMessage('session:attach')
+  async handleSessionAttach(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; terminalId?: string },
+  ) {
+    if (!this.isClientAuthenticated(client)) {
+      return { event: 'error', data: { message: 'Authentication required' } };
+    }
+    const clientData = this.connectedClients.get(client.id);
+    const sessionId = data?.sessionId;
+    if (!sessionId || !clientData?.rooms.has(`session:${sessionId}`)) {
+      return { event: 'error', data: { message: 'Subscribe first' } };
+    }
+    const terminalId = data.terminalId || `${sessionId}:agent`;
+
+    if (!this.terminalManager) {
+      return { event: 'error', data: { message: 'Terminals unavailable' } };
+    }
+
+    // Already streaming → just hand back the buffer for scrollback.
+    if (this.terminalManager.isActive(terminalId)) {
+      return {
+        event: 'attached',
+        data: {
+          terminalId,
+          buffer: this.terminalManager.getBuffer(terminalId),
+        },
+      };
+    }
+
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: sessionId },
+      select: { status: true, containerId: true },
+    });
+    if (!session?.containerId || session.status !== 'RUNNING') {
+      return { event: 'error', data: { message: 'Session is not running' } };
+    }
+
+    await this.terminalManager.start(
+      terminalId,
+      session.containerId,
+      (out) => this.emitSessionOutput(terminalId, out),
+      () =>
+        this.emitSessionOutput(
+          terminalId,
+          '\r\n\x1b[90m[Process exited]\x1b[0m\r\n',
+        ),
+      { cmd: ['bash'] },
+    );
+    return {
+      event: 'attached',
+      data: { terminalId, buffer: this.terminalManager.getBuffer(terminalId) },
+    };
   }
 
   /**

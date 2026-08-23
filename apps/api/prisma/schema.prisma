@@ -35,8 +35,28 @@ model User {
   memberships       OrganizationMember[]
   ownedOrganizations Organization[] @relation("OrganizationOwner")
   refreshTokens     RefreshToken[]
+  cliTokens         CliToken[]
 
   @@map("users")
+}
+
+// A personal access token for the citshe CLI. USER-scoped (not per-org) — it
+// grants access to all of the user's organizations, like a GitHub PAT.
+model CliToken {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String
+  prefix     String // first chars for display, e.g. "ctk_ab12"
+  hashedKey  String    @map("hashed_key") // SHA-256 of the full token
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([hashedKey])
+  @@map("cli_tokens")
 }
 
 model RefreshToken {
