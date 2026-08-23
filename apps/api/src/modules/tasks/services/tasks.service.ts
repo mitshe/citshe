@@ -274,6 +274,7 @@ export class TasksService {
   // =========================================================================
 
   async startProcessing(organizationId: string, id: string) {
+    let previousStatus: TaskStatus = TaskStatus.PENDING;
     // Use transaction to prevent race condition between status check and update
     const updated = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.findFirst({
@@ -285,9 +286,16 @@ export class TasksService {
         throw new NotFoundException(`Task ${id} not found`);
       }
 
-      if (task.status !== TaskStatus.PENDING) {
-        throw new BadRequestException(`Task ${id} is not in PENDING status`);
+      // A task can be sent to AI while it's waiting to run (PENDING or QUEUED).
+      // A task that's already ANALYZING/IN_PROGRESS is in flight; a
+      // REVIEW/closed one uses Reopen first — those still reject.
+      const startable: TaskStatus[] = [TaskStatus.PENDING, TaskStatus.QUEUED];
+      if (!startable.includes(task.status)) {
+        throw new BadRequestException(
+          `Task ${id} can't be processed in status ${task.status}`,
+        );
       }
+      previousStatus = task.status;
 
       return tx.task.update({
         where: { id },
@@ -300,7 +308,7 @@ export class TasksService {
       new TaskStatusChangedEvent(
         id,
         organizationId,
-        TaskStatus.PENDING,
+        previousStatus,
         TaskStatus.ANALYZING,
       ),
     );

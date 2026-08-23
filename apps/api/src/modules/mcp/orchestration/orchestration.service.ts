@@ -838,7 +838,13 @@ export class OrchestrationService {
       );
 
     // Prepare: write the prompt, (re)create the agent window, start logging it,
-    // then feed Claude the prompt and print a marker with its exit code.
+    // then launch Claude in print mode reading the prompt from stdin.
+    //
+    // We DON'T type the prompt interactively — claude with a stdin redirect can
+    // still pop the one-time "Bypass Permissions mode" acknowledgment, whose
+    // menu then eats the piped prompt and the run stalls. Instead we run
+    // `claude -p` (headless: no TUI, no dialog) and belt-and-suspenders
+    // auto-answer the dialog below if an older build still shows it.
     await bash(
       [
         `${tmux} has-session -t citshe 2>/dev/null || ${tmux} new-session -d -s citshe -x 200 -y 50 -c /workspace`,
@@ -848,19 +854,28 @@ export class OrchestrationService {
         `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
         `${tmux} new-window -t citshe -n agent -c /workspace`,
         `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
-        // --permission-mode bypassPermissions skips the one-time bypass dialog
-        // (belt-and-suspenders with the pre-accepted ~/.claude.json), so the
-        // worker never blocks on it.
-        `${tmux} send-keys -t citshe:agent 'claude --dangerously-skip-permissions --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
+        `${tmux} send-keys -t citshe:agent 'claude --print --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
       ].join('; '),
     );
 
     // Poll the log for the done-marker (cheap — grep a file), up to the worker
     // timeout. Live viewing happens via tmux attach, not this poll.
+    // If the bypass-mode acknowledgment ever appears, auto-accept it once by
+    // sending "2" + Enter ("Yes, I accept") so the worker never blocks.
     const deadline = Date.now() + this.WORKER_EXEC_TIMEOUT_MS;
+    let acceptedDialog = false;
     while (Date.now() < deadline) {
       const hit = await bash(`grep -c '${DONE}' ${LOG} || true`);
       if (parseInt(hit.trim(), 10) > 0) break;
+      if (!acceptedDialog) {
+        const dlg = await bash(
+          `grep -c 'Bypass Permissions mode' ${LOG} || true`,
+        );
+        if (parseInt(dlg.trim(), 10) > 0) {
+          await bash(`${tmux} send-keys -t citshe:agent '2' Enter || true`);
+          acceptedDialog = true;
+        }
+      }
       await this.sleep(3000);
     }
 
