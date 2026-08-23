@@ -21,7 +21,14 @@ import {
   Globe,
   AlertCircle,
   Sparkles,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -37,7 +44,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -190,6 +196,7 @@ export default function SessionDetailPage() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const isResizing = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -777,11 +784,12 @@ export default function SessionDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Keyboard shortcuts — desktop only (no keyboard on mobile). */}
           {isRunning && (
             <TooltipProvider delayDuration={0}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hidden sm:flex">
+                  <Button variant="ghost" size="icon" className="hidden h-8 w-8 sm:flex">
                     <Info className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
@@ -808,6 +816,7 @@ export default function SessionDetailPage() {
               </Tooltip>
             </TooltipProvider>
           )}
+          {/* Primary action stays visible on every screen. */}
           {isRunning && (
             <Button
               variant="outline"
@@ -820,61 +829,98 @@ export default function SessionDetailPage() {
               <span className="hidden sm:inline">Continue with Claude</span>
             </Button>
           )}
+          {isCompleted && (
+            <Button variant="outline" size="sm" className="h-8" onClick={handleResume} disabled={resumeSession.isPending}>
+              {resumeSession.isPending ? (
+                <><Loader2 className="w-4 h-4 sm:mr-1 animate-spin" /> <span className="hidden sm:inline">Resuming...</span></>
+              ) : (
+                <><Play className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Resume</span></>
+              )}
+            </Button>
+          )}
+          {/* A FAILED session can't be resumed (no healthy container) — Retry. */}
+          {isFailed && (
+            <Button variant="outline" size="sm" className="h-8" onClick={handleRetry} disabled={recreateSession.isPending}>
+              {recreateSession.isPending ? (
+                <><Loader2 className="w-4 h-4 sm:mr-1 animate-spin" /> <span className="hidden sm:inline">Retrying...</span></>
+              ) : (
+                <><Play className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Retry</span></>
+              )}
+            </Button>
+          )}
+
+          {/* Secondary actions: inline on ≥sm, folded into a ⋯ menu on mobile. */}
           {isRunning && session?.repositories && session.repositories.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="h-8"
+              className="hidden h-8 sm:inline-flex"
               onClick={handleCreatePR}
               disabled={pushAndPR.isPending}
             >
               {pushAndPR.isPending ? (
-                <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <GitPullRequest className="w-4 h-4 sm:mr-1" />
+                <GitPullRequest className="w-4 h-4 mr-1" />
               )}
-              <span className="hidden sm:inline">Create PR</span>
-            </Button>
-          )}
-          {isCompleted && (
-            <Button variant="outline" size="sm" className="h-8" onClick={handleResume} disabled={resumeSession.isPending}>
-              {resumeSession.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Resuming...</>
-              ) : (
-                <><Play className="w-4 h-4 mr-1" /> Resume</>
-              )}
-            </Button>
-          )}
-          {/* A FAILED session can't be resumed (no healthy container) — it must
-              be rebuilt, so offer Retry, not Resume. */}
-          {isFailed && (
-            <Button variant="outline" size="sm" className="h-8" onClick={handleRetry} disabled={recreateSession.isPending}>
-              {recreateSession.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Retrying...</>
-              ) : (
-                <><Play className="w-4 h-4 mr-1" /> Retry</>
-              )}
+              Create PR
             </Button>
           )}
           {isRunning && (
-            <Button variant="destructive" size="sm" className="h-8" onClick={handleStop} disabled={stopSession.isPending}>
+            <Button variant="destructive" size="sm" className="hidden h-8 sm:inline-flex" onClick={handleStop} disabled={stopSession.isPending}>
               {stopSession.isPending ? (
-                <><Loader2 className="w-4 h-4 sm:mr-1 animate-spin" /> <span className="hidden sm:inline">Stopping...</span></>
+                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Stopping...</>
               ) : (
-                <><Square className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Stop</span></>
+                <><Square className="w-4 h-4 mr-1" /> Stop</>
               )}
             </Button>
           )}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-danger hover:text-danger hover:bg-danger/10"
-              >
-                <Trash2 className="w-4 h-4" />
+
+          {/* Overflow menu: on mobile holds the secondary actions; on desktop
+              it just holds Delete (secondary actions are already inline). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreVertical className="w-4 h-4" />
               </Button>
-            </AlertDialogTrigger>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isRunning &&
+                session?.repositories &&
+                session.repositories.length > 0 && (
+                  <DropdownMenuItem
+                    className="sm:hidden"
+                    onClick={handleCreatePR}
+                    disabled={pushAndPR.isPending}
+                  >
+                    <GitPullRequest className="w-4 h-4 mr-2" />
+                    Create PR
+                  </DropdownMenuItem>
+                )}
+              {isRunning && (
+                <DropdownMenuItem
+                  className="sm:hidden"
+                  onClick={handleStop}
+                  disabled={stopSession.isPending}
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-danger focus:text-danger"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <AlertDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+          >
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete terminal</AlertDialogTitle>
