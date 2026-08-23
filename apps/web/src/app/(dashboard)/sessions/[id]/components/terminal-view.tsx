@@ -138,15 +138,13 @@ export function TerminalView({
       if (helper) helper.style.fontSize = "16px";
 
       // xterm has no native touch scrolling — translate vertical swipes into
-      // scrollback movement so the terminal is usable on a phone. We attach to
-      // the xterm viewport so it doesn't fight text selection elsewhere.
-      const viewport = termRef.current!.querySelector(
-        ".xterm-viewport",
-      ) as HTMLElement | null;
-      if (viewport) {
-        // Native momentum scroll for the viewport element itself.
-        viewport.style.setProperty("-webkit-overflow-scrolling", "touch");
-        viewport.style.setProperty("overscroll-behavior", "contain");
+      // scrollback movement so the terminal is usable on a phone. Attach to the
+      // terminal ROOT (not .xterm-viewport): with the WebGL renderer a canvas
+      // overlays the viewport and swallows its touch events, so listening on the
+      // root is the only reliable target across renderers.
+      {
+        const root = termRef.current!;
+        root.style.setProperty("touch-action", "pan-y");
         let touchStartY = 0;
         let touchAccum = 0;
         const onTouchStart = (e: TouchEvent) => {
@@ -186,11 +184,11 @@ export function TerminalView({
             e.preventDefault();
           }
         };
-        viewport.addEventListener("touchstart", onTouchStart, { passive: true });
-        viewport.addEventListener("touchmove", onTouchMove, { passive: false });
+        root.addEventListener("touchstart", onTouchStart, { passive: true });
+        root.addEventListener("touchmove", onTouchMove, { passive: false });
         touchCleanupRef.current = () => {
-          viewport.removeEventListener("touchstart", onTouchStart);
-          viewport.removeEventListener("touchmove", onTouchMove);
+          root.removeEventListener("touchstart", onTouchStart);
+          root.removeEventListener("touchmove", onTouchMove);
         };
       }
 

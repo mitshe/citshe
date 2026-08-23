@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { TaskStatus } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
 import { TasksService } from '../services/tasks.service';
 
@@ -114,5 +115,53 @@ export class WorkerTasksController {
       },
     );
     return { id: attachment.id };
+  }
+
+  @Post(':taskId/note')
+  @ApiOperation({ summary: 'Add a worker note to the task activity' })
+  async note(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('taskId') taskId: string,
+    @Body() body: { text?: string },
+  ) {
+    const payload = this.verifyWorker(authorization);
+    if (payload.taskId && payload.taskId !== taskId) {
+      throw new UnauthorizedException('Token is not for this task');
+    }
+    await this.tasksService.addWorkerNote(
+      payload.organizationId,
+      taskId,
+      body.text ?? '',
+    );
+    return { ok: true };
+  }
+
+  @Post(':taskId/status')
+  @ApiOperation({ summary: 'Set the task status from the worker' })
+  async status(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('taskId') taskId: string,
+    @Body() body: { status?: string },
+  ) {
+    const payload = this.verifyWorker(authorization);
+    if (payload.taskId && payload.taskId !== taskId) {
+      throw new UnauthorizedException('Token is not for this task');
+    }
+    const raw = (body.status || '').toUpperCase().replace(/[\s-]+/g, '_');
+    const map: Record<string, TaskStatus> = {
+      IN_PROGRESS: TaskStatus.IN_PROGRESS,
+      INPROGRESS: TaskStatus.IN_PROGRESS,
+      REVIEW: TaskStatus.REVIEW,
+      DONE: TaskStatus.COMPLETED,
+      COMPLETED: TaskStatus.COMPLETED,
+    };
+    const status = map[raw];
+    if (!status)
+      throw new BadRequestException(`Unknown status "${body.status}"`);
+    return this.tasksService.setWorkerStatus(
+      payload.organizationId,
+      taskId,
+      status,
+    );
   }
 }

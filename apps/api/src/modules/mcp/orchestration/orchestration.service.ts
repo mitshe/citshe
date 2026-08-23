@@ -1047,14 +1047,11 @@ export class OrchestrationService {
       `You are a worker agent. Complete this task end-to-end in the current ` +
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
-      `If you discover meaningful follow-up work that is out of scope for this ` +
-      `task, add it to the board by running: ` +
-      `citshe-task "short title" "one-line description". Only do this for real, ` +
-      `actionable follow-ups — don't spam the board.\n\n` +
-      `If you test a running web app (e.g. a dev server you started), you can ` +
-      `attach a screenshot to this task as evidence by running: ` +
-      `citshe-shot <url> "what this shows" (e.g. citshe-shot http://localhost:3000 ` +
-      `"home page after the change"). It appears in the task's activity.\n\n` +
+      `Use the "citshe" skill to keep the human updated in the panel: leave a ` +
+      `note at meaningful milestones, set the task status to "review" when your ` +
+      `work is ready for a human (or "done" if fully complete), attach a ` +
+      `screenshot when you test a running web app, and add follow-up tasks for ` +
+      `real out-of-scope work. Don't spam — report meaningfully.\n\n` +
       `TASK:\n${body}`
     );
   }

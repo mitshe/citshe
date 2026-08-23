@@ -116,6 +116,8 @@ function actionLabel(
       return "finished";
     case "failed":
       return "failed";
+    case "note":
+      return "";
     default:
       return action;
   }
@@ -769,9 +771,13 @@ export function TaskDetail({
               entry.action === "screenshot"
                 ? screenshotDetails(entry.details)
                 : null;
-            const commentText = isComment
-              ? asString((entry.details as { text?: unknown })?.text)
-              : undefined;
+            // A worker "note" is Claude narrating progress — render its text
+            // like a comment (prose), but with the Claude avatar.
+            const isNote = entry.action === "note";
+            const commentText =
+              isComment || isNote
+                ? asString((entry.details as { text?: unknown })?.text)
+                : undefined;
             // A "finished" entry carries the run summary — render it as prose,
             // not a raw "summary: …" key/value line.
             const summaryText =

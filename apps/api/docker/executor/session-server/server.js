@@ -340,6 +340,161 @@ function installCitsheShotCli() {
   }
 }
 
+/**
+ * Install the "citshe" Claude Code skill so the agent natively understands how
+ * to talk back to citshe (narrate progress, set status, screenshot, add tasks).
+ * A real skill (~/.claude/skills/citshe/SKILL.md + scripts) beats loose CLIs:
+ * Claude reads the description and knows WHEN to use each action.
+ */
+function installCitsheSkill() {
+  if (!process.env.CITSHE_WORKER_TOKEN || !process.env.CITSHE_API_URL) return;
+  const hasTask = !!process.env.CITSHE_TASK_ID;
+  try {
+    const skillDir = path.join(HOME_DIR, '.claude', 'skills', 'citshe');
+    const scriptsDir = path.join(skillDir, 'scripts');
+    fs.mkdirSync(scriptsDir, { recursive: true });
+
+    const skillMd = [
+      '---',
+      'name: citshe',
+      'description: >-',
+      '  Report progress and results back to the citshe panel while working a',
+      '  task. Use this to narrate what you are doing (note), move the task to',
+      '  Review or Done when finished (status), attach a screenshot of a running',
+      '  app as evidence (shot), and add follow-up tasks to the board (task). Use',
+      '  proactively — set status to in-progress when you start and review/done',
+      '  when finished, and leave notes at meaningful milestones.',
+      'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*)',
+      '---',
+      '',
+      '# citshe — talk back to the panel',
+      '',
+      'You are running as a worker for a task shown in the citshe panel. Keep the',
+      'human in the loop by reporting through these scripts. Environment variables',
+      '(CITSHE_API_URL, CITSHE_WORKER_TOKEN, CITSHE_TASK_ID) are already set.',
+      '',
+      '## Narrate progress (note)',
+      'Leave a short note in the task activity at meaningful points.',
+      '```bash',
+      '${CLAUDE_SKILL_DIR}/scripts/citshe-note.sh "Cloned repo, running the dev server"',
+      '```',
+      '',
+      '## Set task status',
+      'Move the task as you work: `in-progress` when you start, `review` when the',
+      'work is ready for a human, or `done` if it is fully complete.',
+      '```bash',
+      '${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review',
+      '```',
+      '',
+      '## Attach a screenshot (proof for web work)',
+      'When you test a running web app, capture the page and attach it.',
+      '```bash',
+      '${CLAUDE_SKILL_DIR}/scripts/citshe-shot.sh http://localhost:3000 "Home page after the change"',
+      '```',
+      '',
+      '## Add a follow-up task',
+      'For real, actionable follow-ups that are out of scope for this task.',
+      '```bash',
+      '${CLAUDE_SKILL_DIR}/scripts/citshe-task.sh "Short title" "One-line description"',
+      '```',
+      '',
+      'Do not spam — notes and tasks should be meaningful, not play-by-play.',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd, 'utf-8');
+
+    const shebang = '#!/bin/bash';
+    const guard = (needTask) =>
+      [
+        'set -e',
+        'if [ -z "$CITSHE_API_URL" ] || [ -z "$CITSHE_WORKER_TOKEN" ]; then',
+        '  echo "citshe env not set" >&2; exit 1; fi',
+        needTask
+          ? 'if [ -z "$CITSHE_TASK_ID" ]; then echo "no CITSHE_TASK_ID (not a task worker)" >&2; exit 1; fi'
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+    // note
+    fs.writeFileSync(
+      path.join(scriptsDir, 'citshe-note.sh'),
+      [
+        shebang,
+        guard(true),
+        'TEXT="$1"',
+        'if [ -z "$TEXT" ]; then echo "usage: citshe-note.sh <text>" >&2; exit 1; fi',
+        'jq -n --arg t "$TEXT" \'{text:$t}\' | \\',
+        '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/note" \\',
+        '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
+        'echo',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    // status
+    fs.writeFileSync(
+      path.join(scriptsDir, 'citshe-status.sh'),
+      [
+        shebang,
+        guard(true),
+        'S="$1"',
+        'if [ -z "$S" ]; then echo "usage: citshe-status.sh <in-progress|review|done>" >&2; exit 1; fi',
+        'jq -n --arg s "$S" \'{status:$s}\' | \\',
+        '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/status" \\',
+        '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
+        'echo',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    // shot (reuse the ~/bin/citshe-shot logic: render URL or upload a file)
+    fs.writeFileSync(
+      path.join(scriptsDir, 'citshe-shot.sh'),
+      [
+        shebang,
+        guard(true),
+        'SRC="$1"; CAPTION="$2"',
+        'if [ -z "$SRC" ]; then echo "usage: citshe-shot.sh <url|file.png> [caption]" >&2; exit 1; fi',
+        'OUT="$(mktemp --suffix=.png)"',
+        "if echo \"$SRC\" | grep -qE '^https?://'; then",
+        '  PW="npx playwright"; command -v playwright >/dev/null 2>&1 && PW="playwright"',
+        '  $PW screenshot --full-page --wait-for-timeout=1500 "$SRC" "$OUT" >/dev/null 2>&1',
+        'else cp "$SRC" "$OUT"; fi',
+        'B64F="$(mktemp)"; base64 -w0 "$OUT" > "$B64F"',
+        'jq -n --rawfile img "$B64F" --arg cap "$CAPTION" \'{image:$img, caption:$cap, mimeType:"image/png"}\' | \\',
+        '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/screenshot" \\',
+        '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
+        'rm -f "$OUT" "$B64F"; echo',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    // task
+    fs.writeFileSync(
+      path.join(scriptsDir, 'citshe-task.sh'),
+      [
+        shebang,
+        guard(false),
+        'TITLE="$1"; DESC="$2"',
+        'if [ -z "$TITLE" ]; then echo "usage: citshe-task.sh <title> [description]" >&2; exit 1; fi',
+        'jq -n --arg t "$TITLE" --arg d "$DESC" \'{title:$t, description:$d}\' | \\',
+        '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks" \\',
+        '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
+        'echo',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    log(
+      'Installed citshe Claude Code skill' +
+        (hasTask ? '' : ' (no task context — task-add only)'),
+    );
+  } catch (err) {
+    log('Could not install citshe skill: ' + err.message);
+  }
+}
+
 function getToken(config) {
   return config.accessToken || config.apiToken || config.token || config.apiKey || null;
 }
@@ -553,6 +708,7 @@ async function setup() {
   installSkills(config.skills);
   installCitsheTaskCli();
   installCitsheShotCli();
+  installCitsheSkill();
   preacceptClaudeBypass();
   startTmux();
 

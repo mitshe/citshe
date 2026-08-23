@@ -226,6 +226,69 @@ export class TasksService {
     return entry;
   }
 
+  /**
+   * A note from the worker (Claude) added to the activity feed — the agent
+   * narrating what it's doing. Rendered like the AI's other entries.
+   */
+  async addWorkerNote(organizationId: string, taskId: string, text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) throw new BadRequestException('Note is empty');
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, agentLogs: true },
+    });
+    if (!task) throw new NotFoundException(`Task ${taskId} not found`);
+    const entry = {
+      agentName: 'worker',
+      action: 'note',
+      details: { text: trimmed.slice(0, 5000) },
+      timestamp: new Date().toISOString(),
+    };
+    const existing = Array.isArray(task.agentLogs) ? task.agentLogs : [];
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { agentLogs: [...existing, entry] as Prisma.JsonArray },
+    });
+    return entry;
+  }
+
+  /**
+   * Let the worker set the task's status (e.g. IN_PROGRESS → REVIEW). Only a
+   * safe subset is allowed so the agent can't cancel/queue itself oddly.
+   */
+  async setWorkerStatus(
+    organizationId: string,
+    taskId: string,
+    status: TaskStatus,
+  ) {
+    const allowed: TaskStatus[] = [
+      TaskStatus.IN_PROGRESS,
+      TaskStatus.REVIEW,
+      TaskStatus.COMPLETED,
+    ];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`Worker can't set status ${status}`);
+    }
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, status: true },
+    });
+    if (!task) throw new NotFoundException(`Task ${taskId} not found`);
+    const updated = await this.prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status,
+        closedAt: status === TaskStatus.COMPLETED ? new Date() : undefined,
+      },
+    });
+    if (task.status !== status) {
+      this.eventBus.publish(
+        new TaskStatusChangedEvent(taskId, organizationId, task.status, status),
+      );
+    }
+    return { id: updated.id, status: updated.status };
+  }
+
   async update(organizationId: string, id: string, dto: UpdateTaskDto) {
     const task = await this.findOne(organizationId, id);
     const previousStatus = task.status;
