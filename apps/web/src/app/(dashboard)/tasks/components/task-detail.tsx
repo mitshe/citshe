@@ -102,6 +102,25 @@ function initials(name: string): string {
   return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
+/** Human-friendly verb for an activity entry. */
+function actionLabel(
+  action: string,
+  ctx: { shot: boolean; isComment: boolean },
+): string {
+  if (ctx.shot) return "attached a screenshot";
+  if (ctx.isComment) return "commented";
+  switch (action) {
+    case "executing":
+      return "started working";
+    case "finished":
+      return "finished";
+    case "failed":
+      return "failed";
+    default:
+      return action;
+  }
+}
+
 /** Narrow task.agentLogs (unknown JSON) into a clean array of entries. */
 function normalizeAgentLogs(raw: unknown): AgentLogEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -252,7 +271,7 @@ function CommentBox({ taskId }: { taskId: string }) {
   };
 
   return (
-    <div className="mt-4 space-y-2">
+    <div className="space-y-2">
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -282,32 +301,6 @@ function CommentBox({ taskId }: { taskId: string }) {
       </div>
     </div>
   );
-}
-
-/** Compactly render an entry's `details` payload for the timeline. */
-function formatDetails(details: unknown): string | null {
-  if (details == null) return null;
-  if (typeof details === "string") return details;
-  if (typeof details === "number" || typeof details === "boolean") {
-    return String(details);
-  }
-  if (isRecord(details)) {
-    const lines = Object.entries(details)
-      .map(([key, value]) => {
-        const rendered =
-          typeof value === "object" && value !== null
-            ? JSON.stringify(value)
-            : String(value);
-        return `${key}: ${rendered}`;
-      })
-      .slice(0, 6);
-    return lines.length > 0 ? lines.join("\n") : null;
-  }
-  try {
-    return JSON.stringify(details);
-  } catch {
-    return null;
-  }
 }
 
 /** Pull a human-readable summary out of task.result, if any. */
@@ -752,6 +745,9 @@ export function TaskDetail({
     <section className="space-y-3">
       <Eyebrow>Activity</Eyebrow>
 
+      {/* Comment box sits at the TOP since the feed is newest-first. */}
+      <CommentBox taskId={task.id} />
+
       {resultSummary && (
         <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-primary">
@@ -782,19 +778,26 @@ export function TaskDetail({
               entry.action === "finished"
                 ? asString((entry.details as { summary?: unknown })?.summary)?.trim()
                 : undefined;
-            const details =
-              shot || isComment || entry.action === "finished"
-                ? null
-                : formatDetails(entry.details);
+            // Only surface a body for things worth reading — comments,
+            // summaries, screenshots. "executing" just restates the title, and
+            // other bare actions are noise, so no raw key/value box.
+            const isLast = index === agentLogs.length - 1;
             return (
-              <li key={index} className="flex gap-3">
+              <li key={index} className="relative flex gap-3 pb-1">
+                {/* Timeline connector between entries. */}
+                {!isLast && (
+                  <span
+                    className="absolute left-[13px] top-8 bottom-0 w-px bg-border"
+                    aria-hidden
+                  />
+                )}
                 {isComment ? (
-                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-semibold text-muted-foreground">
+                  <span className="z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-semibold text-muted-foreground ring-4 ring-surface-card">
                     {initials(entry.agentName)}
                   </span>
                 ) : (
                   <span
-                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                    className="z-10 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-4 ring-surface-card"
                     style={{ backgroundColor: "#D97757" }}
                   >
                     <ClaudeLogo className="h-4 w-4 text-white" />
@@ -805,15 +808,9 @@ export function TaskDetail({
                     <span className="text-sm font-medium text-foreground">
                       {entry.agentName === "worker" ? "Claude" : entry.agentName}
                     </span>
-                    {entry.action && (
-                      <span className="text-sm text-muted-foreground">
-                        {shot
-                          ? "attached a screenshot"
-                          : isComment
-                            ? "commented"
-                            : entry.action}
-                      </span>
-                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {actionLabel(entry.action, { shot: !!shot, isComment })}
+                    </span>
                     {entry.timestamp && (
                       <span className="text-xs text-text-subtle">
                         {formatDistanceToNow(new Date(entry.timestamp))}
@@ -837,11 +834,6 @@ export function TaskDetail({
                       caption={shot.caption}
                     />
                   )}
-                  {details && (
-                    <pre className="mt-1.5 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
-                      {details}
-                    </pre>
-                  )}
                 </div>
               </li>
             );
@@ -852,8 +844,6 @@ export function TaskDetail({
           <p className="text-sm italic text-text-subtle">No activity yet.</p>
         )
       )}
-
-      <CommentBox taskId={task.id} />
     </section>
   );
 
