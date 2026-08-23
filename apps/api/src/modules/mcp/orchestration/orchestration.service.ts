@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { TaskStatus } from '@prisma/client';
+import { TaskStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SessionContainerService } from '../../sessions/services/session-container.service';
@@ -643,7 +643,7 @@ export class OrchestrationService {
         throw new Error('Worker has no container.');
       }
 
-      this.eventsGateway.emitAgentLog(organizationId, taskId, {
+      await this.recordAgentLog(organizationId, taskId, {
         agentName: 'worker',
         action: 'executing',
         details: { title: task.title },
@@ -668,6 +668,11 @@ export class OrchestrationService {
           status: TaskStatus.REVIEW,
           result: { output: output.slice(0, 20_000) },
         },
+      });
+      await this.recordAgentLog(organizationId, taskId, {
+        agentName: 'worker',
+        action: 'finished',
+        details: { summary: output.slice(0, 2000) },
       });
       this.eventsGateway.emitTaskUpdate(organizationId, {
         taskId,
@@ -735,6 +740,39 @@ export class OrchestrationService {
     }
   }
 
+  /**
+   * Append an entry to the task's persisted activity feed (task.agentLogs) AND
+   * emit it live. emitAgentLog alone only pushes a WS event, so re-opening a
+   * task later showed "No activity yet" even though the worker had run.
+   */
+  private async recordAgentLog(
+    organizationId: string,
+    taskId: string,
+    entry: {
+      agentName: string;
+      action: string;
+      details?: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    const logEntry = { ...entry, timestamp: new Date().toISOString() };
+    try {
+      const task = await this.prisma.task.findUnique({
+        where: { id: taskId },
+        select: { agentLogs: true },
+      });
+      const existing = Array.isArray(task?.agentLogs) ? task!.agentLogs : [];
+      await this.prisma.task.update({
+        where: { id: taskId },
+        data: { agentLogs: [...existing, logEntry] as Prisma.JsonArray },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to persist agent log for ${taskId}: ${(err as Error).message}`,
+      );
+    }
+    this.eventsGateway.emitAgentLog(organizationId, taskId, entry);
+  }
+
   private async failTask(
     organizationId: string,
     taskId: string,
@@ -743,6 +781,11 @@ export class OrchestrationService {
     await this.prisma.task.update({
       where: { id: taskId },
       data: { status: TaskStatus.FAILED, result: { error: reason } },
+    });
+    await this.recordAgentLog(organizationId, taskId, {
+      agentName: 'worker',
+      action: 'failed',
+      details: { error: reason },
     });
     this.eventsGateway.emitTaskFailed(organizationId, taskId, reason);
   }
