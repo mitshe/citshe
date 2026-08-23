@@ -20,6 +20,7 @@ import {
   GitPullRequest,
   Globe,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import {
   Tooltip,
@@ -311,6 +312,24 @@ export default function SessionDetailPage() {
         closeable: true,
         terminalId: termId,
         cmd: ["bash"],
+      },
+    ]);
+    setActiveTabId(termId);
+  }, [sessionId]);
+
+  // Take over the worker's container with an interactive Claude session — pick
+  // up where the worker left off (the repo/workspace is already there).
+  const handleContinueWithClaude = useCallback(() => {
+    const termId = `${sessionId}:term-${Date.now()}`;
+    setTabs((prev) => [
+      ...prev,
+      {
+        id: termId,
+        title: "Claude",
+        type: "terminal",
+        closeable: true,
+        terminalId: termId,
+        cmd: ["claude"],
       },
     ]);
     setActiveTabId(termId);
@@ -796,6 +815,18 @@ export default function SessionDetailPage() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          )}
+          {isRunning && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={handleContinueWithClaude}
+              title="Open an interactive Claude in this session"
+            >
+              <Sparkles className="w-4 h-4 sm:mr-1" />
+              <span className="hidden sm:inline">Continue with Claude</span>
+            </Button>
           )}
           {isRunning && session?.repositories && session.repositories.length > 0 && (
             <Button

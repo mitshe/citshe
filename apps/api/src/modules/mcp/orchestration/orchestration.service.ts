@@ -741,8 +741,14 @@ export class OrchestrationService {
         );
       }
     } finally {
-      // Always free the worker slot / stop the container.
-      await this.stopWorker(organizationId, sessionId);
+      // On failure, stop the (dead/unusable) container. On success, LEAVE it
+      // running so you can "Continue with Claude" — take over the same session
+      // interactively to refine or discuss the work. It's stopped when you
+      // explicitly Stop/Close the session. The BullMQ worker slot frees itself
+      // when this function returns, regardless of the container.
+      if (caught) {
+        await this.stopWorker(organizationId, sessionId);
+      }
       if (drain) {
         await this.drainQueue(organizationId, task.createdBy).catch(() => {});
       }
