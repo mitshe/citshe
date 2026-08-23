@@ -660,25 +660,29 @@ export class OrchestrationService {
         task.deliveryMode ?? 'PR',
       );
       const promptB64 = Buffer.from(prompt).toString('base64');
-      // Stream the worker's output live to the session's "agent" terminal so
-      // "Watch terminal" shows the AI working in real time (not just a summary
-      // after it finishes).
+      // Run in stream-json so we can show the AI working LIVE: claude -p with
+      // --output-format text buffers everything to the very end, whereas
+      // stream-json emits NDJSON events as they happen. We parse those into
+      // readable text and push it to the session's "agent" terminal.
       const agentTerminalId = `${sessionId}:agent`;
-      const output = await this.containerService.execCommand(
+      const streamParser = this.makeStreamJsonParser((text) =>
+        this.eventsGateway.emitSessionOutput(agentTerminalId, text),
+      );
+      const rawOutput = await this.containerService.execCommand(
         session.containerId,
         [
           'bash',
           '-c',
-          `echo '${promptB64}' | base64 -d | claude -p --dangerously-skip-permissions --output-format text`,
+          `echo '${promptB64}' | base64 -d | claude -p --dangerously-skip-permissions --verbose --output-format stream-json`,
         ],
         '/workspace',
         this.WORKER_EXEC_TIMEOUT_MS,
         'executor',
-        {
-          onData: (text) =>
-            this.eventsGateway.emitSessionOutput(agentTerminalId, text),
-        },
+        { onData: streamParser.feed },
       );
+      // The human-readable transcript we assembled from the stream (falls back
+      // to raw output if parsing yielded nothing).
+      const output = streamParser.text() || rawOutput;
 
       const delivery = this.parseDeliveryResult(output);
       await this.prisma.task.update({
@@ -877,6 +881,64 @@ export class OrchestrationService {
       `${delivery}\n\n` +
       `TASK:\n${body}`
     );
+  }
+
+  /**
+   * Turn Claude Code's stream-json (NDJSON) output into readable text emitted
+   * live. Each line is a JSON event; we surface assistant text, tool calls and
+   * the final result, both streaming them to `onText` and accumulating a plain
+   * transcript for the stored result.
+   */
+  private makeStreamJsonParser(onText: (text: string) => void): {
+    feed: (chunk: string) => void;
+    text: () => string;
+  } {
+    let buffer = '';
+    let transcript = '';
+    const push = (line: string) => {
+      if (line) {
+        transcript += line;
+        onText(line);
+      }
+    };
+
+    const handle = (evt: Record<string, unknown>) => {
+      const type = evt.type as string | undefined;
+      if (type === 'assistant' || type === 'user') {
+        const msg = evt.message as { content?: unknown } | undefined;
+        const content = Array.isArray(msg?.content) ? msg!.content : [];
+        for (const block of content as Array<Record<string, unknown>>) {
+          if (block.type === 'text' && typeof block.text === 'string') {
+            push(block.text);
+          } else if (block.type === 'tool_use' && block.name) {
+            push(`\r\n\x1b[2m→ ${String(block.name)}\x1b[0m\r\n`);
+          }
+        }
+      } else if (type === 'result') {
+        const res =
+          typeof evt.result === 'string' ? evt.result : undefined;
+        if (res) push(`\r\n${res}\r\n`);
+      }
+    };
+
+    return {
+      feed: (chunk: string) => {
+        buffer += chunk;
+        let nl: number;
+        while ((nl = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!line) continue;
+          try {
+            handle(JSON.parse(line) as Record<string, unknown>);
+          } catch {
+            // Not JSON (e.g. a stray log line) — pass it through verbatim.
+            push(`${line}\r\n`);
+          }
+        }
+      },
+      text: () => transcript,
+    };
   }
 
   /**
