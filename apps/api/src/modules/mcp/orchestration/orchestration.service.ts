@@ -839,7 +839,10 @@ export class OrchestrationService {
         `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
         `${tmux} new-window -t citshe -n agent -c /workspace`,
         `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
-        `${tmux} send-keys -t citshe:agent 'claude --dangerously-skip-permissions < ${PROMPT}; echo ${DONE}$?' Enter`,
+        // --permission-mode bypassPermissions skips the one-time bypass dialog
+        // (belt-and-suspenders with the pre-accepted ~/.claude.json), so the
+        // worker never blocks on it.
+        `${tmux} send-keys -t citshe:agent 'claude --dangerously-skip-permissions --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
       ].join('; '),
     );
 

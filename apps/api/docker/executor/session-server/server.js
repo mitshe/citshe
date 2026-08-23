@@ -211,6 +211,38 @@ function installSkills(skills) {
 }
 
 /**
+ * Pre-accept Claude Code's one-time "Bypass Permissions" and workspace-trust
+ * dialogs so the agent (and you, on take-over) never sit on that prompt. The
+ * container is the sandbox this warning is about, so accepting is correct here.
+ */
+function preacceptClaudeBypass() {
+  try {
+    const file = '/home/executor/.claude.json';
+    let cfg = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    } catch {
+      cfg = {};
+    }
+    cfg.bypassPermissionsModeAccepted = true;
+    cfg.hasTrustDialogAccepted = true;
+    cfg.hasCompletedProjectOnboarding = true;
+    // Trust the workspace so the "do you trust the files in this folder" prompt
+    // is skipped too.
+    cfg.projects = cfg.projects || {};
+    cfg.projects['/workspace'] = {
+      ...(cfg.projects['/workspace'] || {}),
+      hasTrustDialogAccepted: true,
+      hasCompletedProjectOnboarding: true,
+    };
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf-8');
+    log('Pre-accepted Claude bypass/trust dialogs');
+  } catch (err) {
+    log('Could not pre-accept Claude dialogs: ' + err.message);
+  }
+}
+
+/**
  * Install the `citshe-task` helper so the agent can add follow-up tasks to the
  * board: `citshe-task "title" ["description"]`. Uses CITSHE_API_URL +
  * CITSHE_WORKER_TOKEN injected into the container by the orchestrator.
@@ -451,6 +483,7 @@ async function setup() {
   writeInstructions(config.instructions, config.provider);
   installSkills(config.skills);
   installCitsheTaskCli();
+  preacceptClaudeBypass();
   startTmux();
 
   log('Session workspace setup complete');
