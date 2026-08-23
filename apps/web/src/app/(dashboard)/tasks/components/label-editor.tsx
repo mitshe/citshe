@@ -17,6 +17,10 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
+// Handy labels we offer even before the org has created any. "przeklikać"
+// marks a task that a human does by hand (not the AI) — see MANUAL_LABELS.
+const SUGGESTED_LABELS = ["przeklikać", "research", "bug", "content"];
+
 /**
  * Add-a-label control: pick from labels that already exist across the org's
  * tasks, or type a new one and create it. `suggestions` is the pool of known
@@ -42,8 +46,18 @@ export function LabelEditor({
     () => suggestions.filter((s) => !selected.includes(s)).sort(),
     [suggestions, selected],
   );
+  // Suggested labels not already used or selected — offered to bootstrap.
+  const suggested = useMemo(
+    () =>
+      SUGGESTED_LABELS.filter(
+        (s) => !selected.includes(s) && !available.includes(s),
+      ),
+    [selected, available],
+  );
   const exactExists =
-    available.includes(clean) || selected.includes(clean);
+    available.includes(clean) ||
+    selected.includes(clean) ||
+    suggested.includes(clean);
 
   const pick = (label: string) => {
     const value = label.trim().toLowerCase().replace(/^#/, "");
@@ -86,6 +100,20 @@ export function LabelEditor({
                     onSelect={() => pick(label)}
                   >
                     <Check className="mr-2 h-3.5 w-3.5 opacity-0" />
+                    {label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {suggested.length > 0 && (
+              <CommandGroup heading="Suggested">
+                {suggested.map((label) => (
+                  <CommandItem
+                    key={label}
+                    value={label}
+                    onSelect={() => pick(label)}
+                  >
+                    <Plus className="mr-2 h-3.5 w-3.5 opacity-60" />
                     {label}
                   </CommandItem>
                 ))}
