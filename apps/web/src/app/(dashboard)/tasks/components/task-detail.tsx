@@ -41,7 +41,6 @@ import {
   AlertCircle,
   Terminal,
   Plus,
-  Bot,
   CheckCircle2,
   RotateCcw,
   GitPullRequest,
@@ -76,6 +75,15 @@ import { LabelEditor } from "./label-editor";
 // ---------------------------------------------------------------------------
 // Helpers — defensive narrowing of loosely-typed JSON (result / agentLogs)
 // ---------------------------------------------------------------------------
+
+/** Claude's sunburst mark (activity avatar). */
+function ClaudeMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 2.2c.3 0 .55.22.6.52l.66 4.2 2.98-3.03a.6.6 0 0 1 .93.74l-2.2 3.65 4.02-1.4a.6.6 0 0 1 .5 1.07l-3.7 2.16 4.24.35a.6.6 0 0 1 0 1.2l-4.24.35 3.7 2.16a.6.6 0 0 1-.5 1.07l-4.02-1.4 2.2 3.65a.6.6 0 0 1-.93.74l-2.98-3.03-.66 4.2a.6.6 0 0 1-1.2 0l-.66-4.2-2.98 3.03a.6.6 0 0 1-.93-.74l2.2-3.65-4.02 1.4a.6.6 0 0 1-.5-1.07l3.7-2.16-4.24-.35a.6.6 0 0 1 0-1.2l4.24-.35-3.7-2.16a.6.6 0 0 1 .5-1.07l4.02 1.4-2.2-3.65a.6.6 0 0 1 .93-.74l2.98 3.03.66-4.2c.05-.3.3-.52.6-.52Z" />
+    </svg>
+  );
+}
 
 /** A single normalized activity entry pulled from task.agentLogs. */
 interface AgentLogEntry {
@@ -590,13 +598,16 @@ export function TaskDetail({
             const details = formatDetails(entry.details);
             return (
               <li key={index} className="flex gap-3">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface-inset">
-                  <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                <span
+                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                  style={{ backgroundColor: "#D97757" }}
+                >
+                  <ClaudeMark className="h-3.5 w-3.5 text-white" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className="text-sm font-medium text-foreground">
-                      {entry.agentName}
+                      {entry.agentName === "worker" ? "Claude" : entry.agentName}
                     </span>
                     {entry.action && (
                       <span className="text-sm text-muted-foreground">
