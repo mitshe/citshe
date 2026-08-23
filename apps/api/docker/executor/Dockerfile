@@ -31,6 +31,10 @@ RUN apt-get update && apt-get install -y \
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 
+# Put the executor's ~/bin on PATH so installed helpers (e.g. citshe-task,
+# which lets the agent add tasks to the board) are callable by name.
+ENV PATH="/home/executor/bin:${PATH}"
+
 # AI agent CLIs
 RUN npm install -g @anthropic-ai/claude-code openclaw@latest
 

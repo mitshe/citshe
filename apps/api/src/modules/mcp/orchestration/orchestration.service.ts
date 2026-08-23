@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
+import * as jwt from 'jsonwebtoken';
 import { TaskStatus, Prisma, DeliveryMode } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { SessionsService } from '../../sessions/services/sessions.service';
@@ -28,9 +30,22 @@ export class OrchestrationService {
     private readonly sessionsService: SessionsService,
     private readonly containerService: SessionContainerService,
     private readonly eventsGateway: EventsGateway,
+    private readonly config: ConfigService,
     @InjectQueue(QUEUES.TASK_QUEUE)
     private readonly taskQueue: Queue<TaskQueueJob>,
   ) {}
+
+  /**
+   * Sign a short-lived token the worker container uses to create follow-up
+   * tasks on the board (POST /api/v1/worker/tasks) as the same org/user.
+   */
+  private signWorkerToken(organizationId: string, userId: string): string {
+    return jwt.sign(
+      { organizationId, userId, type: 'worker' },
+      this.config.get<string>('JWT_SECRET') || 'dev-secret',
+      { expiresIn: '2h' },
+    );
+  }
 
   /**
    * How many worker threads may run at once. This is also the BullMQ worker
@@ -573,6 +588,7 @@ export class OrchestrationService {
           enableBrowser: session.enableBrowser,
           integrations:
             integrationConfigs.length > 0 ? integrationConfigs : undefined,
+          workerToken: this.signWorkerToken(organizationId, task.createdBy),
         },
         async (cid) => {
           await this.sessionsService.updateContainerId(session.id, cid);
@@ -879,6 +895,10 @@ export class OrchestrationService {
       `You are a worker agent. Complete this task end-to-end in the current ` +
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
+      `If you discover meaningful follow-up work that is out of scope for this ` +
+      `task, add it to the board by running: ` +
+      `citshe-task "short title" "one-line description". Only do this for real, ` +
+      `actionable follow-ups — don't spam the board.\n\n` +
       `TASK:\n${body}`
     );
   }

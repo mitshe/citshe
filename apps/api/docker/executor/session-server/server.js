@@ -210,6 +210,35 @@ function installSkills(skills) {
   log(`Installed ${skills.length} skill(s) as slash commands`);
 }
 
+/**
+ * Install the `citshe-task` helper so the agent can add follow-up tasks to the
+ * board: `citshe-task "title" ["description"]`. Uses CITSHE_API_URL +
+ * CITSHE_WORKER_TOKEN injected into the container by the orchestrator.
+ */
+function installCitsheTaskCli() {
+  if (!process.env.CITSHE_WORKER_TOKEN || !process.env.CITSHE_API_URL) return;
+  const binDir = '/home/executor/bin';
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    const script = [
+      '#!/bin/bash',
+      '# citshe-task "title" ["description"] — add a task to the board.',
+      'set -e',
+      'TITLE="$1"; DESC="$2"',
+      'if [ -z "$TITLE" ]; then echo "usage: citshe-task <title> [description]" >&2; exit 1; fi',
+      'jq -n --arg t "$TITLE" --arg d "$DESC" \'{title:$t, description:$d}\' | \\',
+      '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks" \\',
+      '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" \\',
+      '    -H "Content-Type: application/json" -d @-',
+      'echo',
+    ].join('\n');
+    fs.writeFileSync(path.join(binDir, 'citshe-task'), script, { mode: 0o755 });
+    log('Installed citshe-task CLI (agent can add tasks to the board)');
+  } catch (err) {
+    log('Could not install citshe-task CLI: ' + err.message);
+  }
+}
+
 function getToken(config) {
   return config.accessToken || config.apiToken || config.token || config.apiKey || null;
 }
@@ -421,6 +450,7 @@ async function setup() {
   rewriteSshRemotes(config.integrations);
   writeInstructions(config.instructions, config.provider);
   installSkills(config.skills);
+  installCitsheTaskCli();
 
   log('Session workspace setup complete');
 }

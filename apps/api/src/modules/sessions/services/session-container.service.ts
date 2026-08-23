@@ -37,6 +37,11 @@ export interface SessionContainerConfig {
    */
   image?: string;
   localPath?: string;
+  /**
+   * Short-lived signed token that lets a worker create follow-up tasks on the
+   * board via POST /api/v1/worker/tasks. Injected as CITSHE_WORKER_TOKEN.
+   */
+  workerToken?: string;
 }
 
 /**
@@ -112,6 +117,13 @@ export class SessionContainerService implements OnModuleInit {
           ...(config.environment?.variables?.map(
             (v) => `${v.key}=${v.value}`,
           ) || []),
+          // Let the worker create follow-up tasks on the board (citshe-task).
+          ...(config.workerToken
+            ? [
+                'CITSHE_API_URL=http://api:3001',
+                `CITSHE_WORKER_TOKEN=${config.workerToken}`,
+              ]
+            : []),
         ],
         WorkingDir: '/workspace',
         Labels: {
