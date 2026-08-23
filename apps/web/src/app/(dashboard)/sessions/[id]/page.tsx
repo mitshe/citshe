@@ -898,12 +898,27 @@ export default function SessionDetailPage() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel disabled={deleteSession.isPending}>
+                  Cancel
+                </AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={handleDelete}
+                  // Keep the dialog open while deleting so the pending state is
+                  // visible and the button can't be clicked repeatedly.
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void handleDelete();
+                  }}
+                  disabled={deleteSession.isPending}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  Delete
+                  {deleteSession.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
