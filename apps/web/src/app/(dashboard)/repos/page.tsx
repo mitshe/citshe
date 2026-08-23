@@ -6,7 +6,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
-import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  FilterSearch,
+  parseFilterQuery,
+  type FilterField,
+} from "@/components/ui/filter-search";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,7 +75,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Repository, RepoAnalysisStatus } from "@/lib/api/types";
 
-type RepoFilter = "all" | "analyzed" | "pending";
 
 /** Map a repo's analysis status to a StatusDot state. */
 function analysisDot(status: RepoAnalysisStatus | null | undefined): {
@@ -97,8 +100,23 @@ export default function ReposPage() {
   const { data: integrations = [] } = useIntegrations();
   const githubAppStart = useGithubAppStart();
   const [connectOpen, setConnectOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<RepoFilter>("all");
+  // One query: free text over name/path + `status:analyzed|pending` token.
+  const [query, setQuery] = useState("");
+
+  const repoFilterFields = useMemo<FilterField[]>(
+    () => [
+      {
+        key: "status",
+        description: "Analysis status",
+        values: [
+          { value: "all" },
+          { value: "analyzed" },
+          { value: "pending" },
+        ],
+      },
+    ],
+    [],
+  );
 
   const hasGitIntegration = integrations.some(
     (i) => i.type === "GITHUB" && i.status === "CONNECTED",
@@ -126,16 +144,26 @@ export default function ReposPage() {
     }
   };
 
+  const parsed = useMemo(
+    () => parseFilterQuery(query, repoFilterFields),
+    [query, repoFilterFields],
+  );
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = parsed.text.toLowerCase();
+    const status = parsed.tokens.find((t) => t.key === "status")?.value ?? "all";
     return repos.filter((r) => {
-      if (q && !r.name.toLowerCase().includes(q) && !r.fullPath.toLowerCase().includes(q))
+      if (
+        q &&
+        !r.name.toLowerCase().includes(q) &&
+        !r.fullPath.toLowerCase().includes(q)
+      )
         return false;
-      if (filter === "analyzed") return r.analysisStatus === "done";
-      if (filter === "pending") return r.analysisStatus !== "done";
+      if (status === "analyzed") return r.analysisStatus === "done";
+      if (status === "pending") return r.analysisStatus !== "done";
       return true;
     });
-  }, [repos, search, filter]);
+  }, [repos, parsed]);
 
   return (
     <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
@@ -182,29 +210,14 @@ export default function ReposPage() {
         </div>
       )}
 
-      {/* Search + filter */}
-      {(repos.length > 0 || search) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-subtle" />
-            <Input
-              placeholder="Search repos…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 pl-8"
-            />
-          </div>
-          <SegmentedControl
-            value={filter}
-            onChange={setFilter}
-            aria-label="Filter repos"
-            options={[
-              { value: "all", label: "All" },
-              { value: "analyzed", label: "Analyzed" },
-              { value: "pending", label: "Pending" },
-            ]}
-          />
-        </div>
+      {/* One search box: free text + `status:analyzed|pending` token. */}
+      {(repos.length > 0 || query) && (
+        <FilterSearch
+          value={query}
+          onChange={setQuery}
+          fields={repoFilterFields}
+          placeholder="Search repos…  try status:pending"
+        />
       )}
 
       {isLoading ? (
@@ -380,45 +393,37 @@ function RepoCard({ repo }: { repo: Repository }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-9 px-2.5"
-            onClick={() => quickLaunch.launch({ repositoryId: repo.id })}
-            disabled={quickLaunch.launching}
-            title="Open a terminal on this repo"
-            aria-label="Open a terminal on this repo"
-          >
-            <Terminal className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-9 px-2.5"
-            onClick={runAnalysis}
-            disabled={analyzing}
-            title="Re-analyze this repo"
-            aria-label="Re-analyze this repo"
-          >
-            {analyzing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-          </Button>
+          {/* One ⋯ menu holds every row action — no inline icon buttons
+              beside it (avoids the near-identical analyze/sync icons sitting
+              next to a menu that repeated them). */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-9 px-2.5"
-                title="More actions"
-                aria-label="More actions"
+                title="Repo actions"
+                aria-label="Repo actions"
               >
                 <MoreVertical className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => quickLaunch.launch({ repositoryId: repo.id })}
+                disabled={quickLaunch.launching}
+              >
+                <Terminal className="mr-2 h-3.5 w-3.5" />
+                Open terminal
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={runAnalysis} disabled={analyzing}>
+                {analyzing ? (
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                )}
+                Re-analyze
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => void runSync()}
                 disabled={syncOne.isPending}

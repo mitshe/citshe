@@ -557,7 +557,8 @@ export default function SessionsPage() {
             className="flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Open is always visible — it's the primary action for a row. */}
+            {/* Open is the only inline action — everything else lives in the
+                ⋯ menu, so nothing is duplicated. */}
             <Button
               variant="outline"
               size="sm"
@@ -567,17 +568,6 @@ export default function SessionsPage() {
               <Play className="w-3.5 h-3.5 mr-1" />
               Open
             </Button>
-            {session.status === "RUNNING" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 hidden text-muted-foreground hover:text-foreground sm:inline-flex"
-                onClick={(e) => handleStop(e, session.id)}
-              >
-                <Square className="w-3.5 h-3.5 mr-1" />
-                Stop
-              </Button>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-9 w-9">
@@ -585,12 +575,6 @@ export default function SessionsPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => router.push(`/sessions/${session.id}`)}
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Open
-                </DropdownMenuItem>
                 {session.status === "RUNNING" && (
                   <DropdownMenuItem
                     onClick={(e) =>
@@ -677,21 +661,24 @@ export default function SessionsPage() {
             }
           }}
         >
+          {/* Quick terminal = one tap, default config. New terminal = the
+              full dialog (name / AI provider / repo). Distinct labels so it's
+              obvious which is which. */}
           <Button
             variant="outline"
             onClick={() => quickLaunch.launch()}
             disabled={quickLaunch.launching}
-            title="Open a terminal instantly with defaults"
+            title="Spin up a terminal instantly with default settings"
           >
             {quickLaunch.launching ? (
               <Loader2 className="w-4 h-4 sm:mr-2 animate-spin" />
             ) : (
               <TerminalIcon className="w-4 h-4 sm:mr-2" />
             )}
-            <span className="hidden sm:inline">Open terminal</span>
+            <span className="hidden sm:inline">Quick terminal</span>
           </Button>
           <DialogTrigger asChild>
-            <Button onClick={openCreate}>
+            <Button onClick={openCreate} title="Configure a terminal (name, AI provider, repo)">
               <Plus className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">New terminal</span>
             </Button>

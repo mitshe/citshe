@@ -18,7 +18,6 @@ import {
   X,
   Trash2,
   GitPullRequest,
-  Globe,
   AlertCircle,
   Sparkles,
   MoreVertical,
@@ -69,7 +68,6 @@ import type { SessionStatus } from "@/lib/api/types";
 import { FileTree } from "./components/file-tree";
 import { TerminalView } from "./components/terminal-view";
 import { FileEditor } from "./components/file-editor";
-import BrowserView from "./components/browser-view";
 import { TabBar, type Tab } from "./components/tab-bar";
 
 const statusLabels: Record<string, string> = {
@@ -159,6 +157,9 @@ export default function SessionDetailPage() {
     const agentTitle = hasAgent
       ? `Agent: ${session.name}`
       : `Terminal: ${session.name}`;
+    // Only a terminal tab. The in-app browser preview was removed — it never
+    // worked reliably (localhost:PORT refused to connect) and Claude can test
+    // in its own container instead.
     const initialTabs: Tab[] = [
       {
         id: agentTerminalId,
@@ -169,12 +170,6 @@ export default function SessionDetailPage() {
         cmd: buildAgentCmd(),
       },
     ];
-    initialTabs.push({
-      id: "browser",
-      title: "Browser",
-      type: "browser",
-      closeable: false,
-    });
     setTabs(initialTabs);
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
   const [activeTabId, setActiveTabId] = useState(agentTerminalId);
@@ -1163,47 +1158,6 @@ export default function SessionDetailPage() {
                     onSave={(content) => handleSaveFile(tab.id, content)}
                     onContentRefresh={() => handleRefreshFile(tab.id)}
                   />
-                </div>
-              ))}
-
-            {/* Browser tab */}
-            {tabs
-              .filter((t) => t.type === "browser")
-              .map((tab) => (
-                <div
-                  key={tab.id}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    display: activeTabId === tab.id ? "block" : "none",
-                  }}
-                >
-                  {isRunning ? (
-                    // Only mount (and thus start) the browser once its tab is
-                    // actually opened — it's a heavy Chromium/VNC session that
-                    // Claude uses to test, not something to spin up on load.
-                    activeTabId === tab.id ? (
-                      <BrowserView sessionId={sessionId} />
-                    ) : null
-                  ) : isCreating ? (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center">
-                        <StatusDot state="creating" size={22} className="mx-auto mb-4" />
-                        <p className="text-sm font-medium text-foreground">Starting terminal…</p>
-                        <p className="text-xs mt-1">Browser will be available once the terminal is running</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="rounded-lg border border-border bg-surface-card px-8 py-7 text-center">
-                        <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-surface-hover text-muted-foreground">
-                          <Globe className="w-5 h-5" />
-                        </div>
-                        <p className="text-sm font-medium text-foreground">Browser unavailable</p>
-                        <p className="text-xs mt-1">The terminal must be running to use the browser.</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))}
           </div>
