@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import {
@@ -188,6 +189,7 @@ export function TaskDetail({
   onDeleted,
   fullPageHref,
 }: TaskDetailProps) {
+  const router = useRouter();
   const { data: task, isLoading, error } = useTask(taskId);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
@@ -491,16 +493,20 @@ export function TaskDetail({
         </a>
       )}
       {task.sessionId && (
-        <Link href={`/sessions/${task.sessionId}`}>
-          <Button variant="outline" size="sm">
-            {liveWorker ? (
-              <StatusDot state="running" size={8} className="mr-2" />
-            ) : (
-              <Terminal className="mr-2 h-3.5 w-3.5" />
-            )}
-            Watch terminal
-          </Button>
-        </Link>
+        // router.push, not a <Link><Button>> — inside the Sheet the anchor
+        // click was being swallowed and navigation didn't fire.
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`/sessions/${task.sessionId}`)}
+        >
+          {liveWorker ? (
+            <StatusDot state="running" size={8} className="mr-2" />
+          ) : (
+            <Terminal className="mr-2 h-3.5 w-3.5" />
+          )}
+          Watch terminal
+        </Button>
       )}
     </div>
   );

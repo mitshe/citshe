@@ -24,6 +24,7 @@ import {
   GitPullRequest,
   CheckCircle2,
   RotateCcw,
+  ChevronsUp,
 } from "lucide-react";
 import {
   useProcessTask,
@@ -400,6 +401,20 @@ export function TaskCard({
           {/* In the Queue column the order badge already conveys membership,
               so the "Queued" pill would just restate it — hide it there. */}
           {queueOrderIndex == null && <StatusPill status={task.status} />}
+          {/* Priority — only surfaced when it's High/Urgent (Medium/Low is the
+              default and would just be noise on every card). */}
+          {(task.priority === "high" || task.priority === "urgent") && (
+            <span
+              title={`${getPriority(task.priority).label} priority`}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                getPriority(task.priority).color,
+              )}
+            >
+              <ChevronsUp className="h-3 w-3" />
+              {getPriority(task.priority).label}
+            </span>
+          )}
         </div>
         <TaskMenu
           task={task}

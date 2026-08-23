@@ -37,28 +37,40 @@ export function QueueStatusBar({ className }: { className?: string }) {
         className,
       )}
     >
-      <label className="flex select-none items-center gap-2">
+      <label className="flex select-none items-center gap-2.5">
         <Switch
           checked={autoPull}
           onCheckedChange={onToggle}
           disabled={!overview || setAutoPull.isPending}
           aria-label="Auto-pull queued tasks"
         />
-        <span className="text-xs font-medium text-foreground">Auto-pull</span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          {autoPull
-            ? "Workers pull queued tasks automatically"
-            : "Queued tasks wait until you turn this on"}
+        <span className="flex flex-col leading-tight">
+          <span className="text-xs font-medium text-foreground">
+            Auto-run queued tasks
+            <span
+              className={cn(
+                "ml-1.5 text-[10px] font-semibold uppercase",
+                autoPull ? "text-ok" : "text-text-subtle",
+              )}
+            >
+              {autoPull ? "On" : "Off"}
+            </span>
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {autoPull
+              ? "AI picks up queued tasks and runs them for you"
+              : "Queued tasks wait here until you turn this on"}
+          </span>
         </span>
       </label>
 
       <div className="ml-auto flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <StatusDot state={running > 0 ? "running" : "idle"} size={8} />
-          {running} running / {maxWorkers} workers
+          {running} of {maxWorkers} running
         </span>
         <span className="text-text-subtle/50">·</span>
-        <span>{queued} queued</span>
+        <span>{queued} waiting</span>
       </div>
     </div>
   );

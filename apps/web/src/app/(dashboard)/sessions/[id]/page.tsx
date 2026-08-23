@@ -721,17 +721,14 @@ export default function SessionDetailPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          {/* Status = dot + word together, never a lone dot. Running keeps the
-              pulsing ripple (the header is the allowed ripple spot). */}
-          <span className="flex items-center gap-1.5 shrink-0">
-            <StatusDot
-              state={statusDotStates[sessionStatus] ?? "idle"}
-              pulse={isRunning}
-            />
-            <span className="hidden text-[11px] text-text-subtle sm:inline">
-              {statusLabels[sessionStatus] || sessionStatus}
-            </span>
-          </span>
+          {/* Status dot leads the name; the status word moves into the subtitle
+              line below so the top row is just the name (no cramped
+              "Running · worker: …" competing on one line). */}
+          <StatusDot
+            state={statusDotStates[sessionStatus] ?? "idle"}
+            pulse={isRunning}
+            className="shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               {editingName ? (
@@ -757,6 +754,10 @@ export default function SessionDetailPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground truncate">
+              <span className="text-text-subtle">
+                {statusLabels[sessionStatus] || sessionStatus}
+              </span>
+              {" · "}
               {session.repositories?.[0]?.repository?.name || "No repo"}
               {session.branch && ` · ${session.branch}`}
               {session.aiCredential &&
@@ -818,6 +819,17 @@ export default function SessionDetailPage() {
                 <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Resuming...</>
               ) : (
                 <><Play className="w-4 h-4 mr-1" /> Resume</>
+              )}
+            </Button>
+          )}
+          {/* A FAILED session can't be resumed (no healthy container) — it must
+              be rebuilt, so offer Retry, not Resume. */}
+          {isFailed && (
+            <Button variant="outline" size="sm" className="h-8" onClick={handleRetry} disabled={recreateSession.isPending}>
+              {recreateSession.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Retrying...</>
+              ) : (
+                <><Play className="w-4 h-4 mr-1" /> Retry</>
               )}
             </Button>
           )}
