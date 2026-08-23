@@ -635,7 +635,11 @@ export class SessionContainerService implements OnModuleInit {
     workDir = '/workspace',
     timeoutMs = 60000,
     user = 'executor',
-    options: { throwOnError?: boolean } = {},
+    options: {
+      throwOnError?: boolean;
+      /** Called with demuxed text as it streams in (for live "watch"). */
+      onData?: (text: string) => void;
+    } = {},
   ): Promise<string> {
     const container = this.docker.getContainer(containerId);
 
@@ -671,7 +675,35 @@ export class SessionContainerService implements OnModuleInit {
         }
 
         const chunks: Buffer[] = [];
-        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        // Incrementally demux so we can stream text live to options.onData
+        // (a Docker frame can straddle chunk boundaries — keep a running
+        // buffer and only consume complete frames).
+        let pending = Buffer.alloc(0);
+        let liveStdout = '';
+        let liveStderr = '';
+        stream.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+          if (!options.onData) return;
+          pending = Buffer.concat([pending, chunk]);
+          let off = 0;
+          while (off + 8 <= pending.length) {
+            const type = pending[off];
+            const size = pending.readUInt32BE(off + 4);
+            if (off + 8 + size > pending.length) break;
+            const text = pending
+              .slice(off + 8, off + 8 + size)
+              .toString('utf8');
+            if (type === 2) liveStderr += text;
+            else liveStdout += text;
+            try {
+              options.onData(text);
+            } catch {
+              /* ignore consumer errors */
+            }
+            off += 8 + size;
+          }
+          pending = pending.slice(off);
+        });
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
         stream.on('end', async () => {
           clearTimeout(timer);
@@ -695,6 +727,9 @@ export class SessionContainerService implements OnModuleInit {
             }
             offset += 8 + size;
           }
+          // Silence unused-var lint for the live accumulators (kept for clarity).
+          void liveStdout;
+          void liveStderr;
 
           if (options.throwOnError) {
             try {

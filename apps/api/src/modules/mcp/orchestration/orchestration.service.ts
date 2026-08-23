@@ -660,6 +660,10 @@ export class OrchestrationService {
         task.deliveryMode ?? 'PR',
       );
       const promptB64 = Buffer.from(prompt).toString('base64');
+      // Stream the worker's output live to the session's "agent" terminal so
+      // "Watch terminal" shows the AI working in real time (not just a summary
+      // after it finishes).
+      const agentTerminalId = `${sessionId}:agent`;
       const output = await this.containerService.execCommand(
         session.containerId,
         [
@@ -669,6 +673,11 @@ export class OrchestrationService {
         ],
         '/workspace',
         this.WORKER_EXEC_TIMEOUT_MS,
+        'executor',
+        {
+          onData: (text) =>
+            this.eventsGateway.emitSessionOutput(agentTerminalId, text),
+        },
       );
 
       const delivery = this.parseDeliveryResult(output);
