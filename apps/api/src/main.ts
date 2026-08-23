@@ -2,20 +2,22 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
-import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import type { AppConfig } from './config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // Required for webhook signature verification
   });
 
   // Allow base64 screenshot uploads (citshe-shot) — a viewport PNG is small but
-  // base64 inflates it, so lift the default 100kb JSON limit.
-  app.use(json({ limit: '12mb' }));
-  app.use(urlencoded({ extended: true, limit: '12mb' }));
+  // base64 inflates it, so lift the default 100kb JSON limit. Use Nest's own
+  // body-parser helper so we don't import `express` directly (it isn't a
+  // resolvable dependency in the pruned production image).
+  app.useBodyParser('json', { limit: '12mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '12mb' });
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService<AppConfig>);
 
