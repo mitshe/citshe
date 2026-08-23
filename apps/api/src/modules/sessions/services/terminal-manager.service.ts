@@ -53,6 +53,10 @@ export class TerminalManagerService {
       User: 'executor',
       WorkingDir: '/workspace',
       Env: ['TERM=xterm-256color', 'HOME=/home/executor'],
+      // Start roomy instead of Docker's default 80×24 so full-screen TUIs
+      // (Claude Code) don't render in a narrow band before the client's
+      // fit/resize lands. [rows, cols].
+      ConsoleSize: [40, 160],
     });
 
     const stream: Duplex = await new Promise((resolve, reject) => {

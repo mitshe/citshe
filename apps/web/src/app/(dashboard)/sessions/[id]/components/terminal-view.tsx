@@ -278,6 +278,24 @@ export function TerminalView({
         if (res.buffer && xtermRef.current) {
           xtermRef.current.write(res.buffer);
         }
+        // Push the fitted size to the PTY right after it starts — otherwise the
+        // backend exec keeps Docker's default 80×24 and full-screen TUIs
+        // (Claude Code) draw in a narrow band instead of filling the panel.
+        requestAnimationFrame(() => {
+          try {
+            fitRef.current?.fit();
+            const term = xtermRef.current;
+            if (term && socket) {
+              socket.emit("session:resize", {
+                terminalId,
+                cols: term.cols,
+                rows: term.rows,
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        });
       })
       .catch(() => {
         // ignore
