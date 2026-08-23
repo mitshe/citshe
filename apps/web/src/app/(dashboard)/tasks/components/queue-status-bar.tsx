@@ -30,41 +30,34 @@ export function QueueStatusBar({ className }: { className?: string }) {
     }
   };
 
+  // A quiet single-line strip — no card/box — so it reads as a status line
+  // above the board rather than a heavy panel interrupting it.
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface-inset px-3 py-2",
+        "flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 text-xs",
         className,
       )}
     >
-      <label className="flex select-none items-center gap-2.5">
+      <label className="flex select-none items-center gap-2">
         <Switch
           checked={autoPull}
           onCheckedChange={onToggle}
           disabled={!overview || setAutoPull.isPending}
-          aria-label="Auto-pull queued tasks"
+          aria-label="Auto-run queued tasks"
         />
-        <span className="flex flex-col leading-tight">
-          <span className="text-xs font-medium text-foreground">
-            Auto-run queued tasks
-            <span
-              className={cn(
-                "ml-1.5 text-[10px] font-semibold uppercase",
-                autoPull ? "text-ok" : "text-text-subtle",
-              )}
-            >
-              {autoPull ? "On" : "Off"}
-            </span>
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            {autoPull
-              ? "AI picks up queued tasks and runs them for you"
-              : "Queued tasks wait here until you turn this on"}
-          </span>
+        <span className="font-medium text-foreground">Auto-run queued</span>
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase",
+            autoPull ? "text-ok" : "text-text-subtle",
+          )}
+        >
+          {autoPull ? "On" : "Off"}
         </span>
       </label>
 
-      <div className="ml-auto flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
+      <div className="ml-auto flex items-center gap-2.5 tabular-nums text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <StatusDot state={running > 0 ? "running" : "idle"} size={8} />
           {running} of {maxWorkers} running
