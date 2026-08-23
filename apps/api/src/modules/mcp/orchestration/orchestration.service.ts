@@ -855,19 +855,46 @@ export class OrchestrationService {
       await this.sleep(3000);
     }
 
-    // Read the transcript, strip ANSI escape sequences and the marker line.
+    // Read the raw pane capture and turn it into a clean transcript.
     const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
+    return this.cleanTranscript(raw, DONE);
+  }
 
-    // ESC built via char code so there's no literal control char in the source
-    // (keeps the linter's no-control-regex happy).
+  /**
+   * Clean a raw tmux pane capture into readable text: strip OSC title codes
+   * (]0;… ), CSI colour/cursor sequences and other control chars, drop the
+   * shell prompt lines and the command echo / done-marker we injected, and
+   * collapse the runs of blank lines.
+   */
+  private cleanTranscript(raw: string, done: string): string {
     const ESC = String.fromCharCode(27);
-    const ansi = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
-    const clean = raw
-      .replace(ansi, '')
-      .replace(new RegExp(`${DONE}\\d*`, 'g'), '')
-      .replace(/\r/g, '')
+    const BEL = String.fromCharCode(7);
+    let s = raw.replace(/\r/g, '');
+    // OSC: ESC ] … (terminated by BEL or ESC\)  — e.g. window titles ]0;…
+    s = s.replace(
+      new RegExp(`${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`, 'g'),
+      '',
+    );
+    // CSI: ESC [ … final-byte  — colours, cursor moves.
+    s = s.replace(new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g'), '');
+    // Any other lone control chars (except tab/newline).
+
+    s = s.replace(new RegExp(`[${ESC}${BEL}\\x00-\\x08\\x0b-\\x1f]`, 'g'), '');
+
+    const lines = s.split('\n').filter((line) => {
+      const t = line.trim();
+      if (!t) return true; // keep blanks for now, collapsed below
+      // Drop the shell prompt / the command we injected / the done marker.
+      if (/^executor@[^:]+:.*\$\s*/.test(t)) return false;
+      if (t.includes('claude --dangerously-skip-permissions')) return false;
+      if (t.includes(done)) return false;
+      return true;
+    });
+
+    return lines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return clean;
   }
 
   private async failTask(
