@@ -671,6 +671,10 @@ export class SessionContainerService implements OnModuleInit {
       User: user,
       WorkingDir: workDir,
       Tty: false,
+      // docker exec doesn't set HOME for a -u user; without this it stays
+      // /root, so tools that read ~/.claude (claude auth) or ~/bin (citshe-task,
+      // citshe-shot) look in the wrong home and fail.
+      Env: user === 'executor' ? ['HOME=/home/executor'] : undefined,
     });
 
     return new Promise((resolve, reject) => {
