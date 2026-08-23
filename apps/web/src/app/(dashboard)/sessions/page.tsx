@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -20,13 +19,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+  FilterSearch,
+  parseFilterQuery,
+  type FilterField,
+} from "@/components/ui/filter-search";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,7 +42,6 @@ import {
   Clock,
   Trash2,
   Pencil,
-  Search,
   MoreHorizontal,
   CheckSquare,
   FolderGit2,
@@ -107,8 +102,8 @@ export default function SessionsPage() {
   const { socket } = useSocket();
   const { data: sessions = [], isLoading } = useSessions();
 
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // One query: free text over name + `status:` token.
+  const [query, setQuery] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -116,17 +111,48 @@ export default function SessionsPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
+  const sessionFilterFields = useMemo<FilterField[]>(
+    () => [
+      {
+        key: "status",
+        description: "Terminal status",
+        values: [
+          { value: "all" },
+          { value: "running" },
+          { value: "stopped" },
+          { value: "failed" },
+          { value: "creating" },
+        ],
+      },
+    ],
+    [],
+  );
+
+  const parsedQuery = useMemo(
+    () => parseFilterQuery(query, sessionFilterFields),
+    [query, sessionFilterFields],
+  );
+
   const filteredSessions = useMemo(() => {
     let result = sessions;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((s) => s.name.toLowerCase().includes(q));
+    const text = parsedQuery.text.toLowerCase();
+    if (text) {
+      result = result.filter((s) => s.name.toLowerCase().includes(text));
     }
-    if (filterStatus !== "all") {
-      result = result.filter((s) => s.status === filterStatus);
+    const status = parsedQuery.tokens.find((t) => t.key === "status")?.value;
+    if (status && status !== "all") {
+      // Friendly value → machine status. "stopped" = COMPLETED (a clean exit).
+      const map: Record<string, string> = {
+        running: "RUNNING",
+        stopped: "COMPLETED",
+        failed: "FAILED",
+        creating: "CREATING",
+      };
+      const machine = map[status];
+      if (machine) result = result.filter((s) => s.status === machine);
     }
     return result;
-  }, [sessions, search, filterStatus]);
+  }, [sessions, parsedQuery]);
   const { data: repositories = [] } = useRepositories();
   const { data: aiCredentials = [] } = useAICredentials();
   const { data: skillsList = [] } = useSkills();
@@ -734,30 +760,13 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      {/* Search + Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search terminals..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="RUNNING">Running</SelectItem>
-            <SelectItem value="COMPLETED">Stopped</SelectItem>
-            <SelectItem value="FAILED">Failed</SelectItem>
-            <SelectItem value="CREATING">Creating</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* One search box: free text + `status:running|stopped|…` token. */}
+      <FilterSearch
+        value={query}
+        onChange={setQuery}
+        fields={sessionFilterFields}
+        placeholder="Search terminals…  try status:running"
+      />
 
       <div>
           {isLoading ? (
