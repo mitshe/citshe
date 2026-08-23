@@ -8,6 +8,7 @@ import {
   FolderGit2,
   SquareTerminal,
   Blocks,
+  Clock,
   Settings,
 } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ const PAGES = [
   { label: "Tasks", href: "/tasks", icon: ListTodo },
   { label: "Repos", href: "/repos", icon: FolderGit2 },
   { label: "Terminals", href: "/sessions", icon: SquareTerminal },
+  { label: "Schedules", href: "/schedules", icon: Clock },
   { label: "Stack", href: "/stack", icon: Blocks },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

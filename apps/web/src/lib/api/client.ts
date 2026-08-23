@@ -40,6 +40,9 @@ import type {
   Skill,
   CreateSkillDto,
   UpdateSkillDto,
+  Schedule,
+  CreateScheduleDto,
+  UpdateScheduleDto,
 } from "./types";
 
 // API requests go through Next.js proxy (same-origin, no CORS issues)
@@ -595,6 +598,37 @@ export const api = {
       request<{ imported: number; skills: string[] }>("/skills/import-github", {
         method: "POST",
         body: JSON.stringify(data),
+        token,
+      }),
+  },
+
+  schedules: {
+    list: (token: string) =>
+      request<{ schedules: Schedule[] }>("/schedules", { token }),
+
+    create: (data: CreateScheduleDto, token: string) =>
+      request<{ schedule: Schedule }>("/schedules", {
+        method: "POST",
+        body: JSON.stringify(data),
+        token,
+      }),
+
+    update: (id: string, data: UpdateScheduleDto, token: string) =>
+      request<{ schedule: Schedule }>(`/schedules/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        token,
+      }),
+
+    delete: (id: string, token: string) =>
+      request<{ ok: boolean }>(`/schedules/${id}`, {
+        method: "DELETE",
+        token,
+      }),
+
+    runNow: (id: string, token: string) =>
+      request<{ ok: boolean }>(`/schedules/${id}/run`, {
+        method: "POST",
         token,
       }),
   },

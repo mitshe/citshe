@@ -5,6 +5,7 @@ import { QUEUES } from './queues';
 // Processors
 import { TaskProcessingProcessor } from './processors/task-processing.processor';
 import { TaskQueueProcessor } from './processors/task-queue.processor';
+import { SchedulesProcessor } from './processors/schedules.processor';
 
 // Dependencies
 import { TasksModule } from '../../modules/tasks/tasks.module';
@@ -16,6 +17,8 @@ import { PrismaModule } from '../persistence/prisma/prisma.module';
     // worker queue (task-queue: runs QUEUED tasks in session containers).
     BullModule.registerQueue({ name: QUEUES.TASK_PROCESSING }),
     BullModule.registerQueue({ name: QUEUES.TASK_QUEUE }),
+    // Recurring schedules ("crons"): repeatable jobs → create a Task on fire.
+    BullModule.registerQueue({ name: QUEUES.SCHEDULES }),
 
     // Dependencies for processors
     TasksModule,
@@ -23,7 +26,7 @@ import { PrismaModule } from '../persistence/prisma/prisma.module';
   ],
   // TaskQueueProcessor depends on OrchestrationService, provided by the global
   // McpModule.
-  providers: [TaskProcessingProcessor, TaskQueueProcessor],
+  providers: [TaskProcessingProcessor, TaskQueueProcessor, SchedulesProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}

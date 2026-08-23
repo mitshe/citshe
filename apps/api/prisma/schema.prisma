@@ -98,6 +98,7 @@ model Organization {
   owner         User?    @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members       OrganizationMember[]
   tasks         Task[]
+  schedules     Schedule[]
   integrations  Integration[]
   repositories  Repository[]
   aiCredentials AICredential[]
@@ -219,6 +220,33 @@ model TaskAttachment {
   @@map("task_attachments")
 }
 
+// A recurring schedule ("cron"). Each firing creates a Task from the stored
+// prompt/repo/delivery, which then runs through the normal queue → worker → PR
+// flow. Timing is a standard 5-field cron expression evaluated in `timezone`.
+model Schedule {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  // The instruction the created task carries (its title + description).
+  prompt         String
+  repositoryId   String?  @map("repository_id")
+  deliveryMode   DeliveryMode @default(PR) @map("delivery_mode")
+  // 5-field cron expression, e.g. "0 8 * * 1" (Mon 08:00).
+  cron           String
+  timezone       String   @default("Europe/Warsaw")
+  enabled        Boolean  @default(true)
+  lastRunAt      DateTime? @map("last_run_at")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repository   Repository?  @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("schedules")
+}
+
 // ============================================================================
 // INTEGRATIONS
 // ============================================================================
@@ -338,6 +366,7 @@ model Repository {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   integration        Integration         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   tasks                       Task[]
+  schedules                   Schedule[]
   sessionRepositories         SessionRepository[]
   agentDefinitionRepositories AgentDefinitionRepository[]
 

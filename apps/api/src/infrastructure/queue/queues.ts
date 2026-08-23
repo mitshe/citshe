@@ -10,6 +10,12 @@ export const QUEUES = {
    * here — the DB (status QUEUED + queueOrder) is the source of truth.
    */
   TASK_QUEUE: 'task-queue',
+  /**
+   * Recurring schedules ("crons"). Each Schedule registers a BullMQ repeatable
+   * job keyed by its id; when it fires, the processor creates a Task from the
+   * schedule's stored prompt/repo/delivery.
+   */
+  SCHEDULES: 'schedules',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -29,5 +35,11 @@ export interface TaskProcessingJob {
  */
 export interface TaskQueueJob {
   taskId: string;
+  organizationId: string;
+}
+
+/** Payload of a fired schedule ("cron") job. */
+export interface ScheduleJob {
+  scheduleId: string;
   organizationId: string;
 }
