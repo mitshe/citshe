@@ -868,13 +868,17 @@ export class OrchestrationService {
       );
 
     // Prepare: write the prompt, (re)create the agent window, start logging it,
-    // then launch Claude in print mode reading the prompt from stdin.
+    // then launch Claude reading the prompt from stdin.
     //
-    // We DON'T type the prompt interactively — claude with a stdin redirect can
-    // still pop the one-time "Bypass Permissions mode" acknowledgment, whose
-    // menu then eats the piped prompt and the run stalls. Instead we run
-    // `claude -p` (headless: no TUI, no dialog) and belt-and-suspenders
-    // auto-answer the dialog below if an older build still shows it.
+    // CRITICAL: export HOME=/home/executor. tmux/exec run with HOME=/root, but
+    // Claude's auth (~/.claude/.credentials.json) and settings live under the
+    // executor home — without this, claude fails immediately ("Execution
+    // error") because it can't find its credentials.
+    //
+    // We DON'T type the prompt interactively — a stdin redirect into interactive
+    // claude can pop the one-time "Bypass Permissions" acknowledgment whose menu
+    // then eats the piped prompt and the run stalls. `--print` is headless (no
+    // TUI, no dialog); belt-and-suspenders we still auto-answer the dialog below.
     await bash(
       [
         `${tmux} has-session -t citshe 2>/dev/null || ${tmux} new-session -d -s citshe -x 200 -y 50 -c /workspace`,
@@ -884,7 +888,7 @@ export class OrchestrationService {
         `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
         `${tmux} new-window -t citshe -n agent -c /workspace`,
         `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
-        `${tmux} send-keys -t citshe:agent 'claude --print --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
+        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; claude --print --permission-mode bypassPermissions < ${PROMPT}; echo ${DONE}$?' Enter`,
       ].join('; '),
     );
 
