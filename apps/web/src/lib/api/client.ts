@@ -652,11 +652,20 @@ export const api = {
         token,
       }),
 
-    previews: (repo: string | undefined, token: string) =>
-      request<{ previews: PreviewDeployment[] }>(
-        `/plugins/previews${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`,
+    previews: (
+      repo: string | undefined,
+      token: string,
+      type?: string,
+    ) => {
+      const qs = new URLSearchParams();
+      if (repo) qs.set("repo", repo);
+      if (type) qs.set("type", type);
+      const suffix = qs.toString() ? `?${qs.toString()}` : "";
+      return request<{ previews: PreviewDeployment[] }>(
+        `/plugins/previews${suffix}`,
         { token },
-      ),
+      );
+    },
 
     resources: (type: string, token: string) =>
       request<PluginResources>(`/plugins/${type}/resources`, { token }),

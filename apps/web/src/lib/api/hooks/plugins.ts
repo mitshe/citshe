@@ -108,15 +108,19 @@ export function useSetPluginSelection(type: string) {
   });
 }
 
-/** Recent preview deployments (optionally for a repo). Test on a real deploy. */
-export function usePreviews(repo?: string, enabled = true) {
+/**
+ * Recent preview deployments. Pass `type` on a plugin detail page so only that
+ * plugin's deployments come back (a Neon page shows none; Cloudflare never
+ * shows Vercel's). Omit `type` to aggregate across all deploy plugins.
+ */
+export function usePreviews(repo?: string, enabled = true, type?: string) {
   const getToken = useAuthToken();
 
   return useQuery({
-    queryKey: queryKeys.plugins.previews(repo),
+    queryKey: queryKeys.plugins.previews(repo, type),
     queryFn: async () => {
       const token = await getToken();
-      const { previews } = await api.plugins.previews(repo, token);
+      const { previews } = await api.plugins.previews(repo, token, type);
       return previews;
     },
     enabled,

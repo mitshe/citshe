@@ -79,7 +79,9 @@ export class PluginsController {
   }
 
   @Get(':type/resources')
-  @ApiOperation({ summary: 'Resources the plugin can see, + current selection' })
+  @ApiOperation({
+    summary: 'Resources the plugin can see, + current selection',
+  })
   async resources(
     @OrganizationId() organizationId: string,
     @Param('type') type: string,
@@ -91,7 +93,9 @@ export class PluginsController {
   }
 
   @Put(':type/config')
-  @ApiOperation({ summary: 'Merge a partial config (e.g. selection) into a plugin' })
+  @ApiOperation({
+    summary: 'Merge a partial config (e.g. selection) into a plugin',
+  })
   @HttpCode(HttpStatus.OK)
   async updateConfig(
     @OrganizationId() organizationId: string,
@@ -106,17 +110,26 @@ export class PluginsController {
   }
 
   @Get('previews')
-  @ApiOperation({ summary: 'Recent preview deployments (optionally for a repo)' })
+  @ApiOperation({
+    summary: 'Recent preview deployments (optionally for a repo)',
+  })
   async previews(
     @OrganizationId() organizationId: string,
     @Query('repo') repo?: string,
+    @Query('type') type?: string,
   ) {
-    const previews = await this.plugins.listPreviews(organizationId, repo);
+    const previews = await this.plugins.listPreviews(
+      organizationId,
+      repo,
+      type ? (type.toUpperCase() as PluginType) : undefined,
+    );
     return { previews };
   }
 
   @Post(':type/action')
-  @ApiOperation({ summary: 'Run a plugin write-action (redeploy, add subdomain…)' })
+  @ApiOperation({
+    summary: 'Run a plugin write-action (redeploy, add subdomain…)',
+  })
   @HttpCode(HttpStatus.OK)
   async action(
     @OrganizationId() organizationId: string,

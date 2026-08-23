@@ -18,8 +18,13 @@ export const queryKeys = {
     list: () => [...queryKeys.plugins.all, "list"] as const,
     status: (type: string) =>
       [...queryKeys.plugins.all, "status", type] as const,
-    previews: (repo?: string) =>
-      [...queryKeys.plugins.all, "previews", repo ?? "all"] as const,
+    previews: (repo?: string, type?: string) =>
+      [
+        ...queryKeys.plugins.all,
+        "previews",
+        repo ?? "all",
+        type ?? "all",
+      ] as const,
   },
   integrations: {
     all: ["integrations"] as const,

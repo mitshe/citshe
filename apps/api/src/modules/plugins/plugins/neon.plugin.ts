@@ -4,7 +4,6 @@ import {
   PluginStatus,
   StackPlugin,
   PluginMetric,
-  PluginItem,
   PluginResourceGroup,
   PluginResourceItem,
   ResourceKind,
@@ -139,7 +138,6 @@ class NeonPlugin implements StackPlugin {
   async getStatus(config: PluginConfig): Promise<PluginStatus> {
     const { apiKey, projectId: pinned } = this.cfg(config);
     const metrics: PluginMetric[] = [];
-    const items: PluginItem[] = [];
     let headline: { label: string; state: HealthState } = {
       label: 'Connected',
       state: 'ok',
@@ -154,7 +152,9 @@ class NeonPlugin implements StackPlugin {
         connected: true,
         headline: { label: 'Connected', state: 'ok' },
         metrics: [{ label: 'Neon', value: 'connected' }],
-        links: [{ label: 'Open in Neon', url: 'https://console.neon.tech/app' }],
+        links: [
+          { label: 'Open in Neon', url: 'https://console.neon.tech/app' },
+        ],
       };
     }
 
@@ -172,7 +172,11 @@ class NeonPlugin implements StackPlugin {
         (project.synthetic_storage_size as number | undefined) ??
         (project.data_storage_bytes as number | undefined);
       if (storage != null) {
-        metrics.push({ label: 'Size', value: bytes(storage), section: 'usage' });
+        metrics.push({
+          label: 'Size',
+          value: bytes(storage),
+          section: 'usage',
+        });
       }
       if (project.region_id) {
         metrics.push({
@@ -222,7 +226,10 @@ class NeonPlugin implements StackPlugin {
         const hours = retention / 3600;
         metrics.push({
           label: 'History retention',
-          value: hours >= 1 ? `${hours.toFixed(0)}h` : `${Math.round(retention / 60)}m`,
+          value:
+            hours >= 1
+              ? `${hours.toFixed(0)}h`
+              : `${Math.round(retention / 60)}m`,
           section: 'details',
         });
       }
@@ -261,19 +268,30 @@ class NeonPlugin implements StackPlugin {
           `/projects/${projectId}/branches/${primary.id as string}/endpoints`,
         );
         const endpoints = (json.endpoints as Rec[]) ?? [];
-        const rw = endpoints.find((e) => e.type === 'read_write') ?? endpoints[0];
+        const rw =
+          endpoints.find((e) => e.type === 'read_write') ?? endpoints[0];
         if (rw) {
           const state = rw.current_state as string | undefined;
           const health = computeHealth(state);
           metrics.push({
             label: 'Compute state',
-            value: state === 'active' ? 'active' : state === 'idle' ? 'idle' : (state ?? 'unknown'),
+            value:
+              state === 'active'
+                ? 'active'
+                : state === 'idle'
+                  ? 'idle'
+                  : (state ?? 'unknown'),
             state: health,
             section: 'hero',
           });
           // Card headline reflects whether compute is awake.
           headline = {
-            label: state === 'active' ? 'Active' : state === 'idle' ? 'Idle' : 'Connected',
+            label:
+              state === 'active'
+                ? 'Active'
+                : state === 'idle'
+                  ? 'Idle'
+                  : 'Connected',
             state: health,
           };
         }
@@ -329,9 +347,7 @@ class NeonPlugin implements StackPlugin {
       const dataApi = branchDataApi ?? projectDataApi;
       if (dataApi !== undefined) {
         const enabled =
-          typeof dataApi === 'boolean'
-            ? dataApi
-            : Boolean((dataApi as Rec)?.enabled);
+          typeof dataApi === 'boolean' ? dataApi : Boolean(dataApi?.enabled);
         metrics.push({
           label: 'Data API',
           value: enabled ? 'Enabled' : 'Not enabled',
@@ -387,14 +403,11 @@ class NeonPlugin implements StackPlugin {
           section: 'details',
         });
       }
-      for (const op of ops.slice(0, 5)) {
-        if (!op.created_at) continue;
-        items.push({
-          label: String(op.action ?? 'operation'),
-          value: timeAgo(op.created_at as string),
-          state: opHealth(op.status as string | undefined),
-        });
-      }
+      // NOTE: we deliberately do NOT surface the raw operations feed
+      // (suspend_compute / start_compute …) as status items — those internal
+      // op names are noise to the user. The "Last activity" metric above and
+      // the compute-activity histogram below convey the same signal cleanly.
+      // The full feed is still available under Resources → Recent operations.
 
       // --- Compute activity: ops-per-hour bar sparkline over the last 48h ---
       // Metrics/consumption API is 403 on free plans, so derive a histogram
@@ -442,7 +455,6 @@ class NeonPlugin implements StackPlugin {
       connected: true,
       headline,
       metrics,
-      items: items.length ? items : undefined,
       links: [
         {
           label: 'Open in Neon',
@@ -471,9 +483,10 @@ class NeonPlugin implements StackPlugin {
         const items: PluginResourceItem[] = projects.map((p) => ({
           id: String(p.id),
           name: String(p.name ?? p.id),
-          meta: [p.region_id, p.pg_version ? `PG ${p.pg_version}` : null]
-            .filter(Boolean)
-            .join(' · ') || undefined,
+          meta:
+            [p.region_id, p.pg_version ? `PG ${p.pg_version}` : null]
+              .filter(Boolean)
+              .join(' · ') || undefined,
         }));
         if (items.length) {
           groups.push({

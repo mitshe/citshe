@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import {
+  FilterSearch,
+  parseFilterQuery,
+  type FilterField,
+} from "@/components/ui/filter-search";
 import {
   Dialog,
   DialogBody,
@@ -42,7 +46,6 @@ import {
   Plus,
   Sparkles,
   ChevronRight,
-  X,
   LayoutGrid,
   List as ListIcon,
   GitPullRequest,
@@ -74,11 +77,11 @@ export default function TasksPage() {
   const deleteTask = useDeleteTask();
 
   const [newOpen, setNewOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
-  const [filterRepo, setFilterRepo] = useState<string>("all");
-  const [activeLabel, setActiveLabel] = useState<string | null>(null);
-  const [showClosed, setShowClosed] = useState(false);
+  // One query string drives all filtering: free text + `status:` `repo:`
+  // `label:` tokens (parsed below). Replaces the old repo dropdown + closed
+  // toggle + label chips.
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 250);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   // Slide-over (Jira-style). The selected task id lives here; the board/list
@@ -130,7 +133,7 @@ export default function TasksPage() {
   const repoName = (id: string | null | undefined) =>
     id ? repos.find((r) => r.id === id)?.name ?? "—" : "—";
 
-  // Union of all labels across tasks, for the chip filter.
+  // Union of all labels across tasks, for suggestions + the New task dialog.
   const allLabels = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks as Task[]) {
@@ -139,20 +142,103 @@ export default function TasksPage() {
     return [...set].sort();
   }, [tasks]);
 
-  // Shared filtered set — used by BOTH views.
+  // Filter dimensions the search box understands. `status` maps friendly
+  // values to the board's columns (open = the 3 working columns; closed = the
+  // terminal states); `repo` + `label` are dynamic from live data.
+  const filterFields = useMemo<FilterField[]>(
+    () => [
+      {
+        key: "status",
+        description: "Filter by column",
+        values: [
+          { value: "open", hint: "not closed" },
+          { value: "queue" },
+          { value: "todo" },
+          { value: "in-progress" },
+          { value: "review" },
+          { value: "closed" },
+          { value: "all" },
+        ],
+      },
+      {
+        key: "repo",
+        description: "Filter by repository",
+        values: () => repos.map((r) => ({ value: r.name, label: r.name })),
+      },
+      {
+        key: "label",
+        description: "Filter by label",
+        multiple: true,
+        values: () => allLabels.map((l) => ({ value: l })),
+      },
+    ],
+    [repos, allLabels],
+  );
+
+  // Shared filtered set — used by BOTH views. Derived entirely from `query`.
+  const parsed = useMemo(
+    () => parseFilterQuery(debouncedQuery, filterFields),
+    [debouncedQuery, filterFields],
+  );
+
+  const statusToken =
+    parsed.tokens.find((t) => t.key === "status")?.value ?? "open";
+  const showClosed = statusToken === "closed" || statusToken === "all";
+
   const filtered = useMemo(() => {
     let result = tasks as Task[];
-    if (!showClosed) {
-      result = result.filter((t) => !isClosed(t));
+
+    // status: — column/open/closed/all
+    if (statusToken !== "all") {
+      result = result.filter((t) => {
+        const closed = isClosed(t);
+        switch (statusToken) {
+          case "closed":
+            return closed;
+          case "open":
+            return !closed;
+          case "queue":
+            return !closed && t.status === "QUEUED";
+          case "todo":
+            return !closed && t.status === "PENDING";
+          case "in-progress":
+            return (
+              !closed &&
+              (t.status === "ANALYZING" || t.status === "IN_PROGRESS")
+            );
+          case "review":
+            return !closed && t.status === "REVIEW";
+          default:
+            return !closed;
+        }
+      });
     }
-    if (filterRepo !== "all") {
-      result = result.filter((t) => t.repositoryId === filterRepo);
+
+    // repo: — match by name (case-insensitive)
+    const repoTokens = parsed.tokens
+      .filter((t) => t.key === "repo")
+      .map((t) => t.value.toLowerCase());
+    if (repoTokens.length) {
+      result = result.filter((t) => {
+        const name = repos.find((r) => r.id === t.repositoryId)?.name;
+        return name ? repoTokens.includes(name.toLowerCase()) : false;
+      });
     }
-    if (activeLabel) {
-      result = result.filter((t) => (t.labels ?? []).includes(activeLabel));
+
+    // label: — every label token must be present (AND).
+    const labelTokens = parsed.tokens
+      .filter((t) => t.key === "label")
+      .map((t) => t.value.toLowerCase());
+    if (labelTokens.length) {
+      result = result.filter((t) => {
+        const labels = (t.labels ?? []).map((l) => l.toLowerCase());
+        return labelTokens.every((l) => labels.includes(l));
+      });
     }
-    if (debouncedSearch.trim()) {
-      const q = debouncedSearch.toLowerCase();
+
+    // free text — title / description / labels
+    if (parsed.text) {
+      const q = parsed.text.toLowerCase();
       result = result.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
@@ -160,12 +246,20 @@ export default function TasksPage() {
           (t.labels ?? []).some((l) => l.toLowerCase().includes(q)),
       );
     }
-    return result;
-  }, [tasks, showClosed, filterRepo, activeLabel, debouncedSearch]);
 
-  const hasFilters =
-    !!search || filterRepo !== "all" || !!activeLabel || showClosed;
+    return result;
+  }, [tasks, parsed, statusToken, repos]);
+
+  const hasFilters = !!query.trim();
   const isEmpty = !isLoading && tasks.length === 0;
+
+  // Board/list still need a plain label-click to add a `label:` token.
+  const addLabelToken = useCallback((label: string) => {
+    setQuery((q) => {
+      const token = `label:${/\s/.test(label) ? `"${label}"` : label}`;
+      return q.includes(token) ? q : `${q} ${token}`.trim();
+    });
+  }, []);
 
   return (
     <div className="w-full max-w-[1400px] px-4 sm:px-6 py-6 sm:py-8 space-y-5">
@@ -195,64 +289,13 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-full sm:basis-auto">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks or labels…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        {repos.length > 0 && (
-          <Select value={filterRepo} onValueChange={setFilterRepo}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Repo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All repos</SelectItem>
-              {repos.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {r.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <label className="flex h-9 select-none items-center gap-2 rounded-md border border-border bg-surface-inset px-3 text-xs text-muted-foreground transition-linear">
-          <Switch checked={showClosed} onCheckedChange={setShowClosed} />
-          Show closed
-        </label>
-      </div>
-
-      {/* Label chip filter */}
-      {allLabels.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {allLabels.map((l) => {
-            const active = activeLabel === l;
-            return (
-              <Chip
-                key={l}
-                active={active}
-                onClick={() => setActiveLabel(active ? null : l)}
-              >
-                {l}
-              </Chip>
-            );
-          })}
-          {activeLabel && (
-            <button
-              onClick={() => setActiveLabel(null)}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted-foreground transition-linear hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-              Clear
-            </button>
-          )}
-        </div>
-      )}
+      {/* One search box: free text + status:/repo:/label: tokens. */}
+      <FilterSearch
+        value={query}
+        onChange={setQuery}
+        fields={filterFields}
+        placeholder="Search tasks…  try status:review or label:research"
+      />
 
       {/* Views */}
       {isLoading ? (
@@ -272,8 +315,8 @@ export default function TasksPage() {
       ) : filtered.length === 0 && hasFilters ? (
         <EmptyState
           icon={<Search />}
-          title="Nothing matches your filters"
-          description="Try a different search, repo, or label."
+          title="Nothing matches your search"
+          description="Try a different term, or status:/repo:/label: filter."
         />
       ) : (
         <>
@@ -284,7 +327,7 @@ export default function TasksPage() {
               tasks={filtered}
               repoName={repoName}
               onDelete={setDeleteTarget}
-              onLabelClick={setActiveLabel}
+              onLabelClick={addLabelToken}
               onOpenTask={openTask}
               showClosed={showClosed}
             />
@@ -293,7 +336,7 @@ export default function TasksPage() {
               tasks={filtered}
               repoName={repoName}
               onDelete={setDeleteTarget}
-              onLabelClick={setActiveLabel}
+              onLabelClick={addLabelToken}
               onOpenTask={openTask}
             />
           )}

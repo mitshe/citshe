@@ -60,18 +60,14 @@ export class PluginsService {
       create: {
         organizationId,
         type,
-        status: test.ok
-          ? IntegrationStatus.CONNECTED
-          : IntegrationStatus.ERROR,
-        errorMessage: test.ok ? null : test.error ?? 'Connection failed',
+        status: test.ok ? IntegrationStatus.CONNECTED : IntegrationStatus.ERROR,
+        errorMessage: test.ok ? null : (test.error ?? 'Connection failed'),
         config: new Uint8Array(encrypted),
         configIv: new Uint8Array(iv),
       },
       update: {
-        status: test.ok
-          ? IntegrationStatus.CONNECTED
-          : IntegrationStatus.ERROR,
-        errorMessage: test.ok ? null : test.error ?? 'Connection failed',
+        status: test.ok ? IntegrationStatus.CONNECTED : IntegrationStatus.ERROR,
+        errorMessage: test.ok ? null : (test.error ?? 'Connection failed'),
         config: new Uint8Array(encrypted),
         configIv: new Uint8Array(iv),
       },
@@ -110,9 +106,7 @@ export class PluginsService {
       where: { id, organizationId },
     });
     if (!plugin) throw new NotFoundException(`Plugin ${id} not found`);
-    const result = await pluginRegistry
-      .get(plugin.type)
-      .testConnection(config);
+    const result = await pluginRegistry.get(plugin.type).testConnection(config);
     return {
       success: result.ok,
       message: result.ok ? 'Connection OK' : result.error || 'Failed',
@@ -176,9 +170,7 @@ export class PluginsService {
 
     const impl = pluginRegistry.get(type);
     const config = this.decrypt(plugin);
-    const groups = impl.listResources
-      ? await impl.listResources(config)
-      : [];
+    const groups = impl.listResources ? await impl.listResources(config) : [];
     const selected =
       (config as { selection?: Record<string, unknown> }).selection ?? {};
     return { groups, selected };
@@ -209,16 +201,35 @@ export class PluginsService {
   }
 
   /**
-   * Aggregate recent preview deployments across all connected deploy plugins
-   * (Cloudflare + Vercel), optionally filtered to a repo. So a repo card can
-   * show clickable preview URLs — test on a real deploy, not locally.
+   * Recent preview deployments, optionally filtered to a repo. When `type` is
+   * given (a plugin detail page), only that plugin's deployments are returned —
+   * so the Cloudflare page never shows Vercel's deploys and vice-versa. Without
+   * `type` (e.g. a repo card), we aggregate across all connected deploy plugins.
    */
-  async listPreviews(organizationId: string, repoName?: string) {
+  async listPreviews(
+    organizationId: string,
+    repoName?: string,
+    type?: PluginType,
+  ) {
+    // Only Cloudflare + Vercel expose deployments. A DB plugin like Neon has
+    // none, so scoping to it (or any non-deploy plugin) yields an empty list.
+    const deployTypes: PluginType[] = [
+      PluginType.CLOUDFLARE,
+      PluginType.VERCEL,
+    ];
+    const scoped: PluginType[] = type
+      ? deployTypes.includes(type)
+        ? [type]
+        : [] // asked for a specific non-deploy plugin → nothing to show
+      : deployTypes;
+
+    if (scoped.length === 0) return [];
+
     const plugins = await this.prisma.plugin.findMany({
       where: {
         organizationId,
         status: IntegrationStatus.CONNECTED,
-        type: { in: [PluginType.CLOUDFLARE, PluginType.VERCEL] },
+        type: { in: scoped },
       },
     });
 
@@ -283,9 +294,7 @@ export class PluginsService {
   }
 
   private asType(type: string): PluginType {
-    if (
-      !['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'].includes(type)
-    ) {
+    if (!['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'].includes(type)) {
       throw new BadRequestException(`Unknown plugin type: ${type}`);
     }
     return type as PluginType;

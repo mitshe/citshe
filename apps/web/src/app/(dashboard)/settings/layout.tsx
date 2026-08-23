@@ -40,11 +40,12 @@ const navGroups: SettingsNavGroup[] = [
     hint: "Applies only to the portal you're in",
     scopeIcon: FolderKanban,
     items: [
+      // Connections & credentials first, then the portal entity and its people.
       { title: "AI", href: "/settings/ai", icon: Bot },
       { title: "GitHub", href: "/settings/integrations", icon: Plug },
+      { title: "API Keys", href: "/settings/api-keys", icon: Key },
       { title: "Organization", href: "/settings/organization", icon: Building2 },
       { title: "Team", href: "/settings/team", icon: Users },
-      { title: "API Keys", href: "/settings/api-keys", icon: Key },
     ],
   },
   {

@@ -374,7 +374,13 @@ function PluginDashboard({
 }) {
   const { data: resources, isLoading: resourcesLoading } =
     usePluginResources(type);
-  const { data: previews = [], isLoading: previewsLoading } = usePreviews();
+  // Scope previews to THIS plugin so the Cloudflare page never shows Vercel's
+  // deploys, and a DB plugin like Neon shows none.
+  const { data: previews = [], isLoading: previewsLoading } = usePreviews(
+    undefined,
+    true,
+    type,
+  );
 
   // Tab state lives in the URL (?tab=) so tabs are linkable + back-button works.
   const router = useRouter();
