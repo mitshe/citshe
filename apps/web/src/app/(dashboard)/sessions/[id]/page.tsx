@@ -317,23 +317,11 @@ export default function SessionDetailPage() {
     setActiveTabId(termId);
   }, [sessionId]);
 
-  // Take over the worker's container with an interactive Claude session — pick
-  // up where the worker left off (the repo/workspace is already there).
+  // Take over: attach to the SAME tmux window the worker's Claude ran in
+  // (the "agent" window), so you continue its session, not a fresh one.
   const handleContinueWithClaude = useCallback(() => {
-    const termId = `${sessionId}:term-${Date.now()}`;
-    setTabs((prev) => [
-      ...prev,
-      {
-        id: termId,
-        title: "Claude",
-        type: "terminal",
-        closeable: true,
-        terminalId: termId,
-        cmd: ["claude"],
-      },
-    ]);
-    setActiveTabId(termId);
-  }, [sessionId]);
+    setActiveTabId(agentTerminalId);
+  }, [agentTerminalId]);
 
   const handleOpenFile = useCallback(
     async (relativePath: string) => {

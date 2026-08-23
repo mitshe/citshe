@@ -675,30 +675,14 @@ export class OrchestrationService {
         task.description,
         task.deliveryMode ?? 'PR',
       );
-      const promptB64 = Buffer.from(prompt).toString('base64');
-      // Run in stream-json so we can show the AI working LIVE: claude -p with
-      // --output-format text buffers everything to the very end, whereas
-      // stream-json emits NDJSON events as they happen. We parse those into
-      // readable text and push it to the session's "agent" terminal.
-      const agentTerminalId = `${sessionId}:agent`;
-      const streamParser = this.makeStreamJsonParser((text) =>
-        this.eventsGateway.emitSessionOutput(agentTerminalId, text),
-      );
-      const rawOutput = await this.containerService.execCommand(
+      // Run Claude INTERACTIVELY inside the shared tmux "agent" window so you
+      // can watch it live and even take over (attach to the same window). We
+      // pipe the window to a log to capture the transcript, and detect the end
+      // via a printed marker.
+      const output = await this.runClaudeInTmux(
         session.containerId,
-        [
-          'bash',
-          '-c',
-          `echo '${promptB64}' | base64 -d | claude -p --dangerously-skip-permissions --verbose --output-format stream-json`,
-        ],
-        '/workspace',
-        this.WORKER_EXEC_TIMEOUT_MS,
-        'executor',
-        { onData: streamParser.feed },
+        prompt,
       );
-      // The human-readable transcript we assembled from the stream (falls back
-      // to raw output if parsing yielded nothing).
-      const output = streamParser.text() || rawOutput;
 
       const delivery = this.parseDeliveryResult(output);
       await this.prisma.task.update({
@@ -826,6 +810,65 @@ export class OrchestrationService {
     this.eventsGateway.emitAgentLog(organizationId, taskId, entry);
   }
 
+  /**
+   * Run Claude interactively in the shared tmux "agent" window and return its
+   * cleaned transcript. Because it runs in tmux, you can attach to the same
+   * window (Watch / Continue) to see it work and take over. We pipe the window
+   * to a log for the transcript and poll for a done-marker to detect the end.
+   */
+  private async runClaudeInTmux(
+    containerId: string,
+    prompt: string,
+  ): Promise<string> {
+    const promptB64 = Buffer.from(prompt).toString('base64');
+    const LOG = '/tmp/citshe-agent.log';
+    const PROMPT = '/tmp/citshe-prompt';
+    const DONE = '__CITSHE_DONE__';
+    const tmux = 'tmux -f /etc/tmux.conf';
+    const bash = (script: string) =>
+      this.containerService.execCommand(
+        containerId,
+        ['bash', '-lc', script],
+        '/workspace',
+        60_000,
+        'executor',
+      );
+
+    // Prepare: write the prompt, (re)create the agent window, start logging it,
+    // then feed Claude the prompt and print a marker with its exit code.
+    await bash(
+      [
+        `${tmux} has-session -t citshe 2>/dev/null || ${tmux} new-session -d -s citshe -x 200 -y 50 -c /workspace`,
+        `echo '${promptB64}' | base64 -d > ${PROMPT}`,
+        `: > ${LOG}`,
+        // Fresh agent window each run.
+        `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
+        `${tmux} new-window -t citshe -n agent -c /workspace`,
+        `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
+        `${tmux} send-keys -t citshe:agent 'claude --dangerously-skip-permissions < ${PROMPT}; echo ${DONE}$?' Enter`,
+      ].join('; '),
+    );
+
+    // Poll the log for the done-marker (cheap — grep a file), up to the worker
+    // timeout. Live viewing happens via tmux attach, not this poll.
+    const deadline = Date.now() + this.WORKER_EXEC_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const hit = await bash(`grep -c '${DONE}' ${LOG} || true`);
+      if (parseInt(hit.trim(), 10) > 0) break;
+      await this.sleep(3000);
+    }
+
+    // Read the transcript, strip ANSI escape sequences and the marker line.
+    const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
+    // eslint-disable-next-line no-control-regex
+    const clean = raw
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+      .replace(new RegExp(`${DONE}\\d*`, 'g'), '')
+      .replace(/\r/g, '')
+      .trim();
+    return clean;
+  }
+
   private async failTask(
     organizationId: string,
     taskId: string,
@@ -907,64 +950,6 @@ export class OrchestrationService {
       `actionable follow-ups — don't spam the board.\n\n` +
       `TASK:\n${body}`
     );
-  }
-
-  /**
-   * Turn Claude Code's stream-json (NDJSON) output into readable text emitted
-   * live. Each line is a JSON event; we surface assistant text, tool calls and
-   * the final result, both streaming them to `onText` and accumulating a plain
-   * transcript for the stored result.
-   */
-  private makeStreamJsonParser(onText: (text: string) => void): {
-    feed: (chunk: string) => void;
-    text: () => string;
-  } {
-    let buffer = '';
-    let transcript = '';
-    const push = (line: string) => {
-      if (line) {
-        transcript += line;
-        onText(line);
-      }
-    };
-
-    const handle = (evt: Record<string, unknown>) => {
-      const type = evt.type as string | undefined;
-      if (type === 'assistant' || type === 'user') {
-        const msg = evt.message as { content?: unknown } | undefined;
-        const content = Array.isArray(msg?.content) ? msg!.content : [];
-        for (const block of content as Array<Record<string, unknown>>) {
-          if (block.type === 'text' && typeof block.text === 'string') {
-            push(block.text);
-          } else if (block.type === 'tool_use' && block.name) {
-            push(`\r\n\x1b[2m→ ${String(block.name)}\x1b[0m\r\n`);
-          }
-        }
-      } else if (type === 'result') {
-        const res =
-          typeof evt.result === 'string' ? evt.result : undefined;
-        if (res) push(`\r\n${res}\r\n`);
-      }
-    };
-
-    return {
-      feed: (chunk: string) => {
-        buffer += chunk;
-        let nl: number;
-        while ((nl = buffer.indexOf('\n')) !== -1) {
-          const line = buffer.slice(0, nl).trim();
-          buffer = buffer.slice(nl + 1);
-          if (!line) continue;
-          try {
-            handle(JSON.parse(line) as Record<string, unknown>);
-          } catch {
-            // Not JSON (e.g. a stray log line) — pass it through verbatim.
-            push(`${line}\r\n`);
-          }
-        }
-      },
-      text: () => transcript,
-    };
   }
 
   /**

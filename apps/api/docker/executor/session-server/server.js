@@ -451,8 +451,29 @@ async function setup() {
   writeInstructions(config.instructions, config.provider);
   installSkills(config.skills);
   installCitsheTaskCli();
+  startTmux();
 
   log('Session workspace setup complete');
+}
+
+/**
+ * Start the one shared tmux session ("citshe"). Every citshe terminal attaches
+ * to a window in this session, so multiple clients can watch/type on the same
+ * window (and the agent runs in a window you can take over).
+ */
+function startTmux() {
+  try {
+    // Detached session with a roomy default size; if tmux is missing (older
+    // image) this no-ops and terminals fall back to plain bash.
+    execSilent(
+      'tmux -f /etc/tmux.conf has-session -t citshe 2>/dev/null || ' +
+        'tmux -f /etc/tmux.conf new-session -d -s citshe -x 200 -y 50 -c /workspace',
+      { shell: '/bin/bash' },
+    );
+    log('tmux session "citshe" ready');
+  } catch (err) {
+    log('tmux not available, terminals will use plain bash: ' + err.message);
+  }
 }
 
 process.on('SIGTERM', () => {

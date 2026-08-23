@@ -45,7 +45,11 @@ export class TerminalManagerService {
     const cmd = options?.cmd || ['bash'];
 
     const exec = await container.exec({
-      Cmd: cmd,
+      // Attach to a tmux window so multiple citshe clients can share the same
+      // terminal (watch + take over). The window name is derived from the
+      // terminalId; it's created on first attach running `cmd`, and reused
+      // afterwards. Falls back to plain `cmd` if tmux isn't in the image.
+      Cmd: ['bash', '-lc', this.buildTmuxAttachCommand(terminalId, cmd)],
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
@@ -99,6 +103,38 @@ export class TerminalManagerService {
     });
 
     this.logger.log(`Terminal started: ${terminalId} [${cmd.join(' ')}]`);
+  }
+
+  /** tmux window name for a terminalId (the part after ':' , sanitized). */
+  private windowName(terminalId: string): string {
+    const raw = terminalId.split(':').slice(1).join(':') || 'main';
+    return raw.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 40);
+  }
+
+  /**
+   * Build the shell command that attaches this exec to a tmux window in the
+   * shared "citshe" session. Creates the window (running `cmd`) if it doesn't
+   * exist yet, then attaches read-write and selects it. If tmux isn't present
+   * (older executor image), just run `cmd` directly so terminals still work.
+   */
+  private buildTmuxAttachCommand(terminalId: string, cmd: string[]): string {
+    const win = this.windowName(terminalId);
+    // Shell-quote the command the window should run.
+    const runCmd = cmd
+      .map((c) => `'${c.replace(/'/g, `'\\''`)}'`)
+      .join(' ');
+    const tmux = 'tmux -f /etc/tmux.conf';
+    return (
+      `if command -v tmux >/dev/null 2>&1; then ` +
+      // Ensure the shared session exists (session-server usually made it).
+      `${tmux} has-session -t citshe 2>/dev/null || ${tmux} new-session -d -s citshe -x 200 -y 50 -c /workspace; ` +
+      // Create this window if missing, running the requested command.
+      `${tmux} list-windows -t citshe -F '#W' 2>/dev/null | grep -qx '${win}' || ` +
+      `${tmux} new-window -t citshe -n '${win}' -c /workspace ${runCmd}; ` +
+      // Attach and jump to it (read-write; multiple clients allowed).
+      `exec ${tmux} attach -t citshe \\; select-window -t '${win}'; ` +
+      `else exec ${runCmd}; fi`
+    );
   }
 
   /**

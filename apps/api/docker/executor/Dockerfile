@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     build-essential gcc g++ make cmake \
     python3 python3-pip python3-venv \
     bash zsh vim nano less tree htop \
+    tmux \
     zip unzip tar gzip \
     ca-certificates openssl \
     procps dnsutils openssh-client rsync \
@@ -86,6 +87,20 @@ COPY --chown=executor:executor session-server /session
 WORKDIR /runner
 RUN npm install && npm run build
 WORKDIR /workspace
+
+# tmux config — terminals are tmux windows in one shared "citshe" session, so
+# multiple citshe clients can attach to the same window (watch + take over).
+# aggressive-resize + window-size latest keep the pane sized to the newest
+# client instead of the smallest; escape-time 0 avoids key lag.
+RUN printf '%s\n' \
+    'set -g escape-time 0' \
+    'set -g history-limit 50000' \
+    'set -g mouse on' \
+    'setw -g aggressive-resize on' \
+    'set -g window-size latest' \
+    'set -g status off' \
+    'set -g default-terminal "xterm-256color"' \
+    > /etc/tmux.conf
 
 # Git config
 USER executor
