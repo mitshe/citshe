@@ -61,6 +61,10 @@ services:
       API_BASE_URL: https://${PANEL_DOMAIN:?set PANEL_DOMAIN in .env}
       # The executor image the API spawns for terminals/workers.
       EXECUTOR_IMAGE: ghcr.io/mitshe/citshe-executor:${EXECUTOR_TAG:-latest}
+      # Worker/terminal containers must join THIS compose network (not the
+      # default bridge) so citshe-task / citshe-shot can reach the api service
+      # by name (http://api:3001). On the default bridge, "api" won't resolve.
+      DOCKER_NETWORK: ${DOCKER_NETWORK:-citshe_citshe}
     # The API spawns executor containers via the Docker socket.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

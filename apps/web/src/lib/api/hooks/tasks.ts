@@ -110,6 +110,23 @@ export function useProcessTask() {
   });
 }
 
+export function useAddComment() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, text }: { id: string; text: string }) => {
+      const token = await getToken();
+      await api.tasks.addComment(id, text, token);
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
 export function useCloseTask() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

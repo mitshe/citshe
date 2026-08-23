@@ -24,6 +24,7 @@ export function TerminalView({
   const xtermRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fitRef = useRef<any>(null);
+  const touchCleanupRef = useRef<(() => void) | null>(null);
   const { socket, subscribeToSession, unsubscribeFromSession } = useSocket();
   const startTerminal = useStartTerminal();
   const [terminalReady, setTerminalReady] = useState(false);
@@ -69,6 +70,9 @@ export function TerminalView({
         scrollback: 10000,
         // Keep the viewport pinned to the newest output as it streams in.
         scrollOnUserInput: true,
+        // Smoother wheel scrolling on desktop (default 1 line feels sticky).
+        scrollSensitivity: 3,
+        fastScrollSensitivity: 8,
         theme: {
           // Aligned to the dark DS: surface-inset bg, accent (indigo) cursor,
           // translucent accent selection.
@@ -100,6 +104,47 @@ export function TerminalView({
       terminal.loadAddon(fitAddon);
       terminal.open(termRef.current!);
 
+      // xterm has no native touch scrolling — translate vertical swipes into
+      // scrollback movement so the terminal is usable on a phone. We attach to
+      // the xterm viewport so it doesn't fight text selection elsewhere.
+      const viewport = termRef.current!.querySelector(
+        ".xterm-viewport",
+      ) as HTMLElement | null;
+      if (viewport) {
+        // Native momentum scroll for the viewport element itself.
+        viewport.style.setProperty("-webkit-overflow-scrolling", "touch");
+        let touchStartY = 0;
+        let touchAccum = 0;
+        const onTouchStart = (e: TouchEvent) => {
+          touchStartY = e.touches[0]?.clientY ?? 0;
+          touchAccum = 0;
+        };
+        const onTouchMove = (e: TouchEvent) => {
+          const term = xtermRef.current;
+          if (!term) return;
+          const y = e.touches[0]?.clientY ?? 0;
+          const dy = touchStartY - y;
+          touchStartY = y;
+          touchAccum += dy;
+          // One line ≈ the rendered cell height; scroll whole lines as we go.
+          const cell =
+            (term as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })
+              ._core?._renderService?.dimensions?.css?.cell?.height || 18;
+          const lines = Math.trunc(touchAccum / cell);
+          if (lines !== 0) {
+            term.scrollLines(lines);
+            touchAccum -= lines * cell;
+            e.preventDefault();
+          }
+        };
+        viewport.addEventListener("touchstart", onTouchStart, { passive: true });
+        viewport.addEventListener("touchmove", onTouchMove, { passive: false });
+        touchCleanupRef.current = () => {
+          viewport.removeEventListener("touchstart", onTouchStart);
+          viewport.removeEventListener("touchmove", onTouchMove);
+        };
+      }
+
       // The monospace font loads asynchronously; the first fit often lands
       // before glyph metrics are final, leaving the terminal narrower than the
       // panel (wasted space). Refit a few times as things settle, and again
@@ -128,6 +173,8 @@ export function TerminalView({
 
     return () => {
       disposed = true;
+      touchCleanupRef.current?.();
+      touchCleanupRef.current = null;
       terminal?.dispose();
       xtermRef.current = null;
       fitRef.current = null;

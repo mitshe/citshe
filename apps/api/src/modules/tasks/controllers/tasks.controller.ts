@@ -157,6 +157,26 @@ export class TasksController {
     res.send(Buffer.from(attachment.data));
   }
 
+  @Post(':id/comment')
+  @ApiOperation({ summary: 'Add a user comment to the task activity' })
+  @ApiResponse({ status: 201, description: 'Comment added' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  @HttpCode(HttpStatus.CREATED)
+  async addComment(
+    @OrganizationId() organizationId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() body: { text?: string },
+  ) {
+    const entry = await this.tasksService.addComment(
+      organizationId,
+      id,
+      userId,
+      body.text ?? '',
+    );
+    return { entry };
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update a task' })
   @ApiResponse({

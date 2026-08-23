@@ -62,6 +62,7 @@ import {
   useCloseTask,
   useReopenTask,
   useProcessTask,
+  useAddComment,
   useAuthToken,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
@@ -84,6 +85,8 @@ interface AgentLogEntry {
   action: string;
   details?: unknown;
   timestamp?: string;
+  /** "user" for comments the person left; otherwise the AI worker. */
+  author?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -94,6 +97,12 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/** First letters of a name for a fallback avatar (e.g. "Jakub B" → "JB"). */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
 /** Narrow task.agentLogs (unknown JSON) into a clean array of entries. */
 function normalizeAgentLogs(raw: unknown): AgentLogEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -102,6 +111,7 @@ function normalizeAgentLogs(raw: unknown): AgentLogEntry[] {
     action: asString(entry.action) ?? "",
     details: entry.details,
     timestamp: asString(entry.timestamp),
+    author: asString(entry.author),
   }));
 }
 
@@ -186,6 +196,59 @@ function AttachmentImage({
         </figcaption>
       )}
     </figure>
+  );
+}
+
+/**
+ * Comment box under the activity feed. A comment lands in the timeline
+ * immediately and is folded into the worker's instructions the next time the
+ * task is sent to AI ("Process with AI").
+ */
+function CommentBox({ taskId }: { taskId: string }) {
+  const addComment = useAddComment();
+  const [text, setText] = useState("");
+
+  const submit = async () => {
+    const value = text.trim();
+    if (!value) return;
+    try {
+      await addComment.mutateAsync({ id: taskId, text: value });
+      setText("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add comment");
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Add a comment or instruction… (⌘/Ctrl+Enter to send)"
+        rows={2}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-text-subtle">
+          Sent to AI the next time you run this task.
+        </p>
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={!text.trim() || addComment.isPending}
+        >
+          {addComment.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : null}
+          Comment
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -672,19 +735,31 @@ export function TaskDetail({
       {agentLogs.length > 0 ? (
         <ol className="space-y-3">
           {[...agentLogs].reverse().map((entry, index) => {
+            const isComment =
+              entry.author === "user" || entry.action === "comment";
             const shot =
               entry.action === "screenshot"
                 ? screenshotDetails(entry.details)
                 : null;
-            const details = shot ? null : formatDetails(entry.details);
+            const commentText = isComment
+              ? asString((entry.details as { text?: unknown })?.text)
+              : undefined;
+            const details =
+              shot || isComment ? null : formatDetails(entry.details);
             return (
               <li key={index} className="flex gap-3">
-                <span
-                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: "#D97757" }}
-                >
-                  <ClaudeLogo className="h-4 w-4 text-white" />
-                </span>
+                {isComment ? (
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-hover text-[11px] font-semibold text-muted-foreground">
+                    {initials(entry.agentName)}
+                  </span>
+                ) : (
+                  <span
+                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: "#D97757" }}
+                  >
+                    <ClaudeLogo className="h-4 w-4 text-white" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className="text-sm font-medium text-foreground">
@@ -692,7 +767,11 @@ export function TaskDetail({
                     </span>
                     {entry.action && (
                       <span className="text-sm text-muted-foreground">
-                        {shot ? "attached a screenshot" : entry.action}
+                        {shot
+                          ? "attached a screenshot"
+                          : isComment
+                            ? "commented"
+                            : entry.action}
                       </span>
                     )}
                     {entry.timestamp && (
@@ -701,6 +780,11 @@ export function TaskDetail({
                       </span>
                     )}
                   </div>
+                  {commentText && (
+                    <p className="mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-surface-card px-3 py-2 text-sm text-foreground">
+                      {commentText}
+                    </p>
+                  )}
                   {shot && (
                     <AttachmentImage
                       taskId={task.id}
@@ -723,6 +807,8 @@ export function TaskDetail({
           <p className="text-sm italic text-text-subtle">No activity yet.</p>
         )
       )}
+
+      <CommentBox taskId={task.id} />
     </section>
   );
 

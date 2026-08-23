@@ -321,12 +321,16 @@ function installCitsheShotCli() {
       'else',
       '  cp "$SRC" "$OUT"',
       'fi',
-      'B64="$(base64 -w0 "$OUT")"',
-      'jq -n --arg img "$B64" --arg cap "$CAPTION" \'{image:$img, caption:$cap, mimeType:"image/png"}\' | \\',
+      // Base64 to a file, then jq --rawfile — a full-page PNG is far bigger than
+      // ARG_MAX, so it must NOT be passed as a shell arg (that was the
+      // "jq: Argument list too long" failure).
+      'B64F="$(mktemp)"',
+      'base64 -w0 "$OUT" > "$B64F"',
+      'jq -n --rawfile img "$B64F" --arg cap "$CAPTION" \'{image:$img, caption:$cap, mimeType:"image/png"}\' | \\',
       '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/screenshot" \\',
       '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" \\',
       '    -H "Content-Type: application/json" -d @-',
-      'rm -f "$OUT"',
+      'rm -f "$OUT" "$B64F"',
       'echo',
     ].join('\n');
     fs.writeFileSync(path.join(binDir, 'citshe-shot'), script, { mode: 0o755 });

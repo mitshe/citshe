@@ -165,6 +165,13 @@ export const api = {
         token,
       }),
 
+    addComment: (id: string, text: string, token: string) =>
+      request<{ entry: unknown }>(`/tasks/${id}/comment`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+        token,
+      }),
+
     close: (id: string, token: string) =>
       request<{ task: Task; message: string }>(`/tasks/${id}/close`, {
         method: "POST",

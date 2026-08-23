@@ -180,6 +180,52 @@ export class TasksService {
     return attachment;
   }
 
+  /**
+   * Add a user comment to a task's activity feed. Stored as a `comment` entry in
+   * agentLogs so it renders in the same timeline as the AI's entries. The next
+   * time the task is sent to AI, unaddressed comments are folded into the
+   * worker prompt (see OrchestrationService).
+   */
+  async addComment(
+    organizationId: string,
+    taskId: string,
+    userId: string,
+    text: string,
+  ) {
+    const trimmed = text.trim();
+    if (!trimmed) throw new BadRequestException('Comment is empty');
+
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, agentLogs: true },
+    });
+    if (!task) throw new NotFoundException(`Task ${taskId} not found`);
+
+    // A friendly display name for the timeline.
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    const authorName =
+      [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
+      user?.email ||
+      'You';
+
+    const entry = {
+      agentName: authorName,
+      author: 'user',
+      action: 'comment',
+      details: { text: trimmed.slice(0, 5000) },
+      timestamp: new Date().toISOString(),
+    };
+    const existing = Array.isArray(task.agentLogs) ? task.agentLogs : [];
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { agentLogs: [...existing, entry] as Prisma.JsonArray },
+    });
+    return entry;
+  }
+
   async update(organizationId: string, id: string, dto: UpdateTaskDto) {
     const task = await this.findOne(organizationId, id);
     const previousStatus = task.status;

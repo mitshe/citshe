@@ -676,10 +676,12 @@ export class OrchestrationService {
         details: { title: task.title },
       });
 
+      const comments = await this.collectUserComments(taskId);
       const prompt = this.buildWorkerInstructions(
         task.title,
         task.description,
         task.deliveryMode ?? 'PR',
+        comments,
       );
       // Run Claude INTERACTIVELY inside the shared tmux "agent" window so you
       // can watch it live and even take over (attach to the same window). We
@@ -785,6 +787,34 @@ export class OrchestrationService {
    * emit it live. emitAgentLog alone only pushes a WS event, so re-opening a
    * task later showed "No activity yet" even though the worker had run.
    */
+  /**
+   * User comments added to a task's activity since the last worker run, so a
+   * re-run ("Process with AI" after leaving feedback) picks them up. We take
+   * comments that appear AFTER the most recent "executing" entry; if the worker
+   * never ran, all comments count.
+   */
+  private async collectUserComments(taskId: string): Promise<string[]> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { agentLogs: true },
+    });
+    const logs = Array.isArray(task?.agentLogs)
+      ? (task.agentLogs as Array<Record<string, unknown>>)
+      : [];
+    let lastRun = -1;
+    logs.forEach((l, i) => {
+      if (l.action === 'executing') lastRun = i;
+    });
+    return logs
+      .slice(lastRun + 1)
+      .filter((l) => l.action === 'comment')
+      .map((l) => {
+        const d = l.details as { text?: unknown } | undefined;
+        return typeof d?.text === 'string' ? d.text : '';
+      })
+      .filter((t) => t.trim().length > 0);
+  }
+
   private async recordAgentLog(
     organizationId: string,
     taskId: string,
@@ -975,10 +1005,17 @@ export class OrchestrationService {
     title: string,
     description: string | null,
     deliveryMode: DeliveryMode = 'PR',
+    comments: string[] = [],
   ): string {
-    const body = description?.trim()
+    const base = description?.trim()
       ? `${title}\n\n${description.trim()}`
       : title;
+    // Fold any user comments in as additional instructions for this run.
+    const body =
+      comments.length > 0
+        ? `${base}\n\nADDITIONAL INSTRUCTIONS FROM THE USER (address these):\n` +
+          comments.map((c) => `- ${c}`).join('\n')
+        : base;
 
     // The worker prints a machine-readable marker as its LAST line so citshe
     // can record the real PR link / pushed branch on the task.
