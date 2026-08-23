@@ -271,6 +271,51 @@ function installCitsheTaskCli() {
   }
 }
 
+/**
+ * Install `citshe-shot <url|file.png> [caption]` so the agent can attach a
+ * screenshot to its task's activity feed while testing. A URL is rendered with
+ * headless Chromium (Playwright); a file path is uploaded as-is. Needs
+ * CITSHE_TASK_ID (the task the worker runs) in addition to the worker token.
+ */
+function installCitsheShotCli() {
+  if (
+    !process.env.CITSHE_WORKER_TOKEN ||
+    !process.env.CITSHE_API_URL ||
+    !process.env.CITSHE_TASK_ID
+  )
+    return;
+  const binDir = '/home/executor/bin';
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    const script = [
+      '#!/bin/bash',
+      '# citshe-shot <url|file.png> [caption] — attach a screenshot to this task.',
+      'set -e',
+      'SRC="$1"; CAPTION="$2"',
+      'if [ -z "$SRC" ]; then echo "usage: citshe-shot <url|file.png> [caption]" >&2; exit 1; fi',
+      'OUT="$(mktemp --suffix=.png)"',
+      'if echo "$SRC" | grep -qE \'^https?://\'; then',
+      '  # Render the URL with the Chromium that ships in the executor image.',
+      '  PW="npx playwright"; command -v playwright >/dev/null 2>&1 && PW="playwright"',
+      '  $PW screenshot --full-page --wait-for-timeout=1500 "$SRC" "$OUT" >/dev/null 2>&1',
+      'else',
+      '  cp "$SRC" "$OUT"',
+      'fi',
+      'B64="$(base64 -w0 "$OUT")"',
+      'jq -n --arg img "$B64" --arg cap "$CAPTION" \'{image:$img, caption:$cap, mimeType:"image/png"}\' | \\',
+      '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/screenshot" \\',
+      '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" \\',
+      '    -H "Content-Type: application/json" -d @-',
+      'rm -f "$OUT"',
+      'echo',
+    ].join('\n');
+    fs.writeFileSync(path.join(binDir, 'citshe-shot'), script, { mode: 0o755 });
+    log('Installed citshe-shot CLI (agent can attach screenshots to the task)');
+  } catch (err) {
+    log('Could not install citshe-shot CLI: ' + err.message);
+  }
+}
+
 function getToken(config) {
   return config.accessToken || config.apiToken || config.token || config.apiKey || null;
 }
@@ -483,6 +528,7 @@ async function setup() {
   writeInstructions(config.instructions, config.provider);
   installSkills(config.skills);
   installCitsheTaskCli();
+  installCitsheShotCli();
   preacceptClaudeBypass();
   startTmux();
 

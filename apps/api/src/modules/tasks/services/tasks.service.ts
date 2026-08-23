@@ -126,6 +126,60 @@ export class TasksService {
     return task;
   }
 
+  /**
+   * Attach a screenshot (usually from a worker's `citshe-shot`) to a task and
+   * append a `screenshot` entry to its activity feed. Bytes are stored in the
+   * DB; the UI loads them from GET /tasks/:id/attachments/:attachmentId.
+   */
+  async attachScreenshot(
+    organizationId: string,
+    taskId: string,
+    input: { data: Uint8Array; mimeType: string; caption?: string },
+  ) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, agentLogs: true },
+    });
+    if (!task) throw new NotFoundException(`Task ${taskId} not found`);
+
+    const attachment = await this.prisma.taskAttachment.create({
+      data: {
+        taskId,
+        organizationId,
+        mimeType: input.mimeType,
+        caption: input.caption?.slice(0, 500),
+        data: new Uint8Array(input.data),
+      },
+      select: { id: true, caption: true, mimeType: true, createdAt: true },
+    });
+
+    // Record it in the activity feed so it shows inline under the task.
+    const existing = Array.isArray(task.agentLogs) ? task.agentLogs : [];
+    const logEntry = {
+      agentName: 'worker',
+      action: 'screenshot',
+      details: { attachmentId: attachment.id, caption: input.caption ?? null },
+      timestamp: new Date().toISOString(),
+    };
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { agentLogs: [...existing, logEntry] as Prisma.JsonArray },
+    });
+
+    return attachment;
+  }
+
+  /** Stream one attachment's bytes (authorized by org ownership of its task). */
+  async getAttachment(organizationId: string, attachmentId: string) {
+    const attachment = await this.prisma.taskAttachment.findFirst({
+      where: { id: attachmentId, organizationId },
+    });
+    if (!attachment) {
+      throw new NotFoundException(`Attachment ${attachmentId} not found`);
+    }
+    return attachment;
+  }
+
   async update(organizationId: string, id: string, dto: UpdateTaskDto) {
     const task = await this.findOne(organizationId, id);
     const previousStatus = task.status;

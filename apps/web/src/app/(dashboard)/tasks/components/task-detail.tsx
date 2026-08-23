@@ -62,6 +62,7 @@ import {
   useCloseTask,
   useReopenTask,
   useProcessTask,
+  useAuthToken,
 } from "@/lib/api/hooks";
 import { toast } from "sonner";
 import type {
@@ -102,6 +103,90 @@ function normalizeAgentLogs(raw: unknown): AgentLogEntry[] {
     details: entry.details,
     timestamp: asString(entry.timestamp),
   }));
+}
+
+/** Pull { attachmentId, caption } off a `screenshot` entry's details. */
+function screenshotDetails(
+  details: unknown,
+): { attachmentId: string; caption?: string } | null {
+  if (!isRecord(details)) return null;
+  const attachmentId = asString(details.attachmentId);
+  if (!attachmentId) return null;
+  return { attachmentId, caption: asString(details.caption) ?? undefined };
+}
+
+/**
+ * Loads a task attachment (screenshot) as an object URL. The GET route is
+ * bearer-authed, so an <img src> can't hit it directly — we fetch the blob with
+ * the token and render that. Click opens the full image in a new tab.
+ */
+function AttachmentImage({
+  taskId,
+  attachmentId,
+  caption,
+}: {
+  taskId: string;
+  attachmentId: string;
+  caption?: string;
+}) {
+  const getToken = useAuthToken();
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let revoked = false;
+    let objectUrl: string | null = null;
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `/api/v1/tasks/${taskId}/attachments/${attachmentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+        );
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        if (revoked) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      } catch {
+        if (!revoked) setFailed(true);
+      }
+    })();
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [taskId, attachmentId, getToken]);
+
+  if (failed) {
+    return (
+      <p className="mt-1.5 text-xs italic text-text-subtle">
+        Couldn&apos;t load screenshot.
+      </p>
+    );
+  }
+
+  return (
+    <figure className="mt-1.5">
+      {url ? (
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={caption ?? "Screenshot"}
+            className="max-h-64 w-auto max-w-full rounded-md border border-border object-contain transition-linear hover:border-border-strong"
+          />
+        </a>
+      ) : (
+        <div className="h-32 w-48 animate-pulse rounded-md border border-border bg-surface-inset" />
+      )}
+      {caption && (
+        <figcaption className="mt-1 text-xs text-text-subtle">
+          {caption}
+        </figcaption>
+      )}
+    </figure>
+  );
 }
 
 /** Compactly render an entry's `details` payload for the timeline. */
@@ -587,7 +672,11 @@ export function TaskDetail({
       {agentLogs.length > 0 ? (
         <ol className="space-y-3">
           {[...agentLogs].reverse().map((entry, index) => {
-            const details = formatDetails(entry.details);
+            const shot =
+              entry.action === "screenshot"
+                ? screenshotDetails(entry.details)
+                : null;
+            const details = shot ? null : formatDetails(entry.details);
             return (
               <li key={index} className="flex gap-3">
                 <span
@@ -603,7 +692,7 @@ export function TaskDetail({
                     </span>
                     {entry.action && (
                       <span className="text-sm text-muted-foreground">
-                        {entry.action}
+                        {shot ? "attached a screenshot" : entry.action}
                       </span>
                     )}
                     {entry.timestamp && (
@@ -612,6 +701,13 @@ export function TaskDetail({
                       </span>
                     )}
                   </div>
+                  {shot && (
+                    <AttachmentImage
+                      taskId={task.id}
+                      attachmentId={shot.attachmentId}
+                      caption={shot.caption}
+                    />
+                  )}
                   {details && (
                     <pre className="mt-1.5 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface-inset p-2 font-mono text-xs text-muted-foreground">
                       {details}

@@ -2,13 +2,22 @@ import {
   Body,
   Controller,
   Headers,
+  Param,
   Post,
+  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { TasksService } from '../services/tasks.service';
+
+interface WorkerTokenPayload {
+  organizationId: string;
+  userId: string;
+  taskId?: string;
+  type: string;
+}
 
 /**
  * Lets a worker container create follow-up tasks on the board. It is NOT behind
@@ -25,30 +34,36 @@ export class WorkerTasksController {
     private readonly config: ConfigService,
   ) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Create a task from inside a worker container' })
-  async create(
-    @Headers('authorization') authorization: string | undefined,
-    @Body() body: { title?: string; description?: string; labels?: string[] },
-  ) {
+  /** Verify + decode a worker token, or throw 401. */
+  private verifyWorker(authorization: string | undefined): WorkerTokenPayload {
     const token = authorization?.replace(/^Bearer\s+/i, '').trim();
     if (!token) throw new UnauthorizedException('Missing worker token');
 
-    let payload: { organizationId: string; userId: string; type: string };
+    let payload: WorkerTokenPayload;
     try {
       payload = jwt.verify(
         token,
         this.config.get<string>('JWT_SECRET') || 'dev-secret',
-      ) as typeof payload;
+      ) as WorkerTokenPayload;
     } catch {
       throw new UnauthorizedException('Invalid worker token');
     }
     if (payload.type !== 'worker') {
       throw new UnauthorizedException('Not a worker token');
     }
+    return payload;
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create a task from inside a worker container' })
+  async create(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { title?: string; description?: string; labels?: string[] },
+  ) {
+    const payload = this.verifyWorker(authorization);
 
     const title = (body.title || '').trim();
-    if (!title) throw new UnauthorizedException('title is required');
+    if (!title) throw new BadRequestException('title is required');
 
     const task = await this.tasksService.create(
       payload.organizationId,
@@ -62,5 +77,42 @@ export class WorkerTasksController {
       },
     );
     return { id: task.id, title: task.title };
+  }
+
+  @Post(':taskId/screenshot')
+  @ApiOperation({
+    summary: 'Attach a screenshot (base64 PNG) to the task from a worker',
+  })
+  async screenshot(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('taskId') taskId: string,
+    @Body() body: { image?: string; caption?: string; mimeType?: string },
+  ) {
+    const payload = this.verifyWorker(authorization);
+
+    // The token pins the task it may attach to; the path must match it.
+    if (payload.taskId && payload.taskId !== taskId) {
+      throw new UnauthorizedException('Token is not for this task');
+    }
+
+    const b64 = (body.image || '').replace(/^data:[^,]+,/, '').trim();
+    if (!b64) throw new BadRequestException('image (base64) is required');
+
+    const data = Buffer.from(b64, 'base64');
+    // Guard against absurd payloads (≈8MB of raw image).
+    if (data.length === 0 || data.length > 8 * 1024 * 1024) {
+      throw new BadRequestException('image is empty or too large (max 8MB)');
+    }
+
+    const attachment = await this.tasksService.attachScreenshot(
+      payload.organizationId,
+      taskId,
+      {
+        data,
+        mimeType: body.mimeType || 'image/png',
+        caption: body.caption,
+      },
+    );
+    return { id: attachment.id };
   }
 }

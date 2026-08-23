@@ -7,10 +7,12 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -135,6 +137,24 @@ export class TasksController {
   ) {
     const task = await this.tasksService.findOne(organizationId, id);
     return { task };
+  }
+
+  @Get(':id/attachments/:attachmentId')
+  @ApiOperation({ summary: 'Stream a task attachment (e.g. a screenshot)' })
+  @ApiResponse({ status: 200, description: 'The attachment bytes' })
+  @ApiResponse({ status: 404, description: 'Attachment not found' })
+  async getAttachment(
+    @OrganizationId() organizationId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
+  ) {
+    const attachment = await this.tasksService.getAttachment(
+      organizationId,
+      attachmentId,
+    );
+    res.setHeader('Content-Type', attachment.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(Buffer.from(attachment.data));
   }
 
   @Put(':id')

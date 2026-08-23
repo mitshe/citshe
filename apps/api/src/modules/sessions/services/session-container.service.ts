@@ -42,6 +42,11 @@ export interface SessionContainerConfig {
    * board via POST /api/v1/worker/tasks. Injected as CITSHE_WORKER_TOKEN.
    */
   workerToken?: string;
+  /**
+   * The task this worker is running, injected as CITSHE_TASK_ID so the agent
+   * can attach screenshots to it (citshe-shot).
+   */
+  workerTaskId?: string;
 }
 
 /**
@@ -117,11 +122,15 @@ export class SessionContainerService implements OnModuleInit {
           ...(config.environment?.variables?.map(
             (v) => `${v.key}=${v.value}`,
           ) || []),
-          // Let the worker create follow-up tasks on the board (citshe-task).
+          // Let the worker create follow-up tasks (citshe-task) and attach
+          // screenshots to its task (citshe-shot).
           ...(config.workerToken
             ? [
                 'CITSHE_API_URL=http://api:3001',
                 `CITSHE_WORKER_TOKEN=${config.workerToken}`,
+                ...(config.workerTaskId
+                  ? [`CITSHE_TASK_ID=${config.workerTaskId}`]
+                  : []),
               ]
             : []),
         ],

@@ -191,6 +191,7 @@ model Task {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repository   Repository?   @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
   session      AgentSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  attachments  TaskAttachment[]
 
   @@index([organizationId])
   @@index([repositoryId])
@@ -198,6 +199,24 @@ model Task {
   @@index([sessionId])
   @@index([queueOrder])
   @@map("tasks")
+}
+
+// Images (mostly worker screenshots via citshe-shot) attached to a task and
+// shown in its activity feed. Bytes live in the DB so there is no volume to
+// mount and they're covered by normal DB backups; screenshots are small.
+model TaskAttachment {
+  id             String   @id @default(cuid())
+  taskId         String   @map("task_id")
+  organizationId String   @map("organization_id")
+  mimeType       String   @map("mime_type")
+  caption        String?
+  data           Bytes
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_attachments")
 }
 
 // ============================================================================

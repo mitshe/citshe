@@ -36,9 +36,13 @@ export class OrchestrationService {
    * Sign a short-lived token the worker container uses to create follow-up
    * tasks on the board (POST /api/v1/worker/tasks) as the same org/user.
    */
-  private signWorkerToken(organizationId: string, userId: string): string {
+  private signWorkerToken(
+    organizationId: string,
+    userId: string,
+    taskId?: string,
+  ): string {
     return jwt.sign(
-      { organizationId, userId, type: 'worker' },
+      { organizationId, userId, taskId, type: 'worker' },
       this.config.get<string>('JWT_SECRET') || 'dev-secret',
       { expiresIn: '2h' },
     );
@@ -585,7 +589,12 @@ export class OrchestrationService {
           enableBrowser: session.enableBrowser,
           integrations:
             integrationConfigs.length > 0 ? integrationConfigs : undefined,
-          workerToken: this.signWorkerToken(organizationId, task.createdBy),
+          workerToken: this.signWorkerToken(
+            organizationId,
+            task.createdBy,
+            task.id,
+          ),
+          workerTaskId: task.id,
         },
         async (cid) => {
           await this.sessionsService.updateContainerId(session.id, cid);
@@ -976,6 +985,10 @@ export class OrchestrationService {
       `task, add it to the board by running: ` +
       `citshe-task "short title" "one-line description". Only do this for real, ` +
       `actionable follow-ups — don't spam the board.\n\n` +
+      `If you test a running web app (e.g. a dev server you started), you can ` +
+      `attach a screenshot to this task as evidence by running: ` +
+      `citshe-shot <url> "what this shows" (e.g. citshe-shot http://localhost:3000 ` +
+      `"home page after the change"). It appears in the task's activity.\n\n` +
       `TASK:\n${body}`
     );
   }
