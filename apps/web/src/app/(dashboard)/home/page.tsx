@@ -100,10 +100,9 @@ export default function HomePage() {
   const isSetUp = hasRepo;
 
   return (
-    <div className="w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 space-y-10">
-
+    <div className="w-full max-w-[1400px] px-4 py-5 sm:px-6 sm:py-6 space-y-6">
       {/* Header */}
-      <header className="space-y-2">
+      <header className="space-y-1.5">
         <p className="text-xs font-medium uppercase tracking-wider text-text-subtle">
           {greeting}
         </p>
@@ -137,7 +136,7 @@ export default function HomePage() {
           />
 
           {/* Columns — Repos / Live terminals / Recent tasks (stack on mobile) */}
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-x-4 gap-y-5 md:grid-cols-3">
             {/* Repos */}
             <section className="space-y-3">
               <SectionHeader
