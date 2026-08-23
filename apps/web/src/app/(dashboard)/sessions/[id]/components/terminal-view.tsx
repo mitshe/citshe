@@ -26,6 +26,9 @@ export function TerminalView({
   const fitRef = useRef<any>(null);
   const touchCleanupRef = useRef<(() => void) | null>(null);
   const { socket, subscribeToSession, unsubscribeFromSession } = useSocket();
+  // Live socket for handlers created once at mount (e.g. touch scroll).
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
   const startTerminal = useStartTerminal();
   const [terminalReady, setTerminalReady] = useState(false);
 
@@ -56,6 +59,16 @@ export function TerminalView({
       // @ts-expect-error CSS import
       await import("@xterm/xterm/css/xterm.css");
 
+      if (disposed) return;
+
+      // WebGL renderer for smooth scrolling/redraw on mobile (falls back to the
+      // default DOM renderer if the context is lost or unavailable).
+      let WebglAddon: typeof import("@xterm/addon-webgl").WebglAddon | undefined;
+      try {
+        ({ WebglAddon } = await import("@xterm/addon-webgl"));
+      } catch {
+        WebglAddon = undefined;
+      }
       if (disposed) return;
 
       terminal = new Terminal({
@@ -104,6 +117,26 @@ export function TerminalView({
       terminal.loadAddon(fitAddon);
       terminal.open(termRef.current!);
 
+      // WebGL renderer (best perf on mobile). If the GPU context is lost, xterm
+      // disposes the addon and reverts to the DOM renderer automatically.
+      if (WebglAddon) {
+        try {
+          const webgl = new WebglAddon();
+          webgl.onContextLoss(() => webgl.dispose());
+          terminal.loadAddon(webgl);
+        } catch {
+          /* WebGL unavailable — DOM renderer is fine */
+        }
+      }
+
+      // iOS zooms the whole page when you focus an input whose font is < 16px.
+      // xterm's hidden textarea inherits the (12px) terminal font, so pin it to
+      // 16px — it's invisible, so this only affects zoom behavior, not layout.
+      const helper = termRef.current!.querySelector(
+        ".xterm-helper-textarea",
+      ) as HTMLElement | null;
+      if (helper) helper.style.fontSize = "16px";
+
       // xterm has no native touch scrolling — translate vertical swipes into
       // scrollback movement so the terminal is usable on a phone. We attach to
       // the xterm viewport so it doesn't fight text selection elsewhere.
@@ -113,6 +146,7 @@ export function TerminalView({
       if (viewport) {
         // Native momentum scroll for the viewport element itself.
         viewport.style.setProperty("-webkit-overflow-scrolling", "touch");
+        viewport.style.setProperty("overscroll-behavior", "contain");
         let touchStartY = 0;
         let touchAccum = 0;
         const onTouchStart = (e: TouchEvent) => {
@@ -132,7 +166,22 @@ export function TerminalView({
               ._core?._renderService?.dimensions?.css?.cell?.height || 18;
           const lines = Math.trunc(touchAccum / cell);
           if (lines !== 0) {
-            term.scrollLines(lines);
+            // In a full-screen TUI (Claude Code, vim, less) the alternate
+            // buffer has no scrollback — send arrow keys instead so a swipe
+            // moves the cursor/selection like a scroll would.
+            const isAlt = term.buffer?.active?.type === "alternate";
+            if (isAlt) {
+              const seq = lines > 0 ? "\x1b[B" : "\x1b[A";
+              const steps = Math.min(Math.abs(lines), 6);
+              for (let i = 0; i < steps; i++) {
+                socketRef.current?.emit("session:input", {
+                  terminalId,
+                  input: seq,
+                });
+              }
+            } else {
+              term.scrollLines(lines);
+            }
             touchAccum -= lines * cell;
             e.preventDefault();
           }
@@ -180,7 +229,9 @@ export function TerminalView({
       fitRef.current = null;
       setTerminalReady(false);
     };
-  }, []);
+    // Init runs once — socket/terminalId are read live inside the touch handler
+    // and are stable; re-running would tear down and rebuild the terminal.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resize handling — fit xterm and notify backend PTY
   useEffect(() => {
@@ -360,6 +411,49 @@ export function TerminalView({
     );
   }, []);
 
+  // Keep the terminal + key bar ABOVE the software keyboard. iOS doesn't shrink
+  // the layout viewport for the keyboard (100dvh stays full), so we measure the
+  // overlap via visualViewport and pad the bottom by that much, then refit xterm
+  // to the smaller area. On Android/desktop the inset resolves to 0.
+  const [kbInset, setKbInset] = useState(0);
+  useEffect(() => {
+    if (!isTouch) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let raf = 0;
+    const onResize = () => {
+      const overlap = Math.max(
+        0,
+        window.innerHeight - vv.height - vv.offsetTop,
+      );
+      // Ignore tiny fluctuations (URL bar, rounding).
+      setKbInset(overlap > 80 ? Math.round(overlap) : 0);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        try {
+          fitRef.current?.fit();
+          const term = xtermRef.current;
+          if (term && socket && isRunning) {
+            socket.emit("session:resize", {
+              terminalId,
+              cols: term.cols,
+              rows: term.rows,
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+      });
+    };
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [isTouch, socket, isRunning, terminalId]);
+
   // Send a raw sequence to the PTY (used by the mobile key bar).
   const sendSequence = useCallback(
     (seq: string) => {
@@ -383,6 +477,9 @@ export function TerminalView({
         display: "flex",
         flexDirection: "column",
         background: "#161619",
+        // Lift everything above the software keyboard (iOS). 0 on desktop.
+        paddingBottom: kbInset ? `${kbInset}px` : undefined,
+        transition: "padding-bottom 120ms ease",
       }}
     >
       <div
@@ -403,7 +500,13 @@ export function TerminalView({
         <div ref={termRef} style={{ width: "100%", height: "100%" }} />
       </div>
       {isTouch && isRunning && (
-        <MobileKeyBar onSend={sendSequence} onFocus={focusTerminal} />
+        <MobileKeyBar
+          onSend={sendSequence}
+          onFocus={focusTerminal}
+          // Only pad for the home indicator when the keyboard is closed —
+          // otherwise the bar sits right on top of the keyboard.
+          safeBottom={kbInset === 0}
+        />
       )}
     </div>
   );

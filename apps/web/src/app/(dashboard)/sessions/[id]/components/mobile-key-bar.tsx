@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ClipboardPaste,
+  Keyboard as KeyboardIcon,
+} from "lucide-react";
 
 /**
  * On-screen key bar for the terminal on touch devices. The soft keyboard can't
- * produce Esc / Tab / Ctrl / arrows, which are required to work in a shell,
- * vim, or Claude Code — this bar sends the raw control sequences to the PTY.
+ * produce Esc / Tab / Ctrl / Alt / arrows, which are required to work in a
+ * shell, vim, or Claude Code — this bar sends the raw control sequences to the
+ * PTY. Ctrl and Alt are latching modifiers: tap one, then the next key is
+ * modified (and the modifier clears). A Paste button reads the clipboard.
  */
 
-// Control sequences (what a real terminal sends for these keys).
 const ESC = "\x1b";
 const TAB = "\t";
 const ARROW_UP = "\x1b[A";
@@ -28,29 +36,53 @@ function ctrlByte(ch: string): string {
 interface MobileKeyBarProps {
   onSend: (seq: string) => void;
   onFocus: () => void;
+  /** Add home-indicator safe-area padding (only when the keyboard is closed). */
+  safeBottom?: boolean;
 }
 
-export function MobileKeyBar({ onSend, onFocus }: MobileKeyBarProps) {
-  // When Ctrl is armed, the next printable key becomes Ctrl+<key>.
+export function MobileKeyBar({ onSend, onFocus, safeBottom }: MobileKeyBarProps) {
+  // Latching modifiers: when armed, the next key is modified, then it clears.
   const [ctrlArmed, setCtrlArmed] = useState(false);
+  const [altArmed, setAltArmed] = useState(false);
 
-  const send = (seq: string) => {
-    onSend(seq);
+  const clearMods = () => {
+    setCtrlArmed(false);
+    setAltArmed(false);
   };
 
-  const handlePrintableCombo = (ch: string) => {
-    if (ctrlArmed) {
-      send(ctrlByte(ch));
-      setCtrlArmed(false);
-    } else {
-      send(ch);
+  // Send a printable/base key, applying any armed modifiers.
+  const sendKey = (ch: string) => {
+    let seq = ctrlArmed ? ctrlByte(ch) : ch;
+    if (altArmed) seq = ESC + seq; // Alt = ESC prefix
+    onSend(seq);
+    clearMods();
+  };
+
+  // Send a raw control sequence (arrows, Esc, Tab); Alt still prefixes.
+  const sendSeq = (seq: string) => {
+    onSend(altArmed ? ESC + seq : seq);
+    clearMods();
+  };
+
+  const paste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) onSend(text);
+    } catch {
+      /* clipboard blocked — no-op */
     }
+    onFocus();
   };
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-t border-border bg-surface-card px-1.5 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <Key label="Esc" onClick={() => send(ESC)} />
-      <Key label="Tab" onClick={() => send(TAB)} />
+    <div
+      className={cn(
+        "flex items-center gap-1.5 overflow-x-auto border-t border-border bg-surface-card px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        safeBottom && "pb-safe",
+      )}
+    >
+      <Key label="Esc" onClick={() => sendSeq(ESC)} />
+      <Key label="Tab" onClick={() => sendSeq(TAB)} />
       <Key
         label="Ctrl"
         armed={ctrlArmed}
@@ -59,31 +91,47 @@ export function MobileKeyBar({ onSend, onFocus }: MobileKeyBarProps) {
           onFocus();
         }}
       />
-      {/* Common Ctrl combos as one-taps (respect the armed modifier too) */}
-      <Key label="^C" onClick={() => { send(ctrlByte("C")); setCtrlArmed(false); }} />
-      <Key label="^D" onClick={() => { send(ctrlByte("D")); setCtrlArmed(false); }} />
-      <Key label="^Z" onClick={() => { send(ctrlByte("Z")); setCtrlArmed(false); }} />
-      <Key label="^L" onClick={() => { send(ctrlByte("L")); setCtrlArmed(false); }} />
+      <Key
+        label="Alt"
+        armed={altArmed}
+        onClick={() => {
+          setAltArmed((v) => !v);
+          onFocus();
+        }}
+      />
 
-      <div className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+      <Divider />
 
-      <Key label="/" onClick={() => handlePrintableCombo("/")} />
-      <Key label="|" onClick={() => handlePrintableCombo("|")} />
-      <Key label="-" onClick={() => handlePrintableCombo("-")} />
-      <Key label="~" onClick={() => handlePrintableCombo("~")} />
+      {/* Common Ctrl combos as one-taps. */}
+      <Key label="^C" onClick={() => { onSend(ctrlByte("C")); clearMods(); }} />
+      <Key label="^D" onClick={() => { onSend(ctrlByte("D")); clearMods(); }} />
+      <Key label="^Z" onClick={() => { onSend(ctrlByte("Z")); clearMods(); }} />
+      <Key label="^L" onClick={() => { onSend(ctrlByte("L")); clearMods(); }} />
 
-      <div className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+      <Divider />
 
-      <Key icon={<ArrowUp className="h-3.5 w-3.5" />} onClick={() => send(ARROW_UP)} />
-      <Key icon={<ArrowDown className="h-3.5 w-3.5" />} onClick={() => send(ARROW_DOWN)} />
-      <Key icon={<ArrowLeft className="h-3.5 w-3.5" />} onClick={() => send(ARROW_LEFT)} />
-      <Key icon={<ArrowRight className="h-3.5 w-3.5" />} onClick={() => send(ARROW_RIGHT)} />
+      <Key label="/" onClick={() => sendKey("/")} />
+      <Key label="|" onClick={() => sendKey("|")} />
+      <Key label="-" onClick={() => sendKey("-")} />
+      <Key label="~" onClick={() => sendKey("~")} />
 
-      <div className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+      <Divider />
 
-      <Key label="Keyboard" onClick={onFocus} wide />
+      <Key icon={<ArrowUp className="h-4 w-4" />} onClick={() => sendSeq(ARROW_UP)} />
+      <Key icon={<ArrowDown className="h-4 w-4" />} onClick={() => sendSeq(ARROW_DOWN)} />
+      <Key icon={<ArrowLeft className="h-4 w-4" />} onClick={() => sendSeq(ARROW_LEFT)} />
+      <Key icon={<ArrowRight className="h-4 w-4" />} onClick={() => sendSeq(ARROW_RIGHT)} />
+
+      <Divider />
+
+      <Key icon={<ClipboardPaste className="h-4 w-4" />} onClick={paste} aria-label="Paste" />
+      <Key icon={<KeyboardIcon className="h-4 w-4" />} onClick={onFocus} aria-label="Show keyboard" />
     </div>
   );
+}
+
+function Divider() {
+  return <div className="mx-0.5 h-6 w-px shrink-0 bg-border" />;
 }
 
 function Key({
@@ -91,22 +139,23 @@ function Key({
   icon,
   onClick,
   armed,
-  wide,
+  "aria-label": ariaLabel,
 }: {
   label?: string;
   icon?: React.ReactNode;
   onClick: () => void;
   armed?: boolean;
-  wide?: boolean;
+  "aria-label"?: string;
 }) {
   return (
     <button
       // Keep the terminal from losing focus / avoid the 300ms tap delay.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
+      aria-label={ariaLabel}
+      aria-pressed={armed}
       className={cn(
-        "flex h-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset px-2.5 text-xs font-medium text-foreground active:bg-surface-hover transition-linear",
-        wide && "px-3",
+        "flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset px-3 text-sm font-medium text-foreground transition-linear active:bg-surface-hover",
         armed && "border-primary bg-primary/15 text-primary",
       )}
     >
