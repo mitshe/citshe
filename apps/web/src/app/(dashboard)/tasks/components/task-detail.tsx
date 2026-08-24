@@ -46,6 +46,7 @@ import {
   ArrowUpRight,
   ArrowLeft,
   ChevronDown,
+  Globe,
   Link as LinkIcon,
 } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -118,6 +119,8 @@ function actionLabel(
       return "failed";
     case "note":
       return "";
+    case "site":
+      return "deployed the site";
     default:
       return action;
   }
@@ -325,6 +328,14 @@ function extractPrUrl(result: Task["result"]): string | null {
   return null;
 }
 
+/** Pull the deployed site url out of task.result, if any (build tasks). */
+function extractSiteUrl(result: Task["result"]): string | null {
+  if (!isRecord(result)) return null;
+  const value = result["siteUrl"];
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  return null;
+}
+
 const CLOSED_STATUSES: TaskStatus[] = ["COMPLETED", "CANCELLED", "FAILED"];
 const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
 
@@ -499,6 +510,7 @@ export function TaskDetail({
   const agentLogs = normalizeAgentLogs(task.agentLogs);
   const resultSummary = extractResultSummary(task.result);
   const prUrl = extractPrUrl(task.result);
+  const siteUrl = extractSiteUrl(task.result);
   const saving = updateTask.isPending;
   const liveWorker =
     !!task.sessionId &&
@@ -666,6 +678,15 @@ export function TaskDetail({
           Process with AI
         </Button>
       )}
+      {siteUrl && (
+        <a href={siteUrl} target="_blank" rel="noopener noreferrer">
+          <Button variant="primary" size="sm">
+            <Globe className="mr-2 h-3.5 w-3.5" />
+            Open site
+            <ExternalLink className="ml-1.5 h-3 w-3 opacity-70" />
+          </Button>
+        </a>
+      )}
       {prUrl && (
         <a href={prUrl} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm">
@@ -784,6 +805,10 @@ export function TaskDetail({
               entry.action === "finished"
                 ? asString((entry.details as { summary?: unknown })?.summary)?.trim()
                 : undefined;
+            const siteLink =
+              entry.action === "site"
+                ? asString((entry.details as { url?: unknown })?.url)?.trim()
+                : undefined;
             // Only surface a body for things worth reading — comments,
             // summaries, screenshots. "executing" just restates the title, and
             // other bare actions are noise, so no raw key/value box.
@@ -832,6 +857,18 @@ export function TaskDetail({
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                       {summaryText}
                     </p>
+                  )}
+                  {siteLink && (
+                    <a
+                      href={siteLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-linear hover:bg-primary/15"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      {siteLink}
+                      <ExternalLink className="h-3 w-3 opacity-70" />
+                    </a>
                   )}
                   {shot && (
                     <AttachmentImage

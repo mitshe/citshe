@@ -192,6 +192,12 @@ export const api = {
         method: "POST",
         token,
       }),
+
+    build: (id: string, token: string) =>
+      request<{ task: Task }>(`/tasks/${id}/build`, {
+        method: "POST",
+        token,
+      }),
   },
 
   integrations: {

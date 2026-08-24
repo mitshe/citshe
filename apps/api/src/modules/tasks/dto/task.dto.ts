@@ -3,6 +3,8 @@ import {
   IsOptional,
   IsEnum,
   IsObject,
+  IsIn,
+  IsUrl,
   IsArray,
   ArrayMaxSize,
   MinLength,
@@ -11,10 +13,42 @@ import {
   IsNumber,
   Min,
   Max,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TaskStatus, DeliveryMode } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+/**
+ * "New project" build instructions. When present, the task builds a site from
+ * scratch (or refreshes an existing one): the worker creates the repo itself,
+ * so no repositoryId is set.
+ */
+export class BuildSpecDto {
+  @IsIn(['scratch', 'refresh'])
+  mode: 'scratch' | 'refresh';
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10000)
+  prompt: string;
+
+  @IsUrl({ require_protocol: true })
+  @IsOptional()
+  @MaxLength(2048)
+  sourceUrl?: string;
+
+  @IsIn(['private', 'public'])
+  visibility: 'private' | 'public';
+
+  @IsIn(['next', 'astro', 'astro-svelte'])
+  @IsOptional()
+  stackHint?: 'next' | 'astro' | 'astro-svelte';
+
+  @IsIn(['cloudflare', 'vercel'])
+  @IsOptional()
+  hostingHint?: 'cloudflare' | 'vercel';
+}
 
 export class CreateTaskDto {
   @IsString()
@@ -47,6 +81,11 @@ export class CreateTaskDto {
   @IsEnum(DeliveryMode)
   @IsOptional()
   deliveryMode?: DeliveryMode;
+
+  @ValidateNested()
+  @Type(() => BuildSpecDto)
+  @IsOptional()
+  buildSpec?: BuildSpecDto;
 }
 
 export class UpdateTaskDto {

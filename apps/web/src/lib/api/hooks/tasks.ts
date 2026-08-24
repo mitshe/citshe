@@ -165,6 +165,26 @@ export function useEnqueueTask() {
   });
 }
 
+/** Start a "New project" build task immediately (ignores autoPull). */
+export function useBuildTask() {
+  const getToken = useAuthToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const token = await getToken();
+      const { task } = await api.tasks.build(id, token);
+      return task;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orchestration.queue(),
+      });
+    },
+  });
+}
+
 /** Reorder a task within the Queue column via a fractional queueOrder. */
 export function useReorderQueue() {
   const getToken = useAuthToken();

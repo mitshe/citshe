@@ -255,6 +255,20 @@ export class TasksController {
     return { task };
   }
 
+  @Post(':id/build')
+  @ApiOperation({
+    summary: 'Start a "New project" build task immediately (ignores autoPull)',
+  })
+  @ApiResponse({ status: 200, description: 'Build started' })
+  @HttpCode(HttpStatus.OK)
+  async build(
+    @OrganizationId() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    const task = await this.orchestration.startBuildTask(organizationId, id);
+    return { task };
+  }
+
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel a task' })
   @ApiResponse({

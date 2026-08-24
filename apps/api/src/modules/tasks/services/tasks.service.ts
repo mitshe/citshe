@@ -52,12 +52,16 @@ export class TasksService {
     const task = await this.prisma.task.create({
       data: {
         organizationId,
-        repositoryId: dto.repositoryId || null,
+        // A build task creates its own repo — never bind an existing one.
+        repositoryId: dto.buildSpec ? null : dto.repositoryId || null,
         title: dto.title,
         description: dto.description,
         priority: dto.priority,
         labels: dto.labels ?? [],
         deliveryMode: dto.deliveryMode ?? undefined,
+        buildSpec: dto.buildSpec
+          ? (dto.buildSpec as unknown as Prisma.InputJsonValue)
+          : undefined,
         createdBy: userId,
         agentLogs: [],
       },
@@ -250,6 +254,43 @@ export class TasksService {
       data: { agentLogs: [...existing, entry] as Prisma.JsonArray },
     });
     return entry;
+  }
+
+  /**
+   * Record the live URL of a site a build task just deployed. Stores it on
+   * `result.siteUrl` (so the task card can show an "Open site" button) and
+   * drops a note in the activity feed.
+   */
+  async setWorkerSiteUrl(organizationId: string, taskId: string, url: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, agentLogs: true, result: true },
+    });
+    if (!task) throw new NotFoundException(`Task ${taskId} not found`);
+    const entry = {
+      agentName: 'worker',
+      action: 'site',
+      details: { url: url.slice(0, 2048) },
+      timestamp: new Date().toISOString(),
+    };
+    const existing = Array.isArray(task.agentLogs) ? task.agentLogs : [];
+    const prevResult =
+      task.result &&
+      typeof task.result === 'object' &&
+      !Array.isArray(task.result)
+        ? (task.result as Record<string, unknown>)
+        : {};
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: {
+        agentLogs: [...existing, entry] as Prisma.JsonArray,
+        result: {
+          ...prevResult,
+          siteUrl: url.slice(0, 2048),
+        } as Prisma.InputJsonValue,
+      },
+    });
+    return { ok: true };
   }
 
   /**

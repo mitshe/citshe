@@ -210,6 +210,12 @@ model Task {
   assigneeId     String?    @map("assignee_id")
   dueDate        DateTime?  @map("due_date")
 
+  // Set when this task was created by the "New project" wizard to build a site
+  // from scratch (or refresh an existing one). Shape (BuildSpec):
+  //   { mode: 'scratch'|'refresh', prompt, sourceUrl?, visibility, stackHint?, hostingHint? }
+  // A build task has no repositoryId — the worker creates the repo itself.
+  buildSpec Json? @map("build_spec")
+
   // Worker thread that executes this task (orchestrator dispatch)
   sessionId String? @map("session_id")
 

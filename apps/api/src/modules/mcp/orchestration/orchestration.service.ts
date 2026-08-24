@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import * as jwt from 'jsonwebtoken';
 import { TaskStatus, Prisma, DeliveryMode } from '@prisma/client';
+import { BuildSpec } from '@citshe/types';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SessionContainerService } from '../../sessions/services/session-container.service';
@@ -264,6 +265,44 @@ export class OrchestrationService {
   }
 
   /**
+   * Start a "New project" build task immediately, regardless of the portal's
+   * autoPull setting. The wizard calls this so the user watches Claude build
+   * right away; a fresh portal has autoPull off, so plain enqueue would sit in
+   * QUEUED. Respects only the hard queuePaused stop and worker capacity (via
+   * the task-queue processor / executeTask, which QUEUEs when at capacity).
+   */
+  async startBuildTask(organizationId: string, taskId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { id: true, status: true, queueOrder: true },
+    });
+    if (!task) {
+      return { status: 'error', message: `Task ${taskId} not found.` };
+    }
+
+    const queueOrder = task.queueOrder ?? 0;
+    const updated = await this.prisma.task.update({
+      where: { id: taskId },
+      data: { status: TaskStatus.QUEUED, queueOrder },
+    });
+    this.eventsGateway.emitTaskUpdate(organizationId, {
+      taskId,
+      status: TaskStatus.QUEUED,
+      message: 'Build queued…',
+    });
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { queuePaused: true },
+    });
+    if (!org?.queuePaused) {
+      await this.addTaskJob(organizationId, taskId, queueOrder);
+    }
+
+    return updated;
+  }
+
+  /**
    * Update a task's queueOrder (the frontend computes a fractional value
    * between neighbours). If the task has a pending BullMQ job, its priority is
    * re-derived so the worker pull order follows the new position.
@@ -406,20 +445,40 @@ export class OrchestrationService {
       };
     }
 
-    // Resolve repositories: explicit override, else the task's own repo, else
-    // the org's active repos (when there's exactly one).
-    const repositoryIds =
-      opts?.repositoryIds && opts.repositoryIds.length > 0
+    // Resolve repositories: build tasks create their own repo (none), else
+    // explicit override, else the task's own repo, else the org's active repos.
+    const repositoryIds = task.buildSpec
+      ? []
+      : opts?.repositoryIds && opts.repositoryIds.length > 0
         ? opts.repositoryIds
         : task.repositoryId
           ? [task.repositoryId]
           : await this.defaultRepositoryIds(organizationId);
 
+    // A build task has no repo to clone, so attach the org's GitHub
+    // integration explicitly (repos normally carry it) — the worker needs `gh`
+    // auth to create the new repo.
+    const buildIntegrationIds = task.buildSpec
+      ? (
+          await this.prisma.integration.findMany({
+            where: { organizationId, type: 'GITHUB', status: 'CONNECTED' },
+            select: { id: true },
+          })
+        ).map((i) => i.id)
+      : undefined;
+
     // Create the worker thread.
     const session = await this.sessionsService.create(organizationId, userId, {
       name: `worker: ${task.title}`.slice(0, 80),
       repositoryIds,
-      instructions: this.buildWorkerInstructions(task.title, task.description),
+      ...(buildIntegrationIds ? { integrationIds: buildIntegrationIds } : {}),
+      instructions: this.buildWorkerInstructions(
+        task.title,
+        task.description,
+        task.deliveryMode ?? 'PR',
+        [],
+        (task.buildSpec as BuildSpec | null) ?? null,
+      ),
     });
 
     await this.prisma.task.update({
@@ -523,12 +582,15 @@ export class OrchestrationService {
       throw new Error('Queue is paused — retry later.');
     }
 
-    const repositoryIds = task.repositoryId
-      ? [task.repositoryId]
-      : await this.defaultRepositoryIds(organizationId);
+    // A build task creates its own repo — start from an empty /workspace.
+    const repositoryIds = task.buildSpec
+      ? []
+      : task.repositoryId
+        ? [task.repositoryId]
+        : await this.defaultRepositoryIds(organizationId);
 
     // Attach the org's connected GitHub integration(s) so the worker can
-    // clone and push a PR.
+    // clone and push a PR (and, for a build task, create the new repo).
     const gitIntegrations = await this.prisma.integration.findMany({
       where: { organizationId, type: 'GITHUB', status: 'CONNECTED' },
       select: { id: true },
@@ -546,6 +608,9 @@ export class OrchestrationService {
         instructions: this.buildWorkerInstructions(
           task.title,
           task.description,
+          task.deliveryMode ?? 'PR',
+          [],
+          (task.buildSpec as BuildSpec | null) ?? null,
         ),
       },
     );
@@ -651,6 +716,7 @@ export class OrchestrationService {
       description: string | null;
       createdBy: string;
       deliveryMode?: DeliveryMode;
+      buildSpec?: Prisma.JsonValue;
     },
     opts: { rethrow?: boolean; drain?: boolean } = {},
   ): Promise<void> {
@@ -682,6 +748,7 @@ export class OrchestrationService {
         task.description,
         task.deliveryMode ?? 'PR',
         comments,
+        (task.buildSpec as BuildSpec | null) ?? null,
       );
       // Run Claude INTERACTIVELY inside the shared tmux "agent" window so you
       // can watch it live and even take over (attach to the same window). We
@@ -698,6 +765,7 @@ export class OrchestrationService {
             output: output.slice(0, 20_000),
             ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
             ...(delivery.branch ? { branch: delivery.branch } : {}),
+            ...(delivery.siteUrl ? { siteUrl: delivery.siteUrl } : {}),
           },
         },
       });
@@ -1020,7 +1088,14 @@ export class OrchestrationService {
     description: string | null,
     deliveryMode: DeliveryMode = 'PR',
     comments: string[] = [],
+    buildSpec?: BuildSpec | null,
   ): string {
+    // "New project" wizard tasks get a dedicated builder prompt: the worker
+    // creates its own repo, builds a site, and deploys it.
+    if (buildSpec) {
+      return this.buildBuilderInstructions(buildSpec, comments);
+    }
+
     const base = description?.trim()
       ? `${title}\n\n${description.trim()}`
       : title;
@@ -1057,6 +1132,87 @@ export class OrchestrationService {
   }
 
   /**
+   * Build the prompt for a "New project" task: create a brand-new repo, build a
+   * site (or refresh an existing one), and deploy it live. The stack rules are
+   * fixed policy; hosting has a suggested default per stack but can be
+   * overridden. The repo is PRIVATE unless the user explicitly chose public.
+   */
+  private buildBuilderInstructions(
+    spec: BuildSpec,
+    comments: string[] = [],
+  ): string {
+    const visibilityFlag =
+      spec.visibility === 'public' ? '--public' : '--private';
+
+    const stackRules = [
+      'STACK RULES (pick what fits what you are building):',
+      '- A web application (auth, dashboards, dynamic server logic) → Next.js.',
+      '- A static site (blog, docs, landing) → Astro.',
+      '- A content site that needs interactive islands → Astro + Svelte.',
+      '- If it needs a database → Neon (Postgres); use the neonctl CLI / NEON_API_KEY.',
+      spec.stackHint ? `The user forced the stack: use ${spec.stackHint}.` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const hostingRules = [
+      'HOSTING (deploy the finished site so it is live on a URL):',
+      '- Astro / static / content → Cloudflare Pages (wrangler, CLOUDFLARE_API_TOKEN). Suggested.',
+      '- Next.js / application → Vercel (vercel CLI, VERCEL_TOKEN). Suggested.',
+      '- Next.js can also run on Cloudflare if that is what is connected.',
+      'Only use a host whose token is present in the environment. Run ' +
+        '`env | grep -E "CLOUDFLARE|VERCEL|NEON"` to see what is connected. If ' +
+        'the host you would pick is NOT connected, use whichever IS, and leave a ' +
+        'citshe note explaining the choice.',
+      spec.hostingHint
+        ? `The user forced the host: deploy to ${spec.hostingHint}.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const source =
+      spec.mode === 'refresh' && spec.sourceUrl
+        ? `This is a REFRESH of an existing site: ${spec.sourceUrl}\n` +
+          `First visit it (fetch it / open it) to understand what they do and ` +
+          `their current style, then build a modern, faster, better version — ` +
+          `same character, improved UX. Do NOT copy it verbatim.\n\n`
+        : `This is a brand-new project, built from scratch.\n\n`;
+
+    const extra =
+      comments.length > 0
+        ? `\n\nADDITIONAL INSTRUCTIONS FROM THE USER (address these):\n` +
+          comments.map((c) => `- ${c}`).join('\n')
+        : '';
+
+    return (
+      `You are a builder agent. Create a NEW project from nothing and deploy it ` +
+      `live. Do not ask for confirmation — make reasonable decisions.\n\n` +
+      source +
+      `WHAT THE USER WANTS:\n${spec.prompt.trim()}${extra}\n\n` +
+      stackRules +
+      '\n\n' +
+      hostingRules +
+      '\n\n' +
+      `STEPS:\n` +
+      `1. Create a new GitHub repo with: gh repo create <good-slug> ` +
+      `${visibilityFlag} --source . --remote origin (initialise git in ` +
+      `/workspace first; the repo MUST be ${spec.visibility}).\n` +
+      `2. Scaffold and build the site per the stack rules. Make it genuinely ` +
+      `good — real content, clean design, responsive, sensible SEO.\n` +
+      `3. Commit and push to the new repo.\n` +
+      `4. Deploy it to the chosen host so it is live on a public URL.\n` +
+      `5. Report the live URL with the citshe skill: run ` +
+      `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>" and also print, ` +
+      `as the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
+      `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
+      `(repo created, framework scaffolded, deploying…), set status to "review" ` +
+      `when the site is live and ready for a human, and attach a screenshot of ` +
+      `the deployed site. Report meaningfully, don't spam.`
+    );
+  }
+
+  /**
    * Pull the PR url / pushed branch out of the worker's output (the marker it
    * was told to print last), so the task carries a real link, not a blind
    * "went to review".
@@ -1064,12 +1220,21 @@ export class OrchestrationService {
   private parseDeliveryResult(output: string): {
     prUrl?: string;
     branch?: string;
+    siteUrl?: string;
   } {
+    const result: { prUrl?: string; branch?: string; siteUrl?: string } = {};
+    // A build task deploys a site — capture its live URL (last one wins).
+    const siteMatches = output.match(/SITE_URL:\s*(\S+)/g);
+    if (siteMatches) {
+      const last = siteMatches[siteMatches.length - 1];
+      const m = last.match(/SITE_URL:\s*(\S+)/);
+      if (m) result.siteUrl = m[1];
+    }
     const prMatch = output.match(/PR_URL:\s*(\S+)/);
-    if (prMatch) return { prUrl: prMatch[1] };
+    if (prMatch) result.prUrl = prMatch[1];
     const pushMatch = output.match(/PUSHED:\s*(\S+)/);
-    if (pushMatch) return { branch: pushMatch[1] };
-    return {};
+    if (pushMatch) result.branch = pushMatch[1];
+    return result;
   }
 
   private sleep(ms: number): Promise<void> {

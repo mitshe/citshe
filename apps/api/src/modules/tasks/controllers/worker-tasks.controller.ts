@@ -164,4 +164,27 @@ export class WorkerTasksController {
       status,
     );
   }
+
+  @Post(':taskId/site')
+  @ApiOperation({ summary: 'Report the live URL of a deployed build task' })
+  async site(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('taskId') taskId: string,
+    @Body() body: { url?: string },
+  ) {
+    const payload = this.verifyWorker(authorization);
+    if (payload.taskId && payload.taskId !== taskId) {
+      throw new UnauthorizedException('Token is not for this task');
+    }
+    const url = (body.url || '').trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      throw new BadRequestException('url must be a valid http(s) URL');
+    }
+    await this.tasksService.setWorkerSiteUrl(
+      payload.organizationId,
+      taskId,
+      url,
+    );
+    return { ok: true };
+  }
 }

@@ -15,6 +15,31 @@ export type TaskPriority = "low" | "medium" | "high" | "urgent";
 /** How a worker hands off its work when it finishes a task. */
 export type DeliveryMode = "PR" | "DIRECT_PUSH";
 
+/** Build a brand-new project, or refresh an existing live site. */
+export type BuildMode = "scratch" | "refresh";
+
+/** Who can see the repo the worker creates. Defaults to private. */
+export type RepoVisibility = "private" | "public";
+
+/**
+ * Instructions for a "New project" build task. Present only on tasks created by
+ * the New-project wizard; such a task has no repositoryId — the worker creates
+ * the repo itself, builds the site, and deploys it.
+ */
+export interface BuildSpec {
+  mode: BuildMode;
+  /** What the user wants built, in their own words. */
+  prompt: string;
+  /** For "refresh": the existing site the worker should look at and improve. */
+  sourceUrl?: string;
+  /** Repo visibility on GitHub. Defaults to private. */
+  visibility: RepoVisibility;
+  /** Optional advanced override: force a stack instead of letting Claude pick. */
+  stackHint?: "next" | "astro" | "astro-svelte";
+  /** Optional advanced override: force a host instead of the suggested one. */
+  hostingHint?: "cloudflare" | "vercel";
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -37,6 +62,8 @@ export interface Task {
   repository?: { id: string; name: string };
   result?: Record<string, unknown> | null;
   agentLogs?: Record<string, unknown>[] | null;
+  /** Present when this task was created by the New-project wizard. */
+  buildSpec?: BuildSpec | null;
 }
 
 /** A trimmed task as it appears in the orchestrator queue overview. */
@@ -81,6 +108,8 @@ export interface CreateTaskDto {
   repositoryId?: string;
   assigneeId?: string;
   dueDate?: string;
+  /** Set to turn this into a "build a project from scratch / refresh" task. */
+  buildSpec?: BuildSpec;
 }
 
 export interface UpdateTaskDto {

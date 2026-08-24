@@ -405,6 +405,13 @@ function installCitsheSkill() {
           '${CLAUDE_SKILL_DIR}/scripts/citshe-task.sh "Short title" "One-line description"',
           '```',
           '',
+          '## Report a deployed site (build tasks)',
+          'When you build a project from scratch and deploy it live, report the URL',
+          'so the panel shows an "Open site" button.',
+          '```bash',
+          '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "https://my-project.pages.dev"',
+          '```',
+          '',
         ]
       : [
           'You are running in an interactive citshe terminal session (not a task',
@@ -492,6 +499,22 @@ function installCitsheSkill() {
         'if [ -z "$S" ]; then echo "usage: citshe-status.sh <in-progress|review|done>" >&2; exit 1; fi',
         'jq -n --arg s "$S" \'{status:$s}\' | \\',
         '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/status" \\',
+        '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
+        'echo',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    // site (report the live URL of a deployed build task)
+    fs.writeFileSync(
+      path.join(scriptsDir, 'citshe-site.sh'),
+      [
+        shebang,
+        guard(true),
+        'URL="$1"',
+        'if [ -z "$URL" ]; then echo "usage: citshe-site.sh <live-url>" >&2; exit 1; fi',
+        'jq -n --arg u "$URL" \'{url:$u}\' | \\',
+        '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/$CITSHE_TASK_ID/site" \\',
         '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" -H "Content-Type: application/json" -d @-',
         'echo',
       ].join('\n'),
