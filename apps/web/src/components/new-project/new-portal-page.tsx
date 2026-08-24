@@ -248,10 +248,13 @@ export function NewPortalPage() {
         token,
       );
 
-      // Switch the panel to the new portal, then jump to the build task.
+      // Switch the panel to the new portal, then land on Home — the BuildHero
+      // there shows the friendly "Building your project… → Your site is live"
+      // payoff, instead of dumping the user on the developer task view.
       setBuildStep("Opening your project…");
       await switchOrganization(organizationId).catch(() => undefined);
-      router.push(`/tasks/${taskId}`);
+      void taskId; // the hero finds the active build task on Home
+      router.push("/home");
     } catch (err) {
       const msg =
         err instanceof Error && err.message

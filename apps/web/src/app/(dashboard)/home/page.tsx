@@ -507,6 +507,17 @@ function BuildHero({
     repo?.webUrl ||
     (spec.repoFullPath ? `https://github.com/${spec.repoFullPath}` : undefined);
 
+  // Latest worker milestone (a citshe-note) — shown live while building so the
+  // user sees real progress ("Scaffolding Astro…", "Deploying…") not a spinner.
+  const latestNote = (() => {
+    const logs = Array.isArray(task.agentLogs) ? task.agentLogs : [];
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const e = logs[i] as { action?: string; details?: { text?: string } };
+      if (e?.action === "note" && e.details?.text) return e.details.text;
+    }
+    return null;
+  })();
+
   // Three states: building (live), deployed (has URL), failed.
   const state = failed ? "failed" : siteUrl ? "live" : "building";
   const title =
@@ -536,6 +547,10 @@ function BuildHero({
         >
           {host}
         </a>
+      ) : state === "building" && latestNote ? (
+        <span className="truncate text-sm text-muted-foreground">
+          {latestNote}
+        </span>
       ) : (
         repoUrl && (
           <span className="truncate text-sm text-muted-foreground">
