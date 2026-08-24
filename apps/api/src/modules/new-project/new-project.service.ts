@@ -263,13 +263,16 @@ export class NewProjectService {
         // Compensating rollback: the repo was created on GitHub BEFORE the txn,
         // so a txn failure would leave an orphan repo (which also blocks
         // retrying with the same name). Delete it. Best-effort — needs the
-        // delete_repo scope; if it fails we log the leftover for cleanup.
+        // delete_repo scope; if it fails we tell the user the truth (a repo was
+        // left on their account) rather than pretending nothing happened.
+        let repoLeft = false;
         try {
           await adapter.deleteRepository(remote.fullName);
           this.logger.warn(
             `Rolled back orphan GitHub repo ${remote.fullName} after a failed new-project txn.`,
           );
         } catch (delErr) {
+          repoLeft = true;
           this.logger.error(
             `Could not delete orphan repo ${remote.fullName} (needs delete_repo scope): ${(delErr as Error).message}`,
           );
@@ -280,11 +283,18 @@ export class NewProjectService {
         // Don't leak Prisma/internal error text to the wizard. Map the one
         // failure the user can actually act on (a name collision), else a
         // generic, friendly message. Full detail stays in the server log above.
+        // If we couldn't clean up the repo, say so — the DB portal was NOT
+        // created (transaction rolled back), but the GitHub repo lingers.
+        const tail = repoLeft
+          ? ` We created the GitHub repo "${remote.fullName}" but couldn't finish — you may want to delete it (or reuse it later).`
+          : '';
         const raw = (err as Error).message ?? '';
-        const friendly = /unique|constraint|slug|already exists/i.test(raw)
+        const base = /unique|constraint|slug|already exists/i.test(raw)
           ? 'A portal with a similar name already exists. Try a different name.'
-          : 'Something went wrong setting up the project. Nothing was saved — please try again.';
-        throw new BadRequestException(friendly);
+          : repoLeft
+            ? 'Something went wrong setting up the project.'
+            : 'Something went wrong setting up the project. Nothing was saved — please try again.';
+        throw new BadRequestException(base + tail);
       });
 
     // 3. Kick off the build (best-effort — the task exists either way).
