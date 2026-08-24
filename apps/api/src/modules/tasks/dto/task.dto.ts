@@ -41,6 +41,16 @@ export class BuildSpecDto {
   @IsIn(['private', 'public'])
   visibility: 'private' | 'public';
 
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  repositoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  repoFullPath?: string;
+
   @IsIn(['next', 'astro', 'astro-svelte'])
   @IsOptional()
   stackHint?: 'next' | 'astro' | 'astro-svelte';

@@ -95,6 +95,14 @@ export interface GitProviderPort {
    */
   getRepository(repoId: string): Promise<Repository>;
 
+  /** Create a brand-new repository (for "New project" builds). */
+  createRepository(input: {
+    name: string;
+    description?: string;
+    private?: boolean;
+    autoInit?: boolean;
+  }): Promise<Repository>;
+
   /**
    * List branches
    */

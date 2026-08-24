@@ -1,20 +1,33 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 import { api } from "../client";
-import type { CreateTaskDto, UpdateTaskDto } from "../types";
+import type { CreateTaskDto, UpdateTaskDto, Task } from "../types";
 import { queryKeys, useAuthToken } from "./shared";
 
-export function useTasks(projectId?: string) {
+type TasksQueryOptions = Pick<
+  UseQueryOptions<Task[]>,
+  "refetchInterval"
+>;
+
+export function useTasks(projectId?: string, opts?: TasksQueryOptions) {
   const getToken = useAuthToken();
 
-  return useQuery({
+  return useQuery<Task[]>({
     queryKey: queryKeys.tasks.list(projectId),
     queryFn: async () => {
       const token = await getToken();
       const response = await api.tasks.list(token, projectId);
       return response.data ?? [];
     },
+    // Poll while something is actively building so the home hero / board update
+    // live without a manual refresh.
+    refetchInterval: opts?.refetchInterval,
   });
 }
 

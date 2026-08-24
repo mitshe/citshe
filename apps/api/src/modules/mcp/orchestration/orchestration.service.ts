@@ -582,9 +582,14 @@ export class OrchestrationService {
       throw new Error('Queue is paused — retry later.');
     }
 
-    // A build task creates its own repo — start from an empty /workspace.
+    // A build task clones the repo the wizard created up-front (so the worker
+    // builds into a real, panel-tracked repo). Older build tasks with no repo
+    // fall back to an empty /workspace (the prompt then runs `gh repo create`).
+    const buildSpec = (task.buildSpec as BuildSpec | null) ?? null;
     const repositoryIds = task.buildSpec
-      ? []
+      ? buildSpec?.repositoryId
+        ? [buildSpec.repositoryId]
+        : []
       : task.repositoryId
         ? [task.repositoryId]
         : await this.defaultRepositoryIds(organizationId);
@@ -1192,9 +1197,19 @@ export class OrchestrationService {
           comments.map((c) => `- ${c}`).join('\n')
         : '';
 
+    // The wizard now creates the repo up-front and clones it into /workspace,
+    // so the worker builds INTO it rather than running `gh repo create`.
+    const repoStep = spec.repositoryId
+      ? `1. The repo already exists and is cloned in /workspace` +
+        (spec.repoFullPath ? ` (${spec.repoFullPath})` : '') +
+        `. Build directly in it — it currently only has a README.\n`
+      : `1. Create a new GitHub repo with: gh repo create <good-slug> ` +
+        `${visibilityFlag} --source . --remote origin (initialise git in ` +
+        `/workspace first; the repo MUST be ${spec.visibility}).\n`;
+
     return (
-      `You are a builder agent. Create a NEW project from nothing and deploy it ` +
-      `live. Do not ask for confirmation — make reasonable decisions.\n\n` +
+      `You are a builder agent. Build a project and deploy it live. Do not ask ` +
+      `for confirmation — make reasonable decisions.\n\n` +
       source +
       `WHAT THE USER WANTS:\n${spec.prompt.trim()}${extra}\n\n` +
       stackRules +
@@ -1202,12 +1217,10 @@ export class OrchestrationService {
       hostingRules +
       '\n\n' +
       `STEPS:\n` +
-      `1. Create a new GitHub repo with: gh repo create <good-slug> ` +
-      `${visibilityFlag} --source . --remote origin (initialise git in ` +
-      `/workspace first; the repo MUST be ${spec.visibility}).\n` +
+      repoStep +
       `2. Scaffold and build the site per the stack rules. Make it genuinely ` +
       `good — real content, clean design, responsive, sensible SEO.\n` +
-      `3. Commit and push to the new repo.\n` +
+      `3. Commit and push (the default branch, origin is already set).\n` +
       `4. Deploy it to the chosen host so it is live on a public URL.\n` +
       `5. Report the live URL with the citshe skill: run ` +
       `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>" and also print, ` +

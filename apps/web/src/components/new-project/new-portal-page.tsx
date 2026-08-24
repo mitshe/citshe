@@ -26,6 +26,8 @@ import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
 import { useAuthContext } from "@/lib/auth";
 import { useCreateTask, useBuildTask } from "@/lib/api/hooks/tasks";
 import { useCopyConnections } from "@/lib/api/hooks/plugins";
+import { useAuthToken } from "@/lib/api/hooks/shared";
+import { api } from "@/lib/api/client";
 import { Connectors } from "./connectors";
 import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
 
@@ -42,9 +44,26 @@ import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
  */
 
 type Entry = "new" | "existing";
-type Step = "entry" | "mode" | "describe" | "connect" | "review";
+type Step = "entry" | "mode" | "describe" | "connect" | "repo" | "review";
 
-const NEW_STEPS: Step[] = ["entry", "mode", "describe", "connect", "review"];
+const NEW_STEPS: Step[] = [
+  "entry",
+  "mode",
+  "describe",
+  "connect",
+  "repo",
+  "review",
+];
+
+/** GitHub-safe repo slug from a portal name (letters/digits/-, lowercased). */
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
 
 const PROMPT_CHIPS = [
   "content blog",
@@ -61,6 +80,7 @@ export function NewPortalPage() {
   const createTask = useCreateTask();
   const buildTask = useBuildTask();
   const copyConnections = useCopyConnections();
+  const getToken = useAuthToken();
 
   // "Copy tools from another portal" — the source org id, applied after the new
   // portal is created (the target org doesn't exist until then).
@@ -73,6 +93,12 @@ export function NewPortalPage() {
   const [name, setName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [prompt, setPrompt] = useState("");
+
+  // Repo name: suggested from the portal name, editable. `repoEdited` stops the
+  // suggestion from overwriting a name the user typed.
+  const [repoName, setRepoName] = useState("");
+  const [repoEdited, setRepoEdited] = useState(false);
+  const suggestedRepo = slugify(name) || "my-project";
 
   // Advanced (hidden by default; non-technical users never open it).
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -110,6 +136,10 @@ export function NewPortalPage() {
         );
       case "connect":
         return true; // GitHub is validated at build time
+      case "repo": {
+        const n = (repoEdited ? repoName : suggestedRepo).trim();
+        return n.length > 0 && /^[A-Za-z0-9._-]+$/.test(n);
+      }
       default:
         return true;
     }
@@ -132,12 +162,37 @@ export function NewPortalPage() {
       // 1. Create the portal (this also switches the active org).
       await createOrganization(name.trim());
 
-      // 1b. Optionally copy connected tools from another portal (now that the
-      // new org is the active one, the copy targets it).
+      // 1b. Optionally reuse GitHub from another portal (now that the new org is
+      // the active one, the copy targets it). Must run BEFORE creating the repo.
       if (copyFromOrgId) {
         await copyConnections.mutateAsync(copyFromOrgId).catch(() => {
-          toast.message("Couldn't copy tools — connect them on the board.");
+          toast.message("Couldn't reuse GitHub — connect it on the board.");
         });
+      }
+
+      // 1c. Create the GitHub repo up-front and register it in the portal, so it
+      // exists (and is visible in Repos) before the worker builds into it.
+      let repositoryId: string | undefined;
+      let repoFullPath: string | undefined;
+      try {
+        const token = await getToken();
+        const { repository } = await api.repositoriesCreate(
+          {
+            name: (repoEdited ? repoName : suggestedRepo).trim(),
+            description: `${name.trim()} — built with citshe`,
+            private: visibility !== "public",
+          },
+          token,
+        );
+        repositoryId = repository.id;
+        repoFullPath = repository.fullPath;
+      } catch (err) {
+        // Non-fatal: fall back to the worker creating the repo itself.
+        toast.message(
+          err instanceof Error && err.message
+            ? err.message
+            : "Couldn't create the repo up-front — Claude will create it.",
+        );
       }
 
       // 2. Create the build task.
@@ -145,6 +200,8 @@ export function NewPortalPage() {
         mode,
         prompt: prompt.trim(),
         visibility,
+        ...(repositoryId ? { repositoryId } : {}),
+        ...(repoFullPath ? { repoFullPath } : {}),
         ...(mode === "refresh" && sourceUrl.trim()
           ? { sourceUrl: sourceUrl.trim() }
           : {}),
@@ -378,13 +435,50 @@ export function NewPortalPage() {
           </StepShell>
         )}
 
+        {step === "repo" && (
+          <StepShell
+            title="Create the repository"
+            subtitle="citshe makes a private GitHub repo for your project and Claude builds into it."
+          >
+            <div className="space-y-2">
+              <Label htmlFor="repo-name">Repository name</Label>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-surface-inset/50 px-3 focus-within:border-border-strong">
+                <span className="shrink-0 text-sm text-text-subtle">
+                  github.com/you/
+                </span>
+                <input
+                  id="repo-name"
+                  className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-text-subtle"
+                  value={repoEdited ? repoName : suggestedRepo}
+                  onChange={(e) => {
+                    setRepoEdited(true);
+                    setRepoName(e.target.value);
+                  }}
+                  placeholder="my-project"
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-text-subtle">
+                We suggested one from your portal name — change it or continue.
+                {visibility === "public"
+                  ? " This repo will be public."
+                  : " Private by default."}
+              </p>
+            </div>
+          </StepShell>
+        )}
+
         {step === "review" && (
           <StepShell
             title="Ready to build"
-            subtitle="Claude will create a repo, build the site, and put it online."
+            subtitle="Claude will build the site in your new repo and put it online."
           >
             <dl className="divide-y divide-border overflow-hidden rounded-lg border border-border text-sm">
               <ReviewRow label="Portal" value={name.trim()} />
+              <ReviewRow
+                label="Repository"
+                value={(repoEdited ? repoName : suggestedRepo).trim()}
+              />
               <ReviewRow
                 label="Mode"
                 value={

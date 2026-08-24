@@ -52,6 +52,66 @@ export class RepositoriesService {
   }
 
   /**
+   * Create a brand-new GitHub repository via the API and register it in citshe,
+   * bound to the org's connected GitHub integration. Used by the New-project
+   * wizard so the repo exists (and is visible in the panel) BEFORE the worker
+   * builds into it. Returns the DB Repository row.
+   */
+  async createNew(
+    organizationId: string,
+    input: { name: string; description?: string; private?: boolean },
+  ) {
+    const integration = await this.prisma.integration.findFirst({
+      where: {
+        organizationId,
+        type: IntegrationType.GITHUB,
+        status: 'CONNECTED',
+      },
+      select: { id: true },
+    });
+    if (!integration) {
+      throw new BadRequestException(
+        'Connect GitHub first — the project needs a place for its code.',
+      );
+    }
+
+    const adapter = await this.adapterFactory.createGitProviderFromIntegration(
+      organizationId,
+      integration.id,
+    );
+    if (!(adapter instanceof GitHubAdapter)) {
+      throw new BadRequestException('The connected integration is not GitHub.');
+    }
+
+    const remote = await adapter.createRepository({
+      name: input.name,
+      description: input.description,
+      private: input.private ?? true,
+      autoInit: true,
+    });
+
+    return this.prisma.repository.create({
+      data: {
+        organizationId,
+        integrationId: integration.id,
+        provider: GitProvider.GITHUB,
+        externalId: remote.fullName,
+        name: remote.name,
+        fullPath: remote.fullName,
+        description: remote.description ?? null,
+        defaultBranch: remote.defaultBranch,
+        cloneUrl: remote.cloneUrl,
+        webUrl: remote.webUrl,
+        isActive: true,
+        analysisStatus: 'pending',
+      },
+      include: {
+        integration: { select: { id: true, type: true, status: true } },
+      },
+    });
+  }
+
+  /**
    * Get all repositories for an organization
    */
   async findAll(organizationId: string, options?: { isActive?: boolean }) {
@@ -172,8 +232,7 @@ export class RepositoriesService {
     fullPath: string;
   }): RepositoryOverview['links'] {
     const github = (
-      repo.webUrl ||
-      `https://github.com/${repo.fullPath}`
+      repo.webUrl || `https://github.com/${repo.fullPath}`
     ).replace(/\/+$/, '');
     return {
       github,

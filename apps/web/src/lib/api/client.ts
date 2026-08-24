@@ -710,6 +710,15 @@ export const api = {
       }),
   },
 
+  repositoriesCreate: (
+    data: { name: string; description?: string; private?: boolean },
+    token: string,
+  ) =>
+    request<{ repository: { id: string; name: string; fullPath: string; webUrl: string } }>(
+      "/repositories",
+      { method: "POST", body: JSON.stringify(data), token },
+    ),
+
   plugins: {
     list: (token: string) =>
       request<{ plugins: Plugin[] }>("/plugins", { token }),

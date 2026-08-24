@@ -95,6 +95,25 @@ export class GitHubAdapter implements GitProviderPort {
     return this.mapRepository(repo);
   }
 
+  async createRepository(input: {
+    name: string;
+    description?: string;
+    private?: boolean;
+    autoInit?: boolean;
+  }): Promise<Repository> {
+    const repo = await this.request('/user/repos', {
+      method: 'POST',
+      body: {
+        name: input.name,
+        description: input.description || undefined,
+        private: input.private ?? true,
+        // Seed with a README so the repo has a default branch to clone.
+        auto_init: input.autoInit ?? true,
+      },
+    });
+    return this.mapRepository(repo);
+  }
+
   async listBranches(
     repoId: string,
     options?: { search?: string; limit?: number },

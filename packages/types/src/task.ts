@@ -34,6 +34,13 @@ export interface BuildSpec {
   sourceUrl?: string;
   /** Repo visibility on GitHub. Defaults to private. */
   visibility: RepoVisibility;
+  /**
+   * The repo citshe created up-front for this project (the worker clones it and
+   * builds into it, instead of running `gh repo create`). Set by the wizard.
+   */
+  repositoryId?: string;
+  /** The created repo's full path (owner/name), for the builder prompt. */
+  repoFullPath?: string;
   /** Optional advanced override: force a stack instead of letting Claude pick. */
   stackHint?: "next" | "astro" | "astro-svelte";
   /** Optional advanced override: force a host instead of the suggested one. */

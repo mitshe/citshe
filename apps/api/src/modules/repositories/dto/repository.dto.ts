@@ -1,6 +1,34 @@
-import { IsString, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  MinLength,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 import { GitProvider } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CreateRepositoryDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  // GitHub repo names: letters, digits, ., -, _.
+  @Matches(/^[A-Za-z0-9._-]+$/, {
+    message: 'Repo name may only contain letters, digits, ., - and _',
+  })
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(350)
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  private?: boolean;
+}
 
 export class UpdateRepositoryDto {
   @IsOptional()

@@ -22,6 +22,7 @@ import { RepoAnalysisService } from '../services/repo-analysis.service';
 import { AuthGuard } from '@/shared/auth';
 import { OrganizationId } from '../../../shared/decorators/organization.decorator';
 import {
+  CreateRepositoryDto,
   UpdateRepositoryDto,
   BulkUpdateRepositoriesDto,
   BulkDeleteRepositoriesDto,
@@ -45,6 +46,20 @@ export class RepositoriesController {
     private readonly repositoriesService: RepositoriesService,
     private readonly analysisService: RepoAnalysisService,
   ) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new GitHub repository in this portal' })
+  @ApiResponse({ status: 201, description: 'Repository created' })
+  async create(
+    @OrganizationId() organizationId: string,
+    @Body() dto: CreateRepositoryDto,
+  ) {
+    const repository = await this.repositoriesService.createNew(
+      organizationId,
+      { name: dto.name, description: dto.description, private: dto.private },
+    );
+    return { repository };
+  }
 
   @Post(':id/analyze')
   @ApiOperation({ summary: 'Analyze a connected repo (stack, CI, AI summary)' })

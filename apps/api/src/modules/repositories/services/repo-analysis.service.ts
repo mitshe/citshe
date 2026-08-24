@@ -56,7 +56,8 @@ export class RepoAnalysisService {
     const repo = await this.prisma.repository.findFirst({
       where: { id: repositoryId, organizationId },
     });
-    if (!repo) throw new NotFoundException(`Repository ${repositoryId} not found`);
+    if (!repo)
+      throw new NotFoundException(`Repository ${repositoryId} not found`);
 
     await this.prisma.repository.update({
       where: { id: repositoryId },
@@ -185,7 +186,13 @@ export class RepoAnalysisService {
           branch,
         );
         if (!body) continue;
-        for (const t of ['push', 'pull_request', 'workflow_dispatch', 'schedule', 'release']) {
+        for (const t of [
+          'push',
+          'pull_request',
+          'workflow_dispatch',
+          'schedule',
+          'release',
+        ]) {
           if (new RegExp(`\\b${t}\\b`).test(body)) triggers.add(t);
         }
       }
@@ -198,7 +205,11 @@ export class RepoAnalysisService {
 
     const gitlabCi = await this.tryFile(git, repoRef, '.gitlab-ci.yml', branch);
     if (gitlabCi) {
-      return { provider: 'gitlab-ci', workflows: ['.gitlab-ci.yml'], triggers: [] };
+      return {
+        provider: 'gitlab-ci',
+        workflows: ['.gitlab-ci.yml'],
+        triggers: [],
+      };
     }
 
     return { provider: 'none', workflows: [], triggers: [] };
@@ -251,9 +262,8 @@ export class RepoAnalysisService {
     if (!prefix || prefix.length < 3) return [];
 
     try {
-      const remote = await this.repositories.listRemoteRepositories(
-        organizationId,
-      );
+      const remote =
+        await this.repositories.listRemoteRepositories(organizationId);
       return remote
         .filter(
           (r) =>
