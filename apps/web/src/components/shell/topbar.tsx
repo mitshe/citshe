@@ -56,7 +56,13 @@ export function Topbar() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3 pt-safe">
+    <header
+      className="flex shrink-0 items-center justify-between border-b border-border px-3 pt-safe"
+      // The bar is 48px of content PLUS the safe-area inset on top — otherwise
+      // pt-safe eats into a fixed 48px height and clips the controls under the
+      // notch (the "cut-off header" bug on iOS).
+      style={{ minHeight: "calc(3rem + env(safe-area-inset-top))" }}
+    >
       <div className="flex items-center gap-2">
         {/* Mobile hamburger → drawer */}
         <Button

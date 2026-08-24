@@ -721,7 +721,12 @@ export default function SessionDetailPage() {
   return (
     <div className="flex flex-col absolute inset-0 overflow-hidden">
       {/* Top Bar */}
-      <div className="flex h-12 items-center justify-between gap-2 px-2 sm:px-4 border-b border-border bg-surface-card shrink-0 pt-safe">
+      <div
+        className="flex items-center justify-between gap-2 px-2 sm:px-4 border-b border-border bg-surface-card shrink-0 pt-safe"
+        // 48px content + the safe-area on top (so pt-safe doesn't clip the
+        // controls under the notch).
+        style={{ minHeight: "calc(3rem + env(safe-area-inset-top))" }}
+      >
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           <Button
             variant="ghost"
