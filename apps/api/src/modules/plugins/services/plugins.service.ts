@@ -128,7 +128,7 @@ export class PluginsService {
       return cached.status;
     }
 
-    const config = this.decrypt(plugin);
+    const config = await this.withScope(this.decrypt(plugin), organizationId);
     try {
       const status = await pluginRegistry.get(type).getStatus(config);
       this.statusCache.set(plugin.id, { status, at: Date.now() });
@@ -169,11 +169,37 @@ export class PluginsService {
     if (!plugin) throw new NotFoundException(`${type} is not connected.`);
 
     const impl = pluginRegistry.get(type);
-    const config = this.decrypt(plugin);
+    const config = await this.withScope(this.decrypt(plugin), organizationId);
     const groups = impl.listResources ? await impl.listResources(config) : [];
     const selected =
       (config as { selection?: Record<string, unknown> }).selection ?? {};
     return { groups, selected };
+  }
+
+  /**
+   * Add a `scopeRepos` hint to a plugin config: the names of this portal's
+   * repos. A plugin whose token is account-wide (e.g. Cloudflare) uses this to
+   * show only the resources belonging to THIS portal (its Pages project /
+   * matching zone), instead of every project on the whole account — the "7
+   * random domains" confusion. No-op for plugins that ignore the hint.
+   */
+  private async withScope(
+    config: PluginConfig,
+    organizationId: string,
+  ): Promise<PluginConfig> {
+    try {
+      const repos = await this.prisma.repository.findMany({
+        where: { organizationId },
+        select: { name: true },
+      });
+      const names = repos.map((r) => r.name).filter(Boolean);
+      if (names.length > 0) {
+        return { ...config, scopeRepos: names };
+      }
+    } catch {
+      // best-effort — fall back to unscoped
+    }
+    return config;
   }
 
   /**

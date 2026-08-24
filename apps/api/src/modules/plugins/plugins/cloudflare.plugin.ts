@@ -30,6 +30,13 @@ interface CfConfig {
   apiToken: string;
   accountId?: string; // optional — auto-detected from the token if absent
   selection?: PluginSelection; // per-portal: which resources to show
+  scopeRepos?: string[]; // this portal's repo names — scope resources to them
+}
+
+/** Does a resource name belong to this portal (matches any of its repos)? */
+function inScope(name: string, scopeRepos?: string[]): boolean {
+  if (!scopeRepos || scopeRepos.length === 0) return true; // unscoped → show all
+  return scopeRepos.some((repo) => nameMatches(name, repo));
 }
 
 function cfHeaders(token: string) {
@@ -61,7 +68,10 @@ function compact(n: number): string {
 function humanBytes(n: number): string {
   if (n <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  const i = Math.min(
+    units.length - 1,
+    Math.floor(Math.log(n) / Math.log(1024)),
+  );
   const v = n / Math.pow(1024, i);
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
@@ -399,10 +409,18 @@ class CloudflarePlugin implements StackPlugin {
     // Pages: each project annotated with its latest deploy state + when. Keep
     // the raw project objects too — we need canonical_deployment below to mark
     // the live production deploy.
+    const scopeRepos = this.cfg(config).scopeRepos;
     let pagesRaw: Array<Record<string, unknown>> = [];
     try {
-      const pj = await this.get(apiToken, `/accounts/${accountId}/pages/projects`);
+      const pj = await this.get(
+        apiToken,
+        `/accounts/${accountId}/pages/projects`,
+      );
       pagesRaw = (pj?.result as Array<Record<string, unknown>>) ?? [];
+      // Scope to THIS portal's project(s) so we don't list the whole account.
+      pagesRaw = pagesRaw.filter((p) =>
+        inScope(String(p.name ?? ''), scopeRepos),
+      );
     } catch {
       pagesRaw = [];
     }
@@ -425,7 +443,8 @@ class CloudflarePlugin implements StackPlugin {
         meta: when ? timeAgo(when) : undefined,
       };
     });
-    if (pages.length) groups.push({ kind: 'pages', label: 'Pages', items: pages });
+    if (pages.length)
+      groups.push({ kind: 'pages', label: 'Pages', items: pages });
 
     // Recent deployments across the freshest Pages project (rich: state +
     // commit message + branch + author + relative time). The live production
@@ -467,7 +486,9 @@ class CloudflarePlugin implements StackPlugin {
           const sha = (meta.commit_hash as string)?.slice(0, 7);
           const branch = (meta.branch as string) || undefined;
           const author = (meta.author as string) || undefined;
-          const message = (meta.commit_message as string)?.split('\n')[0].trim();
+          const message = (meta.commit_message as string)
+            ?.split('\n')[0]
+            .trim();
           const env = (d.environment as string) || 'production';
           const whenIso = d.created_on as string | undefined;
           const when = whenIso ? timeAgo(whenIso) : undefined;
@@ -486,7 +507,7 @@ class CloudflarePlugin implements StackPlugin {
           const baseName = message || proj;
           const name = ok
             ? baseName
-            : `${baseName} — ${building ? 'Building…' : (stage || 'Failed')}`;
+            : `${baseName} — ${building ? 'Building…' : stage || 'Failed'}`;
           return {
             id,
             name,
@@ -515,10 +536,12 @@ class CloudflarePlugin implements StackPlugin {
     }
 
     // Domains: status dot + DNS record count as meta (one cheap count each).
+    // Scoped to this portal so we don't dump every domain on the account.
     const zonesRaw: Array<Record<string, unknown>> = await (async () => {
       try {
         const j = await this.get(apiToken, `/zones?per_page=50`);
-        return (j?.result as Array<Record<string, unknown>>) ?? [];
+        const all = (j?.result as Array<Record<string, unknown>>) ?? [];
+        return all.filter((z) => inScope(String(z.name ?? ''), scopeRepos));
       } catch {
         return [];
       }
@@ -552,9 +575,7 @@ class CloudflarePlugin implements StackPlugin {
       (w) => ({
         id: w.id as string,
         name: w.id as string,
-        meta: w.modified_on
-          ? timeAgo(w.modified_on as string)
-          : undefined,
+        meta: w.modified_on ? timeAgo(w.modified_on as string) : undefined,
       }),
       (j) => (j.result as Array<Record<string, unknown>>) ?? [],
     );
@@ -627,127 +648,129 @@ class CloudflarePlugin implements StackPlugin {
 
     // --- Pages: projects + the freshest deployment (the "is it live") ---
     if (wantPages)
-    try {
-      const json = await this.get(
-        apiToken,
-        `/accounts/${accountId}/pages/projects`,
-      );
-      let projects: Array<Record<string, unknown>> = json?.result ?? [];
-      if (filtered) projects = projects.filter((p) => selPages.has(p.name as string));
-      metrics.push({
-        label: 'Pages projects',
-        value: String(projects.length),
-        section: 'details',
-      });
-
-      // Rank by latest deployment time and surface the top few.
-      const withDeploy = projects
-        .map((p) => {
-          const dep = (p.latest_deployment ?? {}) as Record<string, unknown>;
-          const stage = (dep.latest_stage as { status?: string })?.status;
-          return {
-            name: p.name as string,
-            when: (dep.created_on as string) || '',
-            stage,
-          };
-        })
-        .filter((p) => p.when)
-        .sort((a, b) => +new Date(b.when) - +new Date(a.when));
-
-      const latest = withDeploy[0];
-      if (latest) {
-        latestProject = latest.name;
-        const ok = latest.stage === 'success' || latest.stage === 'active';
-        const building = latest.stage === 'building' || latest.stage === 'queued';
-        headline = {
-          label: ok ? 'Live' : building ? 'Deploying' : 'Deploy failed',
-          state: ok ? 'ok' : building ? 'warn' : 'down',
-        };
-        // Normalize the deploy stage to a compact READY/BUILDING/ERROR-style
-        // status so it reads the same as Vercel's Last deploy hint.
-        const stageLabel = ok
-          ? 'READY'
-          : building
-            ? 'BUILDING'
-            : (latest.stage || 'error').toUpperCase();
+      try {
+        const json = await this.get(
+          apiToken,
+          `/accounts/${accountId}/pages/projects`,
+        );
+        let projects: Array<Record<string, unknown>> = json?.result ?? [];
+        if (filtered)
+          projects = projects.filter((p) => selPages.has(p.name as string));
         metrics.push({
-          label: 'Last deploy',
-          value: timeAgo(latest.when),
-          hint: `${stageLabel} · ${latest.name}`,
-          state: ok ? 'ok' : building ? 'warn' : 'down',
-          section: 'hero',
+          label: 'Pages projects',
+          value: String(projects.length),
+          section: 'details',
         });
-        // Offer a one-click redeploy of the freshest project.
-        actions.push({
-          id: `redeploy:${latest.name}`,
-          label: 'Redeploy',
-          target: latest.name,
-          confirm: true,
-        });
-        // And attach a custom subdomain to that project.
-        actions.push({
-          id: `add-domain:${latest.name}`,
-          label: 'Add subdomain',
-          target: latest.name,
-          prompt: `Custom domain to attach to ${latest.name} (e.g. app.example.com)`,
-        });
-      }
 
-      // Surface the custom domains already on the freshest project.
-      if (latestProject) {
-        try {
-          const dj = await this.get(
-            apiToken,
-            `/accounts/${accountId}/pages/projects/${latestProject}/domains`,
-          );
-          const domains: Array<Record<string, unknown>> = dj?.result ?? [];
-          for (const d of domains.slice(0, 5)) {
-            const st = (d.status as string) || '';
-            items.push({
-              label: (d.name as string) || 'domain',
-              value: st || 'domain',
-              state: st === 'active' ? 'ok' : 'warn',
-            });
-          }
-        } catch {
-          // domains listing optional
+        // Rank by latest deployment time and surface the top few.
+        const withDeploy = projects
+          .map((p) => {
+            const dep = (p.latest_deployment ?? {}) as Record<string, unknown>;
+            const stage = (dep.latest_stage as { status?: string })?.status;
+            return {
+              name: p.name as string,
+              when: (dep.created_on as string) || '',
+              stage,
+            };
+          })
+          .filter((p) => p.when)
+          .sort((a, b) => +new Date(b.when) - +new Date(a.when));
+
+        const latest = withDeploy[0];
+        if (latest) {
+          latestProject = latest.name;
+          const ok = latest.stage === 'success' || latest.stage === 'active';
+          const building =
+            latest.stage === 'building' || latest.stage === 'queued';
+          headline = {
+            label: ok ? 'Live' : building ? 'Deploying' : 'Deploy failed',
+            state: ok ? 'ok' : building ? 'warn' : 'down',
+          };
+          // Normalize the deploy stage to a compact READY/BUILDING/ERROR-style
+          // status so it reads the same as Vercel's Last deploy hint.
+          const stageLabel = ok
+            ? 'READY'
+            : building
+              ? 'BUILDING'
+              : (latest.stage || 'error').toUpperCase();
+          metrics.push({
+            label: 'Last deploy',
+            value: timeAgo(latest.when),
+            hint: `${stageLabel} · ${latest.name}`,
+            state: ok ? 'ok' : building ? 'warn' : 'down',
+            section: 'hero',
+          });
+          // Offer a one-click redeploy of the freshest project.
+          actions.push({
+            id: `redeploy:${latest.name}`,
+            label: 'Redeploy',
+            target: latest.name,
+            confirm: true,
+          });
+          // And attach a custom subdomain to that project.
+          actions.push({
+            id: `add-domain:${latest.name}`,
+            label: 'Add subdomain',
+            target: latest.name,
+            prompt: `Custom domain to attach to ${latest.name} (e.g. app.example.com)`,
+          });
         }
-      }
 
-      // Recent deployments count for the freshest project (mirrors Vercel's
-      // Deployments metric). Cheap single call, resilient: omit on failure.
-      if (latestProject) {
-        try {
-          const lj = await this.get(
-            apiToken,
-            `/accounts/${accountId}/pages/projects/${latestProject}/deployments?per_page=20`,
-          );
-          const deploys: Array<Record<string, unknown>> = lj?.result ?? [];
-          if (deploys.length) {
-            metrics.push({
-              label: 'Deployments',
-              value: String(deploys.length),
-              hint: latestProject,
-              section: 'details',
-            });
+        // Surface the custom domains already on the freshest project.
+        if (latestProject) {
+          try {
+            const dj = await this.get(
+              apiToken,
+              `/accounts/${accountId}/pages/projects/${latestProject}/domains`,
+            );
+            const domains: Array<Record<string, unknown>> = dj?.result ?? [];
+            for (const d of domains.slice(0, 5)) {
+              const st = (d.status as string) || '';
+              items.push({
+                label: (d.name as string) || 'domain',
+                value: st || 'domain',
+                state: st === 'active' ? 'ok' : 'warn',
+              });
+            }
+          } catch {
+            // domains listing optional
           }
-        } catch {
-          // deployments listing optional — skip quietly
         }
-      }
 
-      for (const p of withDeploy.slice(0, 5)) {
-        const ok = p.stage === 'success' || p.stage === 'active';
-        const building = p.stage === 'building' || p.stage === 'queued';
-        items.push({
-          label: p.name,
-          value: timeAgo(p.when),
-          state: ok ? 'ok' : building ? 'warn' : 'down',
-        });
+        // Recent deployments count for the freshest project (mirrors Vercel's
+        // Deployments metric). Cheap single call, resilient: omit on failure.
+        if (latestProject) {
+          try {
+            const lj = await this.get(
+              apiToken,
+              `/accounts/${accountId}/pages/projects/${latestProject}/deployments?per_page=20`,
+            );
+            const deploys: Array<Record<string, unknown>> = lj?.result ?? [];
+            if (deploys.length) {
+              metrics.push({
+                label: 'Deployments',
+                value: String(deploys.length),
+                hint: latestProject,
+                section: 'details',
+              });
+            }
+          } catch {
+            // deployments listing optional — skip quietly
+          }
+        }
+
+        for (const p of withDeploy.slice(0, 5)) {
+          const ok = p.stage === 'success' || p.stage === 'active';
+          const building = p.stage === 'building' || p.stage === 'queued';
+          items.push({
+            label: p.name,
+            value: timeAgo(p.when),
+            state: ok ? 'ok' : building ? 'warn' : 'down',
+          });
+        }
+      } catch {
+        metrics.push({ label: 'Pages', value: 'no access', state: 'warn' });
       }
-    } catch {
-      metrics.push({ label: 'Pages', value: 'no access', state: 'warn' });
-    }
 
     // --- Domains (zones): status + DNS record count, and pick a primary zone
     // to pull 24h traffic analytics from. When nothing is selected we still
@@ -768,7 +791,7 @@ class CloudflarePlugin implements StackPlugin {
             if (z?.id)
               zoneList.push({
                 id: z.id as string,
-                name: (z.name as string) || (zoneId as string),
+                name: (z.name as string) || zoneId,
                 status: (z.status as string) || '',
                 plan: (z.plan as { name?: string } | undefined)?.name,
               });
@@ -778,14 +801,15 @@ class CloudflarePlugin implements StackPlugin {
         }
       } else {
         const zj = await this.get(apiToken, `/zones?per_page=50`);
-        zoneList = ((zj?.result as Array<Record<string, unknown>>) ?? []).map(
-          (z) => ({
+        const scopeRepos = this.cfg(config).scopeRepos;
+        zoneList = ((zj?.result as Array<Record<string, unknown>>) ?? [])
+          .filter((z) => inScope(String(z.name ?? ''), scopeRepos))
+          .map((z) => ({
             id: z.id as string,
             name: z.name as string,
             status: (z.status as string) || '',
             plan: (z.plan as { name?: string } | undefined)?.name,
-          }),
-        );
+          }));
       }
     } catch {
       // zone listing optional — skip quietly
@@ -951,10 +975,14 @@ class CloudflarePlugin implements StackPlugin {
     const selR2 = new Set(selection?.r2 ?? []);
     if (!filtered || selR2.size > 0)
       try {
-        const json = await this.get(apiToken, `/accounts/${accountId}/r2/buckets`);
+        const json = await this.get(
+          apiToken,
+          `/accounts/${accountId}/r2/buckets`,
+        );
         let buckets: Array<Record<string, unknown>> =
           json?.result?.buckets ?? [];
-        if (filtered) buckets = buckets.filter((b) => selR2.has(b.name as string));
+        if (filtered)
+          buckets = buckets.filter((b) => selR2.has(b.name as string));
         metrics.push({
           label: 'R2 buckets',
           value: String(buckets.length),
@@ -1099,7 +1127,10 @@ class CloudflarePlugin implements StackPlugin {
         );
         const dep = list?.result?.[0];
         if (!dep?.id) {
-          return { ok: false, message: `No deployment to redeploy for ${project}.` };
+          return {
+            ok: false,
+            message: `No deployment to redeploy for ${project}.`,
+          };
         }
         const res = await fetch(
           `${API}/accounts/${accountId}/pages/projects/${project}/deployments/${dep.id}/retry`,
