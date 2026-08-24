@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -69,6 +69,13 @@ class NewProjectBuildSpecDto {
   hostingHint?: 'cloudflare' | 'vercel';
 }
 
+class ValidateGithubDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  github: string;
+}
+
 class CreateNewProjectDto {
   @IsString()
   @MinLength(1)
@@ -100,6 +107,17 @@ class CreateNewProjectDto {
 @UseGuards(AuthGuard)
 export class NewProjectController {
   constructor(private readonly newProject: NewProjectService) {}
+
+  @Post('validate-github')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Pre-flight check the GitHub token before building (scopes/expiry)',
+  })
+  @ApiResponse({ status: 200, description: 'Validation verdict' })
+  async validateGithub(@Body() dto: ValidateGithubDto) {
+    return this.newProject.validateGithub(dto.github);
+  }
 
   @Post()
   @ApiOperation({

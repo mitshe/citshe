@@ -61,6 +61,95 @@ export class GitHubAdapter implements GitProviderPort {
     }
   }
 
+  /**
+   * Validate that the pasted token is usable for the "New project" flow BEFORE
+   * we try to create anything. Returns a structured verdict so the wizard can
+   * show a precise, human error instead of failing mid-build.
+   *
+   * How scopes are read:
+   * - Classic PATs return their granted scopes in the `X-OAuth-Scopes` response
+   *   header of any authenticated request. We read that header from `GET /user`
+   *   and check for `repo` (create/push) and `workflow` (needed if the build
+   *   writes CI files). This is a fast, exact check.
+   * - Fine-grained PATs and GitHub-App tokens do NOT expose scopes in that
+   *   header, so an empty header is NOT treated as "missing scopes" — we only
+   *   flag a scope as missing when the header is present AND lacks it. In that
+   *   case `login` still confirms the token authenticates.
+   */
+  async validateForNewProject(): Promise<{
+    ok: boolean;
+    login?: string;
+    /** Present only for classic PATs (header-reported). null = couldn't read. */
+    scopes: string[] | null;
+    hasRepo: boolean;
+    hasWorkflow: boolean;
+    /** Human error when ok=false (bad/expired token). */
+    error?: string;
+  }> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.apiBaseUrl}/user`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+    } catch {
+      return {
+        ok: false,
+        scopes: null,
+        hasRepo: false,
+        hasWorkflow: false,
+        error: "Couldn't reach GitHub. Check your connection and try again.",
+      };
+    }
+
+    if (res.status === 401) {
+      return {
+        ok: false,
+        scopes: null,
+        hasRepo: false,
+        hasWorkflow: false,
+        error:
+          'That GitHub token is invalid or expired. Create a fresh one and paste it again.',
+      };
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        scopes: null,
+        hasRepo: false,
+        hasWorkflow: false,
+        error: `GitHub rejected the token (${res.status}). Please try a different token.`,
+      };
+    }
+
+    const user = (await res.json()) as { login?: string };
+    // Classic PATs report scopes here; fine-grained PATs / App tokens do not.
+    const scopeHeader = res.headers.get('x-oauth-scopes');
+    if (scopeHeader === null) {
+      // Fine-grained / App token: can't read scopes, token authenticates. Treat
+      // as usable — the real create call will surface any missing permission.
+      return {
+        ok: true,
+        login: user.login,
+        scopes: null,
+        hasRepo: true,
+        hasWorkflow: true,
+      };
+    }
+
+    const scopes = scopeHeader
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // `repo` implies full repo control; `public_repo` only covers public repos.
+    const hasRepo = scopes.includes('repo');
+    const hasWorkflow = scopes.includes('workflow');
+    return { ok: true, login: user.login, scopes, hasRepo, hasWorkflow };
+  }
+
   async listRepositories(options?: {
     search?: string;
     limit?: number;

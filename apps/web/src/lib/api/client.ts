@@ -747,6 +747,13 @@ export const api = {
       { method: "POST", body: JSON.stringify(data), token },
     ),
 
+  // Pre-flight check the pasted GitHub token (scopes/expiry) before building.
+  newProjectValidateGithub: (github: string, token: string) =>
+    request<{ ok: boolean; login?: string; warning?: string; error?: string }>(
+      "/new-project/validate-github",
+      { method: "POST", body: JSON.stringify({ github }), token },
+    ),
+
   plugins: {
     list: (token: string) =>
       request<{ plugins: Plugin[] }>("/plugins", { token }),

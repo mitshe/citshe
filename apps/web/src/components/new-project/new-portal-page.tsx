@@ -154,6 +154,12 @@ export function NewPortalPage() {
   const [buildStep, setBuildStep] = useState<string | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
 
+  // GitHub token pre-flight (runs when leaving the "access" step). A blocking
+  // error keeps the user on the step; a warning lets them through with a note.
+  const [checkingGithub, setCheckingGithub] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+  const [githubWarning, setGithubWarning] = useState<string | null>(null);
+
   const stepIndex = NEW_STEPS.indexOf(step);
 
   const leave = () => router.push("/home");
@@ -190,7 +196,35 @@ export function NewPortalPage() {
     }
   };
 
-  const advance = () => {
+  const advance = async () => {
+    // Pre-flight the GitHub token when leaving "access" — catch an expired token
+    // or a missing "repo" scope here, with a clear fix, instead of failing the
+    // build later. A warning (e.g. no "workflow" scope) is non-blocking.
+    if (step === "access") {
+      const gh = keys.github?.trim();
+      if (gh) {
+        setCheckingGithub(true);
+        setGithubError(null);
+        setGithubWarning(null);
+        try {
+          const token = await getToken();
+          const v = await api.newProjectValidateGithub(gh, token);
+          if (!v.ok) {
+            setGithubError(
+              v.error ?? "That GitHub token didn't work. Please check it.",
+            );
+            return;
+          }
+          setGithubWarning(v.warning ?? null);
+        } catch {
+          // Don't hard-block on a transient check failure — the atomic build
+          // still validates for real. Let them proceed.
+          setGithubWarning(null);
+        } finally {
+          setCheckingGithub(false);
+        }
+      }
+    }
     const next = NEW_STEPS[stepIndex + 1];
     if (next) setStep(next);
   };
@@ -305,11 +339,20 @@ export function NewPortalPage() {
               <Button
                 variant="primary"
                 className="ml-auto min-w-40"
-                onClick={advance}
-                disabled={!canContinue()}
+                onClick={() => void advance()}
+                disabled={!canContinue() || checkingGithub}
               >
-                Continue
-                <ArrowRight className="size-4" />
+                {checkingGithub ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Checking GitHub…
+                  </>
+                ) : (
+                  <>
+                    Continue
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -458,18 +501,33 @@ export function NewPortalPage() {
                     key={f.key}
                     def={f}
                     value={keys[f.key] ?? ""}
-                    onChange={(v) =>
-                      setKeys((prev) => ({ ...prev, [f.key]: v }))
-                    }
+                    onChange={(v) => {
+                      setKeys((prev) => ({ ...prev, [f.key]: v }));
+                      // Editing the GitHub token invalidates the last check.
+                      if (f.key === "github") {
+                        setGithubError(null);
+                        setGithubWarning(null);
+                      }
+                    }}
                   />
                 ))}
               </div>
-              {!keys.github?.trim() && (
+              {githubError ? (
+                <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-danger">
+                  <AlertCircle className="mt-px size-3.5 shrink-0" />
+                  {githubError}
+                </p>
+              ) : githubWarning ? (
+                <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-warn">
+                  <AlertCircle className="mt-px size-3.5 shrink-0" />
+                  {githubWarning}
+                </p>
+              ) : !keys.github?.trim() ? (
                 <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-warn">
                   <AlertCircle className="size-3.5" />
                   GitHub is required — your project needs a place for its code.
                 </p>
-              )}
+              ) : null}
               <p className="mt-2 text-[11px] text-text-subtle">
                 Keys are encrypted. Cloudflare/Vercel/Neon are optional — Claude
                 uses whichever you provide.

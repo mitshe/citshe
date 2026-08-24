@@ -52,6 +52,52 @@ export class NewProjectService {
     private readonly orchestration: OrchestrationService,
   ) {}
 
+  /**
+   * Pre-flight check for the wizard's GitHub token, run when the user leaves the
+   * "Connect" step — BEFORE the atomic build. Surfaces a precise, human message
+   * ("token expired", "add the workflow scope") so the build never fails
+   * mid-flight for a reason we could have caught up front.
+   *
+   * Only GitHub is validated here: it's required and its scopes gate everything
+   * (repo creation + optional CI). Cloudflare/Vercel/Neon are optional and their
+   * tokens are exercised later by the build itself, so we don't block on them.
+   */
+  async validateGithub(token: string): Promise<{
+    ok: boolean;
+    login?: string;
+    /** Non-blocking heads-up (e.g. missing `workflow` scope). */
+    warning?: string;
+    /** Blocking reason when ok=false. */
+    error?: string;
+  }> {
+    const t = token?.trim();
+    if (!t) {
+      return { ok: false, error: 'Paste your GitHub token to continue.' };
+    }
+    const adapter = new GitHubAdapter({ accessToken: t });
+    const v = await adapter.validateForNewProject();
+    if (!v.ok) {
+      return { ok: false, error: v.error };
+    }
+    // Classic PAT with a readable scope list but no `repo` → it literally can't
+    // create the repo. Block now with an exact fix.
+    if (v.scopes !== null && !v.hasRepo) {
+      return {
+        ok: false,
+        login: v.login,
+        error:
+          'This token is missing the "repo" scope, so it can\'t create your project\'s repository. Create a new token with "repo" checked.',
+      };
+    }
+    // Missing `workflow` isn't fatal (only matters if the build writes CI), so
+    // let them through with a heads-up rather than a hard stop.
+    const warning =
+      v.scopes !== null && !v.hasWorkflow
+        ? 'Heads up: this token has no "workflow" scope. The build works, but it won\'t be able to add GitHub Actions files if it needs to.'
+        : undefined;
+    return { ok: true, login: v.login, warning };
+  }
+
   async create(
     userId: string,
     input: NewProjectInput,
