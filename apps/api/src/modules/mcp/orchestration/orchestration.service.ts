@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -20,8 +25,9 @@ import { QUEUES, TaskQueueJob } from '../../../infrastructure/queue/queues';
  * This service holds the dispatch logic the MCP tools call into.
  */
 @Injectable()
-export class OrchestrationService {
+export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrchestrationService.name);
+  private watchdogTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -32,6 +38,24 @@ export class OrchestrationService {
     @InjectQueue(QUEUES.TASK_QUEUE)
     private readonly taskQueue: Queue<TaskQueueJob>,
   ) {}
+
+  onModuleInit() {
+    // Watchdog: a worker can die silently (crash, OOM, killed container) and
+    // leave its task stuck IN_PROGRESS forever — the agent never runs
+    // `citshe-status review`, so nothing moves it. Sweep periodically and FAIL
+    // tasks that have been IN_PROGRESS well past the exec timeout with no fresh
+    // activity, so the board never shows a permanently "running" ghost.
+    this.watchdogTimer = setInterval(() => {
+      void this.sweepStuckTasks().catch(() => undefined);
+      void this.reapIdleWorkers().catch(() => undefined);
+    }, this.WATCHDOG_INTERVAL_MS);
+    // Don't keep the process alive just for the timer.
+    this.watchdogTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.watchdogTimer) clearInterval(this.watchdogTimer);
+  }
 
   /**
    * Sign a short-lived token the worker container uses to create follow-up
@@ -61,6 +85,21 @@ export class OrchestrationService {
   private readonly WORKER_READY_TIMEOUT_MS = 90_000;
   /** How long a single task execution may run inside the worker. */
   private readonly WORKER_EXEC_TIMEOUT_MS = 20 * 60_000;
+  /** Watchdog sweep cadence. */
+  private readonly WATCHDOG_INTERVAL_MS = 5 * 60_000;
+  /**
+   * A task IN_PROGRESS longer than this with no fresh activity is considered
+   * dead (crashed worker / lost container). Comfortably past WORKER_EXEC_TIMEOUT
+   * so a legitimately long build is never killed.
+   */
+  private readonly STUCK_TASK_MS = 30 * 60_000;
+  /**
+   * On success we KEEP the worker container running so you can "Continue with
+   * Claude". But an idle finished worker left running forever leaks a container
+   * + volumes. Stop it after this idle window (the per-org home volume persists,
+   * so a later terminal/resume just spins a fresh container with the same auth).
+   */
+  private readonly WORKER_IDLE_REAP_MS = 30 * 60_000;
 
   /**
    * Snapshot of the queue: tasks grouped by lifecycle + the workers currently
@@ -869,6 +908,45 @@ export class OrchestrationService {
     return false;
   }
 
+  /**
+   * Reap finished-but-idle worker containers. On task success the worker is left
+   * RUNNING for "Continue with Claude"; without this, those containers pile up
+   * indefinitely (a real resource leak — this is why "the worker doesn't close").
+   * Stop workers whose task is terminal (REVIEW/COMPLETED/FAILED) and whose
+   * session has been idle past the reap window. The home volume stays, so resume
+   * still works by spinning a fresh container. Bounded work; runs every 5 min.
+   */
+  private async reapIdleWorkers(): Promise<void> {
+    const idleCutoff = new Date(Date.now() - this.WORKER_IDLE_REAP_MS);
+    const sessions = await this.prisma.agentSession.findMany({
+      where: {
+        status: 'RUNNING',
+        lastActiveAt: { lt: idleCutoff },
+        // Only worker sessions (they have a task); leave ad-hoc terminals alone.
+        tasks: {
+          some: {
+            status: {
+              in: [
+                TaskStatus.REVIEW,
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+              ],
+            },
+          },
+        },
+      },
+      select: { id: true, organizationId: true },
+      take: 50,
+    });
+    for (const s of sessions) {
+      this.logger.log(`Reaping idle finished worker session ${s.id}.`);
+      await this.stopWorker(s.organizationId, s.id).catch((err) =>
+        this.logger.warn(`Reap failed for ${s.id}: ${(err as Error).message}`),
+      );
+    }
+  }
+
   private async stopWorker(organizationId: string, sessionId: string) {
     try {
       const session = await this.sessionsService.findOne(
@@ -1108,6 +1186,58 @@ export class OrchestrationService {
     reason: string,
   ): Promise<void> {
     await this.failTask(organizationId, taskId, reason);
+  }
+
+  /**
+   * Watchdog sweep: fail tasks stuck IN_PROGRESS well past the exec timeout.
+   * A task is "stuck" if it hasn't been touched (updatedAt) in STUCK_TASK_MS AND
+   * its worker session/container is gone or not RUNNING — meaning the worker
+   * died silently and will never move the task. Bounded work; runs every 5 min.
+   */
+  private async sweepStuckTasks(): Promise<void> {
+    const cutoff = new Date(Date.now() - this.STUCK_TASK_MS);
+    const stuck = await this.prisma.task.findMany({
+      where: { status: TaskStatus.IN_PROGRESS, updatedAt: { lt: cutoff } },
+      select: { id: true, organizationId: true, sessionId: true },
+      take: 50,
+    });
+    if (stuck.length === 0) return;
+
+    for (const t of stuck) {
+      // If the session container is still genuinely running, leave it — the
+      // build may just be long. Only fail when nothing is actually working.
+      let alive = false;
+      if (t.sessionId) {
+        try {
+          const s = await this.prisma.agentSession.findUnique({
+            where: { id: t.sessionId },
+            select: { status: true, containerId: true },
+          });
+          if (s?.status === 'RUNNING' && s.containerId) {
+            const state = await this.containerService.getContainerState(
+              s.containerId,
+            );
+            alive = state === 'running';
+          }
+        } catch {
+          alive = false;
+        }
+      }
+      if (alive) continue;
+
+      this.logger.warn(
+        `Watchdog: task ${t.id} stuck IN_PROGRESS with no live worker — failing.`,
+      );
+      await this.failTask(
+        t.organizationId,
+        t.id,
+        'The build stopped unexpectedly (the worker went away). Try running it again.',
+      ).catch((err) =>
+        this.logger.error(
+          `Watchdog could not fail task ${t.id}: ${(err as Error).message}`,
+        ),
+      );
+    }
   }
 
   private async updateTaskStatus(
