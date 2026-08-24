@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { io, type Socket } from "socket.io-client";
-import { requireConfig } from "../api.js";
+import { requireConfig, getSessions, CliError } from "../api.js";
 import {
   SOCKET_EVENTS,
   SOCKET_PATH,
@@ -15,19 +15,35 @@ export interface AttachOptions {
 const DETACH_BYTE = 0x1d;
 
 export async function attachCommand(
-  sessionId: string,
+  idOrPrefix: string,
   options: AttachOptions,
 ): Promise<void> {
   const config = await requireConfig();
+
+  // `ls` shows shortened ids, so resolve the full id from an exact match or a
+  // unique prefix before we build the terminal id / socket rooms.
+  const { sessions } = await getSessions(config);
+  const matches = sessions.filter(
+    (s) => s.id === idOrPrefix || s.id.startsWith(idOrPrefix),
+  );
+  if (matches.length === 0) {
+    throw new CliError(
+      `No session matches "${idOrPrefix}". Run \`citshe ls\` to see ids.`,
+    );
+  }
+  if (matches.length > 1) {
+    throw new CliError(
+      `"${idOrPrefix}" is ambiguous (${matches.length} sessions). Use more characters.`,
+    );
+  }
+  const sessionId = matches[0].id;
   const terminalId = options.terminal || defaultTerminalId(sessionId);
 
   const stdin = process.stdin;
   const stdout = process.stdout;
 
   console.log(
-    chalk.dim(
-      `Connecting to ${config.wsBase} …  (detach with Ctrl-] or ~. )`,
-    ),
+    chalk.dim(`Connecting to ${config.wsBase} …  (detach with Ctrl-] or ~. )`),
   );
 
   // The gateway lives on the "/events" namespace (same as the web app).
@@ -109,56 +125,53 @@ export async function attachCommand(
   };
 
   // --- socket wiring -------------------------------------------------------
+  // The gateway (NestJS) replies with EVENTS, not socket.io acks, so we drive
+  // the handshake off events: connect → authenticate → `authenticated` →
+  // subscribe → `subscribed` → session:attach → `attached`.
+  let authedOnce = false;
+  let attachedOnce = false;
+
   socket.on("connect", () => {
     socket.emit(SOCKET_EVENTS.authenticate, { token: config.token });
   });
 
   socket.on(SOCKET_EVENTS.authenticated, () => {
-    // Join the session room FIRST (wait for its ack so the room membership is
-    // in place), then ensure the terminal is running and stream it.
-    socket.emit(
-      SOCKET_EVENTS.subscribeSession,
-      { sessionId },
-      (sub?: { event?: string; data?: { message?: string } }) => {
-        if (sub?.event === "error") {
-          detach(
-            chalk.red(`Subscribe failed: ${sub.data?.message ?? "unknown"}`),
-            1,
-          );
-          return;
-        }
-        startAttach();
-      },
-    );
+    if (authedOnce) return;
+    authedOnce = true;
+    socket.emit(SOCKET_EVENTS.subscribeSession, { sessionId });
   });
 
-  const startAttach = () => {
-    socket.emit(
-      SOCKET_EVENTS.sessionAttach,
-      { sessionId, terminalId },
-      (ack?: { event?: string; data?: { buffer?: string; message?: string } }) => {
-        if (ack?.event === "error") {
-          detach(chalk.red(`Attach failed: ${ack.data?.message ?? "unknown"}`), 1);
-          return;
-        }
-        // Paint existing scrollback first.
-        if (typeof ack?.data?.buffer === "string") stdout.write(ack.data.buffer);
+  socket.on("subscribed", () => {
+    socket.emit(SOCKET_EVENTS.sessionAttach, { sessionId, terminalId });
+  });
 
-        // Enter raw mode and start forwarding keystrokes.
-        if (stdin.isTTY) {
-          stdin.setRawMode(true);
-          rawEnabled = true;
-        }
-        stdin.resume();
-        stdin.on("data", onStdin);
-        stdout.on("resize", sendResize);
-        sendResize();
+  socket.on(
+    "attached",
+    (data?: { terminalId?: string; buffer?: string }) => {
+      if (attachedOnce) return;
+      attachedOnce = true;
+      startAttach(data);
+    },
+  );
 
-        console.log(
-          chalk.green(`\n✓ Attached to ${sessionId}.`) +
-            chalk.dim("  Ctrl-] to detach.\n"),
-        );
-      },
+  const startAttach = (data?: { buffer?: string }) => {
+    // Paint existing scrollback first.
+    if (typeof data?.buffer === "string" && data.buffer) {
+      stdout.write(data.buffer);
+    }
+    // Enter raw mode and start forwarding keystrokes.
+    if (stdin.isTTY) {
+      stdin.setRawMode(true);
+      rawEnabled = true;
+    }
+    stdin.resume();
+    stdin.on("data", onStdin);
+    stdout.on("resize", sendResize);
+    sendResize();
+
+    console.log(
+      chalk.green(`✓ Attached to ${sessionId}.`) +
+        chalk.dim("  Ctrl-] to detach.\n"),
     );
   };
 

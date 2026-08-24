@@ -247,4 +247,32 @@ export class CliService {
     });
     return !!s;
   }
+
+  /**
+   * Resolve a full session id from an exact id or a short PREFIX (the CLI's
+   * `ls` shows shortened ids), scoped to the given orgs. Returns the full id or
+   * null (also null if the prefix is ambiguous).
+   */
+  async resolveSessionId(
+    orgIds: string[],
+    idOrPrefix: string,
+  ): Promise<string | null> {
+    if (!idOrPrefix || orgIds.length === 0) return null;
+    // Exact match first.
+    const exact = await this.prisma.agentSession.findFirst({
+      where: { id: idOrPrefix, organizationId: { in: orgIds } },
+      select: { id: true },
+    });
+    if (exact) return exact.id;
+    // Prefix match — unique only.
+    const matches = await this.prisma.agentSession.findMany({
+      where: {
+        id: { startsWith: idOrPrefix },
+        organizationId: { in: orgIds },
+      },
+      select: { id: true },
+      take: 2,
+    });
+    return matches.length === 1 ? matches[0].id : null;
+  }
 }
