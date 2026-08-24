@@ -170,10 +170,15 @@ export class SessionContainerService implements OnModuleInit {
     }
   }
 
-  /** RO bind of the seed volume at /seed (empty when disabled). */
+  /**
+   * Bind of the seed volume at /seed. READ-WRITE so a container can push its
+   * refreshed Claude token back to the seed (auto-propagation): Claude Code
+   * refreshes the access token from the long-lived refresh token, and we sync
+   * that fresh token to /seed so NEW portals always seed a working login.
+   */
   private claudeAuthSeedBind(): string[] {
     const vol = this.claudeAuthSeedVolume();
-    return vol ? [`${vol}:/seed:ro`] : [];
+    return vol ? [`${vol}:/seed`] : [];
   }
 
   /**

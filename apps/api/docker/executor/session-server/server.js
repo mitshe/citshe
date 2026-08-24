@@ -816,8 +816,60 @@ async function setup() {
   installCitsheSkill();
   preacceptClaudeBypass();
   startTmux();
+  startClaudeAuthSeedSync();
 
   log('Session workspace setup complete');
+}
+
+/**
+ * Auto-propagate a refreshed Claude login to the shared seed volume.
+ *
+ * Each portal has its own home volume, so a login only lives in one container.
+ * Claude Code refreshes the short-lived access token from the long-lived
+ * refresh token; when it does, we copy the fresh credentials to /seed (mounted
+ * RW) so NEW portals always seed a WORKING login instead of an expired one.
+ *
+ * We only push when OUR token's accessToken is non-empty AND its expiresAt is
+ * newer than the seed's — so a stale container never overwrites a fresher seed.
+ * The write is atomic (temp file + rename). No-op if /seed isn't mounted.
+ */
+function startClaudeAuthSeedSync() {
+  const SEED = '/seed/.credentials.json';
+  const MINE = path.join(HOME_DIR, '.claude', '.credentials.json');
+  if (!fs.existsSync('/seed')) return; // seed not mounted → nothing to do
+
+  const readExpiry = (file) => {
+    try {
+      const j = JSON.parse(fs.readFileSync(file, 'utf-8'));
+      const o = j.claudeAiOauth || {};
+      if (!o.accessToken) return null; // blank token → useless
+      return typeof o.expiresAt === 'number' ? o.expiresAt : 0;
+    } catch {
+      return null;
+    }
+  };
+
+  const syncOnce = () => {
+    try {
+      const mine = readExpiry(MINE);
+      if (mine == null) return; // our token is blank/unreadable
+      const seed = readExpiry(SEED);
+      // Push when the seed is missing/blank, or ours is strictly newer.
+      if (seed == null || mine > seed) {
+        const tmp = '/seed/.credentials.json.tmp';
+        fs.copyFileSync(MINE, tmp);
+        fs.renameSync(tmp, SEED); // atomic replace
+        log('Synced refreshed Claude login to the shared seed.');
+      }
+    } catch (err) {
+      // Best-effort — never let seed sync affect the session.
+      log('Claude seed sync skipped: ' + err.message);
+    }
+  };
+
+  // Sync shortly after start (Claude may refresh on first run), then hourly.
+  setTimeout(syncOnce, 60_000);
+  setInterval(syncOnce, 60 * 60_000);
 }
 
 /**
