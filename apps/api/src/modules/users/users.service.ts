@@ -488,7 +488,10 @@ export class UsersService {
    * Używane do sprzątania po porzuceniu wizarda "New portal" (org powstaje
    * na początku, więc porzucenie zostawiłoby pustą org — usuwamy ją).
    */
-  async deleteEmptyOrganization(userId: string, organizationId: string): Promise<void> {
+  async deleteEmptyOrganization(
+    userId: string,
+    organizationId: string,
+  ): Promise<void> {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { ownerId: true, _count: { select: { repositories: true } } },
@@ -500,7 +503,23 @@ export class UsersService {
       throw new UnauthorizedException('Only the owner can delete this portal');
     }
     if (org._count.repositories > 0) {
-      throw new BadRequestException('Portal is not empty — it has repositories');
+      throw new BadRequestException(
+        'Portal is not empty — it has repositories',
+      );
+    }
+
+    // #7: refuse to delete while a worker is still live. AgentSession cascades
+    // on org-delete at the DB level, so deleting here would drop the row while
+    // its Docker container keeps running (orphaned) and any in-flight build is
+    // lost. A freshly-created portal shouldn't have one, but the first build can
+    // start before the repo row commits — guard so cleanup never races a build.
+    const liveWorkers = await this.prisma.agentSession.count({
+      where: { organizationId, status: { in: ['CREATING', 'RUNNING'] } },
+    });
+    if (liveWorkers > 0) {
+      throw new BadRequestException(
+        'This portal has a build running — wait for it to finish (or stop it) before deleting.',
+      );
     }
 
     // Kasujemy zależne wiersze i org w transakcji (integracje/pluginy/członkowie).
