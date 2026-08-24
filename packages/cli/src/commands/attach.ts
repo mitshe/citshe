@@ -42,6 +42,10 @@ export async function attachCommand(
   const stdin = process.stdin;
   const stdout = process.stdout;
 
+  // Briefly ignore stdin right after attaching, to swallow terminal
+  // auto-responses (Device Attributes etc.) that would otherwise be typed in.
+  let inputGraceUntil = 0;
+
   console.log(
     chalk.dim(`Connecting to ${config.wsBase} …  (detach with Ctrl-] or ~. )`),
   );
@@ -102,6 +106,21 @@ export async function attachCommand(
       return;
     }
 
+    // Drop the terminal's own auto-replies (DA/DA2 like ESC [ > … c, and the
+    // XTVERSION reply ESC P > | iTerm2 … ESC \) in the grace window so they
+    // aren't typed into the shell. These are pure escape sequences with no
+    // Enter, so a real keystroke is never swallowed.
+    if (Date.now() < inputGraceUntil) {
+      const s = chunk.toString("utf8");
+      const isAutoReply =
+        /^\x1b/.test(s) &&
+        !/[\r\n]/.test(s) &&
+        (/\x1b\[[>=?]?[0-9;]*[cnq]/.test(s) ||
+          /\x1bP>?\|/.test(s) ||
+          /iTerm2|\d+;\d+;\d+c/.test(s));
+      if (isAutoReply) return;
+    }
+
     // "~." sequence at start of a line detaches.
     for (const byte of chunk) {
       if (sawTilde) {
@@ -155,9 +174,12 @@ export async function attachCommand(
   );
 
   const startAttach = (data?: { buffer?: string }) => {
-    // Paint existing scrollback first.
+    // Paint existing scrollback first — but strip terminal capability QUERIES
+    // (Device Attributes, cursor-position, etc.) from the replayed buffer.
+    // Otherwise our local terminal (e.g. iTerm2) answers them and the reply
+    // lands as typed input at the shell prompt (the "iTerm2 3.6.10…" garbage).
     if (typeof data?.buffer === "string" && data.buffer) {
-      stdout.write(data.buffer);
+      stdout.write(stripQueries(data.buffer));
     }
     // Enter raw mode and start forwarding keystrokes.
     if (stdin.isTTY) {
@@ -169,9 +191,22 @@ export async function attachCommand(
     stdout.on("resize", sendResize);
     sendResize();
 
+    // Swallow any late auto-responses (DA/DA2) the terminal emits right after
+    // the replay, so they don't get typed into the shell.
+    inputGraceUntil = Date.now() + 900;
+
+    const name = matches[0].name || sessionId;
     console.log(
-      chalk.green(`✓ Attached to ${sessionId}.`) +
-        chalk.dim("  Ctrl-] to detach.\n"),
+      "\n" +
+        chalk.green("  ● Attached") +
+        chalk.dim(` to citshe session `) +
+        chalk.bold(name) +
+        chalk.dim(` (on your VPS, inside tmux)\n`) +
+        chalk.dim("    Detach: ") +
+        chalk.bold("Ctrl-]") +
+        chalk.dim("   ·   this is a shared session — don't ") +
+        chalk.bold("exit") +
+        chalk.dim(" unless you mean to close it\n"),
     );
   };
 
@@ -181,7 +216,9 @@ export async function attachCommand(
   }) => {
     // Only render output for the terminal we asked for.
     if (payload.terminalId && payload.terminalId !== terminalId) return;
-    if (typeof payload.data === "string") stdout.write(payload.data);
+    // Strip terminal capability queries so our local terminal never answers
+    // them (its reply would be typed into the shell).
+    if (typeof payload.data === "string") stdout.write(stripQueries(payload.data));
   });
 
   socket.on(SOCKET_EVENTS.error, (payload: { message?: string }) => {
@@ -207,4 +244,23 @@ export async function attachCommand(
   // Clean up on Ctrl-C / termination.
   process.on("SIGINT", () => detach("Detached.", 0));
   process.on("SIGTERM", () => detach(undefined, 0));
+}
+
+/**
+ * Remove terminal capability QUERIES from replayed scrollback so the local
+ * terminal doesn't answer them (its answer would be typed into the shell):
+ * Device Attributes `ESC [ c` / `ESC [ > c`, and DECRQSS-style `ESC P … ESC \`.
+ */
+function stripQueries(s: string): string {
+  return (
+    s
+      // Primary/secondary Device Attributes: ESC [ c, ESC [ > c, ESC [ = c …
+      .replace(/\x1b\[[>=?]?[0-9;]*c/g, "")
+      // XTVERSION / name-version query: ESC [ > q
+      .replace(/\x1b\[>[0-9;]*q/g, "")
+      // Cursor-position report request: ESC [ 6 n (and other DSR ESC [ … n).
+      .replace(/\x1b\[[0-9;?]*n/g, "")
+      // DCS query/response wrappers: ESC P … ESC \.
+      .replace(/\x1bP[^\x1b]*\x1b\\/g, "")
+  );
 }

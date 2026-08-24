@@ -1,6 +1,6 @@
 {
   "name": "@citshe/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Thin local CLI for the citshe panel — attach to Claude Code sessions running on your VPS from your local terminal.",
   "type": "module",
   "license": "MIT",
