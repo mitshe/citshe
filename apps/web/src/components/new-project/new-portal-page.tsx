@@ -283,11 +283,7 @@ export function NewPortalPage() {
       void taskId; // the hero finds the active build task on Home
       router.push("/home");
     } catch (err) {
-      const msg =
-        err instanceof Error && err.message
-          ? err.message
-          : "Couldn't start the project.";
-      setBuildError(msg);
+      setBuildError(humanizeBuildError(err));
       setBuildStep(null);
       setBuilding(false);
     }
@@ -836,4 +832,27 @@ function isValidUrl(s: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Turn whatever the build threw into one clean sentence for the user. The API
+ * already returns human messages for the cases the user can act on (bad token,
+ * name taken, name collision); we keep those verbatim. We only rewrite the two
+ * shapes that would otherwise leak: a network failure (no server message) and a
+ * raw "API Error: 500 …" fallback.
+ */
+function humanizeBuildError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : "";
+  if (!msg) {
+    return "Something went wrong. Nothing was saved — please try again.";
+  }
+  // fetch() rejects with "Failed to fetch" / "Load failed" when offline.
+  if (/failed to fetch|load failed|networkerror/i.test(msg)) {
+    return "Couldn't reach citshe. Check your connection and try again.";
+  }
+  // Unmapped 5xx fallback from the API client — don't show the raw status line.
+  if (/^API Error: 5\d\d/.test(msg)) {
+    return "The server hit an unexpected error. Nothing was saved — please try again.";
+  }
+  return msg;
 }

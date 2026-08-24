@@ -128,9 +128,19 @@ export class NewProjectService {
         autoInit: true,
       });
     } catch (err) {
-      throw new BadRequestException(
-        `Couldn't create the GitHub repo: ${(err as Error).message}. Check the token and that the name is free.`,
-      );
+      // The adapter prefixes messages with "GitHub:"; strip it and turn the two
+      // errors the user can act on into plain-language fixes.
+      const raw = ((err as Error).message ?? '').replace(/^GitHub:\s*/i, '');
+      let friendly: string;
+      if (/already exists|name already/i.test(raw)) {
+        friendly = `The repository name "${repoName}" is already taken on your GitHub account. Pick a different name.`;
+      } else if (/bad credentials|401|unauthorized|invalid/i.test(raw)) {
+        friendly =
+          'That GitHub token was rejected. Create a fresh token (with the "repo" scope) and try again.';
+      } else {
+        friendly = `Couldn't create the GitHub repo. ${raw || 'Check the token and that the name is free.'}`;
+      }
+      throw new BadRequestException(friendly);
     }
 
     // Encrypt the credentials once (global key) for storage.
@@ -255,9 +265,14 @@ export class NewProjectService {
         this.logger.error(
           `New project transaction failed: ${(err as Error).message}`,
         );
-        throw new BadRequestException(
-          `Couldn't set up the project: ${(err as Error).message}`,
-        );
+        // Don't leak Prisma/internal error text to the wizard. Map the one
+        // failure the user can actually act on (a name collision), else a
+        // generic, friendly message. Full detail stays in the server log above.
+        const raw = (err as Error).message ?? '';
+        const friendly = /unique|constraint|slug|already exists/i.test(raw)
+          ? 'A portal with a similar name already exists. Try a different name.'
+          : 'Something went wrong setting up the project. Nothing was saved — please try again.';
+        throw new BadRequestException(friendly);
       });
 
     // 3. Kick off the build (best-effort — the task exists either way).
