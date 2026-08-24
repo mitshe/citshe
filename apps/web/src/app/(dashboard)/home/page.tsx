@@ -14,9 +14,6 @@ import {
   Search,
   X,
   Globe,
-  ExternalLink,
-  Rocket,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTaskStatus } from "@/lib/status-config";
@@ -514,81 +511,54 @@ function BuildHero({
   const state = failed ? "failed" : siteUrl ? "live" : "building";
   const title =
     state === "live"
-      ? "Your site is live"
+      ? "Site is live"
       : state === "failed"
-        ? "The build hit a snag"
+        ? "Build failed"
         : spec.mode === "refresh"
-          ? "Refreshing your site…"
-          : "Building your project…";
-  const subtitle =
-    state === "live"
-      ? "Claude built it and deployed it. Open it below."
-      : state === "failed"
-        ? "Open the task to see what happened and retry."
-        : "Claude is scaffolding, building and deploying. This runs in the background — you can leave this page.";
+          ? "Refreshing your site"
+          : "Building your project";
+  const dotState =
+    state === "live" ? "ok" : state === "failed" ? "failed" : "running";
 
-  const accent =
-    state === "live" ? "text-ok" : state === "failed" ? "text-danger" : "text-primary";
+  const host = siteUrl?.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   return (
-    <section className="rounded-lg border border-border bg-surface-card p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <span
-          className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-inset",
-            accent,
-          )}
+    <section className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface-card px-4 py-3">
+      <StatusDot state={dotState} size={8} pulse={state === "building"} />
+      <span className="text-sm font-medium text-foreground">{title}</span>
+
+      {host ? (
+        <a
+          href={siteUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="truncate text-sm text-muted-foreground transition-linear hover:text-foreground"
         >
-          {state === "live" ? (
-            <Globe className="size-4" />
-          ) : state === "failed" ? (
-            <AlertCircle className="size-4" />
-          ) : (
-            <Rocket className="size-4" />
-          )}
-        </span>
+          {host}
+        </a>
+      ) : (
+        repoUrl && (
+          <span className="truncate text-sm text-muted-foreground">
+            {repo?.name ?? spec.repoFullPath}
+          </span>
+        )
+      )}
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {state === "building" && <StatusDot state="running" size={8} pulse />}
-            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
-              {title}
-            </h2>
-          </div>
-          <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
-            {subtitle}
-          </p>
-
-          {repoUrl && (
-            <a
-              href={repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-inset px-2.5 py-1 text-xs font-medium text-muted-foreground transition-linear hover:text-foreground"
-            >
-              <FolderGit2 className="size-3.5" />
-              {repo?.name ?? spec.repoFullPath}
-            </a>
-          )}
-
-          <div className="mt-3.5 flex flex-wrap items-center gap-2">
-            {siteUrl && (
-              <a href={siteUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="primary" size="sm">
-                  <Globe className="size-3.5" />
-                  Open site
-                  <ExternalLink className="size-3 opacity-70" />
-                </Button>
-              </a>
-            )}
-            <Link href={`/tasks/${task.id}`}>
-              <Button variant="outline" size="sm">
-                {state === "building" ? "Watch it build" : "Open task"}
-                <ArrowRight className="size-3.5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
+      <div className="ml-auto flex items-center gap-2">
+        {siteUrl && (
+          <a href={siteUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="primary" size="sm">
+              <Globe className="size-3.5" />
+              Open site
+            </Button>
+          </a>
+        )}
+        <Link
+          href={`/tasks/${task.id}`}
+          className="text-sm font-medium text-muted-foreground transition-linear hover:text-foreground"
+        >
+          {state === "building" ? "Watch →" : "Task →"}
+        </Link>
       </div>
     </section>
   );
