@@ -3,7 +3,6 @@
  */
 
 export const QUEUES = {
-  TASK_PROCESSING: 'task-processing',
   /**
    * Orchestrator worker queue: each job runs one QUEUED task end-to-end in a
    * session container (`claude -p`). Only tasks actively being pulled live
@@ -19,14 +18,6 @@ export const QUEUES = {
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
-
-// Job Types
-export interface TaskProcessingJob {
-  type: 'process' | 'analyze' | 'complete' | 'fail';
-  taskId: string;
-  organizationId: string;
-  payload?: Record<string, unknown>;
-}
 
 /**
  * A job on the orchestrator worker queue (`task-queue`). Job `priority` is

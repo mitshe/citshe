@@ -3,7 +3,6 @@ import { BullModule } from '@nestjs/bullmq';
 import { QUEUES } from './queues';
 
 // Processors
-import { TaskProcessingProcessor } from './processors/task-processing.processor';
 import { TaskQueueProcessor } from './processors/task-queue.processor';
 import { SchedulesProcessor } from './processors/schedules.processor';
 
@@ -13,9 +12,8 @@ import { PrismaModule } from '../persistence/prisma/prisma.module';
 
 @Module({
   imports: [
-    // Register the task-processing queue (AI analysis) and the orchestrator
-    // worker queue (task-queue: runs QUEUED tasks in session containers).
-    BullModule.registerQueue({ name: QUEUES.TASK_PROCESSING }),
+    // The orchestrator worker queue (task-queue: runs QUEUED tasks in Claude
+    // Code session containers — the ONLY execution path).
     BullModule.registerQueue({ name: QUEUES.TASK_QUEUE }),
     // Recurring schedules ("crons"): repeatable jobs → create a Task on fire.
     BullModule.registerQueue({ name: QUEUES.SCHEDULES }),
@@ -26,7 +24,7 @@ import { PrismaModule } from '../persistence/prisma/prisma.module';
   ],
   // TaskQueueProcessor depends on OrchestrationService, provided by the global
   // McpModule.
-  providers: [TaskProcessingProcessor, TaskQueueProcessor, SchedulesProcessor],
+  providers: [TaskQueueProcessor, SchedulesProcessor],
   exports: [BullModule],
 })
 export class QueueModule {}

@@ -114,6 +114,16 @@ export class GitHubAdapter implements GitProviderPort {
     return this.mapRepository(repo);
   }
 
+  /**
+   * Delete a repository (owner/name). Used to roll back a just-created repo when
+   * the surrounding transaction fails, so a failed "new project" leaves no
+   * orphan repo (which would also block retrying with the same name). Requires
+   * the token to have the `delete_repo` scope; best-effort otherwise.
+   */
+  async deleteRepository(fullName: string): Promise<void> {
+    await this.request(`/repos/${fullName}`, { method: 'DELETE' });
+  }
+
   async listBranches(
     repoId: string,
     options?: { search?: string; limit?: number },
@@ -697,9 +707,7 @@ export class GitHubAdapter implements GitProviderPort {
     limit = 20,
   ): Promise<Array<{ name: string; protected: boolean }>> {
     const params = new URLSearchParams({ per_page: String(limit) });
-    const branches = await this.request(
-      `/repos/${repoId}/branches?${params}`,
-    );
+    const branches = await this.request(`/repos/${repoId}/branches?${params}`);
     return (branches || []).map((b: any) => ({
       name: b.name || '',
       protected: b.protected || false,

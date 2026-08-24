@@ -164,12 +164,6 @@ export const api = {
         token,
       }),
 
-    process: (id: string, token: string) =>
-      request<{ task: Task }>(`/tasks/${id}/process`, {
-        method: "POST",
-        token,
-      }),
-
     cancel: (id: string, token: string) =>
       request<{ task: Task }>(`/tasks/${id}/cancel`, {
         method: "POST",

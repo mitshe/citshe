@@ -5,8 +5,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskFilterDto } from '../dto/task.dto';
 import { TaskStatus, Prisma } from '@prisma/client';
@@ -21,10 +19,6 @@ import {
   TaskCompletedEvent,
   TaskFailedEvent,
 } from '../../../domain/events/task.events';
-import {
-  QUEUES,
-  TaskProcessingJob,
-} from '../../../infrastructure/queue/queues';
 
 @Injectable()
 export class TasksService {
@@ -33,8 +27,6 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBus,
-    @InjectQueue(QUEUES.TASK_PROCESSING)
-    private readonly taskQueue: Queue<TaskProcessingJob>,
   ) {}
 
   async create(organizationId: string, userId: string, dto: CreateTaskDto) {
@@ -422,70 +414,6 @@ export class TasksService {
   // =========================================================================
   // Task Processing Methods
   // =========================================================================
-
-  async startProcessing(organizationId: string, id: string) {
-    let previousStatus: TaskStatus = TaskStatus.PENDING;
-    // Use transaction to prevent race condition between status check and update
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const task = await tx.task.findFirst({
-        where: { id, organizationId },
-        include: { repository: true },
-      });
-
-      if (!task) {
-        throw new NotFoundException(`Task ${id} not found`);
-      }
-
-      // A task can be sent to AI while it's waiting to run (PENDING or QUEUED).
-      // A task that's already ANALYZING/IN_PROGRESS is in flight; a
-      // REVIEW/closed one uses Reopen first — those still reject.
-      const startable: TaskStatus[] = [TaskStatus.PENDING, TaskStatus.QUEUED];
-      if (!startable.includes(task.status)) {
-        throw new BadRequestException(
-          `Task ${id} can't be processed in status ${task.status}`,
-        );
-      }
-      previousStatus = task.status;
-
-      return tx.task.update({
-        where: { id },
-        data: { status: TaskStatus.ANALYZING },
-      });
-    });
-
-    // Emit status change event
-    this.eventBus.publish(
-      new TaskStatusChangedEvent(
-        id,
-        organizationId,
-        previousStatus,
-        TaskStatus.ANALYZING,
-      ),
-    );
-
-    // Enqueue task for AI processing
-    await this.taskQueue.add(
-      'analyze',
-      {
-        type: 'analyze',
-        taskId: id,
-        organizationId,
-      },
-      {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 50,
-      },
-    );
-
-    this.logger.log(`Task ${id} enqueued for AI processing`);
-
-    return updated;
-  }
 
   async cancel(organizationId: string, id: string) {
     const cancellableStatuses: TaskStatus[] = [

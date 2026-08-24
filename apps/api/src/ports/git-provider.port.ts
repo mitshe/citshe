@@ -103,6 +103,9 @@ export interface GitProviderPort {
     autoInit?: boolean;
   }): Promise<Repository>;
 
+  /** Delete a repository (owner/name) — compensating rollback for a failed build. */
+  deleteRepository(fullName: string): Promise<void>;
+
   /**
    * List branches
    */

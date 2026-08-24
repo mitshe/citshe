@@ -214,8 +214,9 @@ export function NewPortalPage() {
       const engine = await api.orchestration.engineStatus(token);
       if (!engine.ok) {
         throw new Error(
-          "The Claude engine isn't logged in on the server. An admin needs to " +
-            "run `claude /login` once before projects can be built.",
+          engine.reason === "unknown"
+            ? "We couldn't reach the build engine right now. Please try again in a moment."
+            : "The build engine needs to be reconnected before new sites can be built. Please contact the person who set up citshe.",
         );
       }
 

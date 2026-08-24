@@ -164,9 +164,10 @@ export class SessionContainerService implements OnModuleInit {
       if (hasAccess || canRefresh) return { ok: true };
       return { ok: false, reason: 'expired' };
     } catch (err) {
-      // Can't check → don't block the user; the worker will surface it.
+      // Fail CLOSED: if we can't verify the engine login, block the build with a
+      // clear reason rather than let it start and die silently in the worker.
       this.logger.warn(`checkEngineAuth failed: ${(err as Error).message}`);
-      return { ok: true };
+      return { ok: false, reason: 'unknown' };
     }
   }
 

@@ -191,9 +191,23 @@ export class NewProjectService {
           repoFullPath: repo.fullPath,
         };
       })
-      .catch((err) => {
+      .catch(async (err) => {
+        // Compensating rollback: the repo was created on GitHub BEFORE the txn,
+        // so a txn failure would leave an orphan repo (which also blocks
+        // retrying with the same name). Delete it. Best-effort — needs the
+        // delete_repo scope; if it fails we log the leftover for cleanup.
+        try {
+          await adapter.deleteRepository(remote.fullName);
+          this.logger.warn(
+            `Rolled back orphan GitHub repo ${remote.fullName} after a failed new-project txn.`,
+          );
+        } catch (delErr) {
+          this.logger.error(
+            `Could not delete orphan repo ${remote.fullName} (needs delete_repo scope): ${(delErr as Error).message}`,
+          );
+        }
         this.logger.error(
-          `New project transaction failed (repo ${remote.fullName} was created on GitHub): ${(err as Error).message}`,
+          `New project transaction failed: ${(err as Error).message}`,
         );
         throw new BadRequestException(
           `Couldn't set up the project: ${(err as Error).message}`,

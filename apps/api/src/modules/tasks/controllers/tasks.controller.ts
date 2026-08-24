@@ -217,23 +217,6 @@ export class TasksController {
   // Task Processing Endpoints
   // =========================================================================
 
-  @Post(':id/process')
-  @ApiOperation({ summary: 'Start AI processing for a task' })
-  @ApiResponse({
-    status: 200,
-    description: 'Task processing started',
-    type: TaskWithMessageResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'Task not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async startProcessing(
-    @OrganizationId() organizationId: string,
-    @Param('id') id: string,
-  ) {
-    const task = await this.tasksService.startProcessing(organizationId, id);
-    return { task, message: 'Task processing started' };
-  }
-
   @Post(':id/queue')
   @ApiOperation({
     summary:
