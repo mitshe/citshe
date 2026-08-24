@@ -121,6 +121,52 @@ export function getMe(token: string, apiBase: string): Promise<CliMeResponse> {
   return apiRequest<CliMeResponse>(API_ROUTES.me, { token, apiBase });
 }
 
+// ─── Browser SSO (device flow) — no token yet ─────────────────────
+
+/** Token-less POST for the device-auth handshake. */
+async function noAuthPost<T>(
+  apiBase: string,
+  routePath: string,
+  body?: unknown,
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase}${routePath}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    throw new CliError(
+      `Could not reach ${apiBase} — check your connection or the panel URL.\n  (${(err as Error).message})`,
+    );
+  }
+  if (!res.ok) {
+    throw new CliError(`Login request failed (${res.status}).`);
+  }
+  return (await res.json()) as T;
+}
+
+export interface DeviceAuthStart {
+  deviceCode: string;
+  userCode: string;
+  expiresIn: number;
+}
+
+export function startDeviceAuth(apiBase: string): Promise<DeviceAuthStart> {
+  return noAuthPost<DeviceAuthStart>(apiBase, "/api/v1/cli/auth/start");
+}
+
+export function pollDeviceAuth(
+  apiBase: string,
+  deviceCode: string,
+): Promise<{ status: string; token?: string }> {
+  return noAuthPost(apiBase, "/api/v1/cli/auth/token", { deviceCode });
+}
+
 export function getSessions(
   config: CliConfig,
 ): Promise<CliSessionsResponse> {

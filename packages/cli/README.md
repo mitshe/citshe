@@ -14,14 +14,19 @@ socket.io server.
 npm i -g @citshe/cli
 ```
 
-Then get a token: in the citshe panel go to **Settings → API keys → citshe CLI →
-New CLI token**, copy it, and:
+Then sign in — it opens your browser (like `gh auth login`):
 
 ```bash
-citshe login          # paste the ctk_… token when prompted
+citshe login          # asks for your panel URL, then opens the browser to authorize
 citshe ls             # list your sessions (grouped by portal)
 citshe attach <id>    # attach that session's terminal to THIS terminal
 ```
+
+`citshe login` first asks for the **panel URL** (Enter accepts the default
+`https://rangopanel.mitshe.com`), then opens the browser where you click
+**Authorize**. Prefer a token? Generate one in **Settings → API keys → citshe
+CLI** and run `citshe login --token ctk_…` (or `--api-base <url>` to skip the
+prompt).
 
 One token works across **all your portals**. Detach from an attached session
 with **Ctrl-]** (or type **`~.`** at the start of a line).

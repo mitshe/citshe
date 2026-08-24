@@ -67,6 +67,57 @@ export class CliController {
     return this.sessionImport.importSession(ctx, body);
   }
 
+  // ─── Browser SSO (device flow) ──────────────────────────────────
+
+  @Post('auth/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Begin a browser login (CLI, no auth)' })
+  async authStart() {
+    return this.cli.startDeviceAuth();
+  }
+
+  @Post('auth/token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Poll for the login result (CLI, no auth)' })
+  async authToken(@Body() body: { deviceCode?: string }) {
+    if (!body?.deviceCode) {
+      throw new UnauthorizedException('deviceCode required');
+    }
+    return this.cli.pollDeviceAuth(body.deviceCode);
+  }
+
+  @Get('auth/request/:userCode')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Panel: load a pending CLI login by user code' })
+  async authRequest(@Param('userCode') userCode: string) {
+    const request = await this.cli.getPendingByUserCode(userCode);
+    return { request };
+  }
+
+  @Post('auth/approve')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Panel: approve a CLI login' })
+  async authApprove(
+    @UserId() userId: string,
+    @Body() body: { userCode?: string },
+  ) {
+    if (!body?.userCode) throw new UnauthorizedException('userCode required');
+    return this.cli.approveDeviceAuth(userId, body.userCode);
+  }
+
+  @Post('auth/deny')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Panel: deny a CLI login' })
+  async authDeny(@Body() body: { userCode?: string }) {
+    if (!body?.userCode) throw new UnauthorizedException('userCode required');
+    return this.cli.denyDeviceAuth(body.userCode);
+  }
+
   // ─── Token management (panel, user AuthGuard) ───────────────────
 
   @Post('tokens')

@@ -40,6 +40,25 @@ model User {
   @@map("users")
 }
 
+// A short-lived device-authorization request for `citshe login` (browser SSO,
+// like `gh auth login`). The CLI holds the secret deviceCode; the user types
+// the short userCode (or clicks a link) in the panel to approve. On approval a
+// CliToken is minted and its plaintext is stashed here ONCE for the CLI's next
+// poll, then cleared.
+model CliAuthRequest {
+  id         String   @id @default(cuid())
+  deviceCode String   @unique @map("device_code") // secret, CLI-held
+  userCode   String   @unique @map("user_code") // short, human-visible
+  status     String   @default("pending") // pending | approved | denied
+  userId     String?  @map("user_id") // set on approval
+  token      String? // minted ctk_ token, delivered once to the CLI
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userCode])
+  @@map("cli_auth_requests")
+}
+
 // A personal access token for the citshe CLI. USER-scoped (not per-org) — it
 // grants access to all of the user's organizations, like a GitHub PAT.
 model CliToken {

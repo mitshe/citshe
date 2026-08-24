@@ -656,6 +656,26 @@ export const api = {
         method: "DELETE",
         token,
       }),
+
+    // Browser SSO (device flow) — panel side.
+    authRequest: (userCode: string, token: string) =>
+      request<{
+        request: { id: string; status: string } | null;
+      }>(`/cli/auth/request/${encodeURIComponent(userCode)}`, { token }),
+
+    authApprove: (userCode: string, token: string) =>
+      request<{ ok: boolean }>("/cli/auth/approve", {
+        method: "POST",
+        body: JSON.stringify({ userCode }),
+        token,
+      }),
+
+    authDeny: (userCode: string, token: string) =>
+      request<{ ok: boolean }>("/cli/auth/deny", {
+        method: "POST",
+        body: JSON.stringify({ userCode }),
+        token,
+      }),
   },
 
   orchestration: {

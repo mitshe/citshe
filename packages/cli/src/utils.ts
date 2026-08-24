@@ -1,4 +1,21 @@
 import readline from "node:readline";
+import { spawn } from "node:child_process";
+
+/** Open a URL in the user's default browser (best-effort, cross-platform). */
+export function openBrowser(url: string): void {
+  const cmd =
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "cmd"
+        : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    spawn(cmd, args, { stdio: "ignore", detached: true }).unref();
+  } catch {
+    /* user can open the URL manually */
+  }
+}
 
 /** Prompt the user for a line of input on the terminal (no extra deps). */
 export function prompt(question: string): Promise<string> {

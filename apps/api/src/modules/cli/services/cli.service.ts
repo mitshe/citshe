@@ -70,7 +70,8 @@ export class CliService {
 
   // ─── Token management (called from the panel) ───────────────────
 
-  async createToken(userId: string, name: string) {
+  /** Mint a token row and return its plaintext (stored only hashed). */
+  private async mintToken(userId: string, name: string) {
     const token = `ctk_${crypto.randomBytes(32).toString('hex')}`;
     const created = await this.prisma.cliToken.create({
       data: {
@@ -81,8 +82,88 @@ export class CliService {
       },
       select: { id: true, name: true, prefix: true, createdAt: true },
     });
-    // The full token is shown ONCE, here — never stored in the clear.
     return { ...created, token };
+  }
+
+  async createToken(userId: string, name: string) {
+    // The full token is shown ONCE, here — never stored in the clear.
+    return this.mintToken(userId, name);
+  }
+
+  // ─── Browser SSO (device authorization, like `gh auth login`) ────
+
+  /** Start a login: the CLI keeps deviceCode, the user approves userCode. */
+  async startDeviceAuth() {
+    // userCode is short + human-friendly (avoid ambiguous chars).
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const userCode = Array.from(
+      { length: 8 },
+      () => alphabet[crypto.randomInt(alphabet.length)],
+    )
+      .join('')
+      .replace(/(.{4})(.{4})/, '$1-$2');
+    const deviceCode = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    await this.prisma.cliAuthRequest.create({
+      data: { deviceCode, userCode, expiresAt },
+    });
+    return { deviceCode, userCode, expiresIn: 600 };
+  }
+
+  /** The CLI polls this with its deviceCode until approved. */
+  async pollDeviceAuth(deviceCode: string) {
+    const req = await this.prisma.cliAuthRequest.findUnique({
+      where: { deviceCode },
+    });
+    if (!req || req.expiresAt < new Date()) return { status: 'expired' };
+    if (req.status === 'denied') return { status: 'denied' };
+    if (req.status === 'approved' && req.token) {
+      // Deliver the token exactly once, then clear it.
+      await this.prisma.cliAuthRequest.update({
+        where: { deviceCode },
+        data: { token: null },
+      });
+      return { status: 'approved', token: req.token };
+    }
+    return { status: 'pending' };
+  }
+
+  /** Panel side: look up a pending request by the code the user sees. */
+  async getPendingByUserCode(userCode: string) {
+    const req = await this.prisma.cliAuthRequest.findUnique({
+      where: { userCode: userCode.trim().toUpperCase() },
+      select: { id: true, status: true, expiresAt: true, createdAt: true },
+    });
+    if (!req || req.expiresAt < new Date()) return null;
+    return req;
+  }
+
+  /** Panel side: the logged-in user approves → mint a token for them. */
+  async approveDeviceAuth(userId: string, userCode: string) {
+    const code = userCode.trim().toUpperCase();
+    const req = await this.prisma.cliAuthRequest.findUnique({
+      where: { userCode: code },
+    });
+    if (!req || req.expiresAt < new Date()) {
+      throw new NotFoundException('Login request not found or expired');
+    }
+    if (req.status !== 'pending') {
+      throw new UnauthorizedException('This request was already handled');
+    }
+    const { token } = await this.mintToken(userId, 'CLI (browser login)');
+    await this.prisma.cliAuthRequest.update({
+      where: { userCode: code },
+      data: { status: 'approved', userId, token },
+    });
+    return { ok: true };
+  }
+
+  async denyDeviceAuth(userCode: string) {
+    const code = userCode.trim().toUpperCase();
+    await this.prisma.cliAuthRequest
+      .update({ where: { userCode: code }, data: { status: 'denied' } })
+      .catch(() => undefined);
+    return { ok: true };
   }
 
   async listTokens(userId: string) {

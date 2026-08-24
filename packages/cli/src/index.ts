@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { CliError, AuthError } from "./api.js";
-import { DEFAULT_API_BASE } from "./config.js";
 import { loginCommand, logoutCommand } from "./commands/login.js";
 import { lsCommand } from "./commands/ls.js";
 import { attachCommand } from "./commands/attach.js";
@@ -42,16 +41,23 @@ program
 
 program
   .command("login")
-  .argument("[token]", "your ctk_ personal access token")
-  .option(
-    "--api-base <url>",
-    "citshe API base URL",
-    DEFAULT_API_BASE,
-  )
-  .description("Save and verify your citshe access token")
-  .action(action(async (token: string | undefined, opts: { apiBase: string }) => {
-    await loginCommand(token, { apiBase: opts.apiBase });
-  }));
+  .argument("[token]", "a ctk_ token (skips the browser flow)")
+  .option("--api-base <url>", "panel URL (skips the prompt)")
+  .option("--token <token>", "a ctk_ token (skips the browser flow)")
+  .description("Sign in via your browser (or with a token)")
+  .action(
+    action(
+      async (
+        token: string | undefined,
+        opts: { apiBase?: string; token?: string },
+      ) => {
+        await loginCommand(token, {
+          apiBase: opts.apiBase,
+          token: opts.token,
+        });
+      },
+    ),
+  );
 
 program
   .command("logout")
