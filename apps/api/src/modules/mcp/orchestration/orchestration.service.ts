@@ -124,6 +124,11 @@ export class OrchestrationService {
     };
   }
 
+  /** Is the Claude engine logged in? Gate for the New-project wizard. */
+  async engineStatus(): Promise<{ ok: boolean; reason?: string }> {
+    return this.containerService.checkEngineAuth();
+  }
+
   async setQueuePaused(organizationId: string, paused: boolean) {
     await this.prisma.organization.update({
       where: { id: organizationId },
@@ -1266,14 +1271,14 @@ export class OrchestrationService {
   private detectWorkerHardError(output: string): string | null {
     const head = output.slice(0, 4000);
     if (
-      /Not logged in|Please run \/login|Invalid API key|Credit balance/i.test(
+      /Not logged in|Please run \/login|Invalid API key|Credit balance|OAuth session expired|could not be refreshed|Failed to authenticate/i.test(
         head,
       )
     ) {
       return (
-        'Claude is not authenticated in this portal. Open a terminal in this ' +
-        'portal and run `claude /login` once (the login is per-portal), then ' +
-        'retry the task.'
+        "Claude isn't logged in (the session expired). Open a terminal and run " +
+        '`claude /login` once, then retry the task. If the whole engine went ' +
+        'stale, the login has to be refreshed on the server.'
       );
     }
     return null;

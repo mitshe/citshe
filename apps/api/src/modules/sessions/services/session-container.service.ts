@@ -114,6 +114,62 @@ export class SessionContainerService implements OnModuleInit {
     return this.configService.get<string>('CLAUDE_AUTH_SEED_VOLUME') || null;
   }
 
+  /**
+   * Is the Claude engine logged in? Reads the shared seed credential (a tiny
+   * throwaway container) and checks it has a usable token — a non-empty
+   * accessToken, or a refreshToken whose expiry is still in the future. Used to
+   * gate the New-project wizard so a build never starts against a dead login.
+   * Returns { ok, reason } — ok:true when seeding is disabled (can't tell, so
+   * don't block).
+   */
+  async checkEngineAuth(): Promise<{ ok: boolean; reason?: string }> {
+    const vol = this.claudeAuthSeedVolume();
+    if (!vol) return { ok: true };
+    try {
+      const container = await this.docker.createContainer({
+        Image: 'alpine',
+        Entrypoint: ['sh', '-c'],
+        Cmd: ['cat /seed/.credentials.json 2>/dev/null || true'],
+        HostConfig: { Binds: [`${vol}:/seed:ro`], AutoRemove: true },
+      });
+      await container.start();
+      const stream = await container.logs({
+        stdout: true,
+        stderr: false,
+        follow: true,
+      });
+      const raw = await new Promise<string>((resolve) => {
+        const chunks: Buffer[] = [];
+        stream.on('data', (c: Buffer) => chunks.push(c));
+        stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        stream.on('error', () => resolve(''));
+      });
+      // Strip docker log framing (8-byte header per frame) then find JSON.
+      const jsonStart = raw.indexOf('{');
+      if (jsonStart < 0) return { ok: false, reason: 'not-logged-in' };
+      const parsed = JSON.parse(raw.slice(jsonStart)) as {
+        claudeAiOauth?: {
+          accessToken?: string;
+          refreshToken?: string;
+          refreshTokenExpiresAt?: number;
+        };
+      };
+      const oauth = parsed.claudeAiOauth;
+      if (!oauth) return { ok: false, reason: 'not-logged-in' };
+      const hasAccess = !!oauth.accessToken;
+      const canRefresh =
+        !!oauth.refreshToken &&
+        typeof oauth.refreshTokenExpiresAt === 'number' &&
+        oauth.refreshTokenExpiresAt > Date.now();
+      if (hasAccess || canRefresh) return { ok: true };
+      return { ok: false, reason: 'expired' };
+    } catch (err) {
+      // Can't check → don't block the user; the worker will surface it.
+      this.logger.warn(`checkEngineAuth failed: ${(err as Error).message}`);
+      return { ok: true };
+    }
+  }
+
   /** RO bind of the seed volume at /seed (empty when disabled). */
   private claudeAuthSeedBind(): string[] {
     const vol = this.claudeAuthSeedVolume();
@@ -127,8 +183,13 @@ export class SessionContainerService implements OnModuleInit {
    */
   private claudeAuthSeedCmd(): string {
     if (!this.claudeAuthSeedVolume()) return '';
+    // Copy the seed in when the org has NO credentials yet OR its accessToken is
+    // blank (Claude zeroes the token after a failed refresh, which left orgs
+    // stuck "OAuth session expired"). An org with a live token keeps its own.
     return (
-      `if [ -s /seed/.credentials.json ] && [ ! -s /home/executor/.claude/.credentials.json ]; then ` +
+      `if [ -s /seed/.credentials.json ] && ` +
+      `( [ ! -s /home/executor/.claude/.credentials.json ] || ` +
+      `  grep -q '"accessToken":""' /home/executor/.claude/.credentials.json 2>/dev/null ); then ` +
       `mkdir -p /home/executor/.claude && ` +
       `cp /seed/.credentials.json /home/executor/.claude/.credentials.json && ` +
       `chown -R executor:executor /home/executor/.claude; fi; `

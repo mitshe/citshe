@@ -688,6 +688,12 @@ export const api = {
     queue: (token: string) =>
       request<QueueOverview>("/orchestration/queue", { token }),
 
+    engineStatus: (token: string) =>
+      request<{ ok: boolean; reason?: string }>(
+        "/orchestration/engine-status",
+        { token },
+      ),
+
     setPaused: (paused: boolean, token: string) =>
       request<{ queuePaused: boolean }>("/orchestration/queue/pause", {
         method: "POST",

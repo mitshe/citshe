@@ -29,6 +29,13 @@ export class OrchestrationController {
     return this.orchestration.getQueueOverview(organizationId);
   }
 
+  @Get('engine-status')
+  @ApiOperation({ summary: 'Is the Claude engine logged in? (wizard gate)' })
+  @ApiResponse({ status: 200, description: 'Engine auth status' })
+  async engineStatus() {
+    return this.orchestration.engineStatus();
+  }
+
   @Post('queue/pause')
   @ApiOperation({ summary: 'Pause or resume automatic worker dispatch' })
   @ApiResponse({ status: 200, description: 'New pause state' })

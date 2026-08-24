@@ -13,7 +13,6 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +107,8 @@ export function NewPortalPage() {
     useState<BuildSpec["hostingHint"]>(undefined);
 
   const [building, setBuilding] = useState(false);
+  const [buildStep, setBuildStep] = useState<string | null>(null);
+  const [buildError, setBuildError] = useState<string | null>(null);
   const [plainCreateOpen, setPlainCreateOpen] = useState(false);
 
   const stepIndex = NEW_STEPS.indexOf(step);
@@ -158,50 +159,53 @@ export function NewPortalPage() {
   const build = async () => {
     if (building || !mode) return;
     setBuilding(true);
+    setBuildError(null);
     try {
+      const token = await getToken();
+
+      // GATE: don't start anything if the Claude engine isn't logged in — a
+      // dead login means the worker can't build. Fail loudly, up-front.
+      setBuildStep("Checking the Claude engine…");
+      const engine = await api.orchestration.engineStatus(token);
+      if (!engine.ok) {
+        throw new Error(
+          "The Claude engine isn't logged in on the server. An admin needs to " +
+            "run `claude /login` once before projects can be built.",
+        );
+      }
+
       // 1. Create the portal (this also switches the active org).
+      setBuildStep("Creating the portal…");
       await createOrganization(name.trim());
 
-      // 1b. Optionally reuse GitHub from another portal (now that the new org is
-      // the active one, the copy targets it). Must run BEFORE creating the repo.
+      // 2. Reuse GitHub from another portal, if chosen. HARD — the repo step
+      // needs GitHub, so a failure here must stop (no silent fallback).
       if (copyFromOrgId) {
-        await copyConnections.mutateAsync(copyFromOrgId).catch(() => {
-          toast.message("Couldn't reuse GitHub — connect it on the board.");
-        });
+        setBuildStep("Reusing your GitHub login…");
+        await copyConnections.mutateAsync(copyFromOrgId);
       }
 
-      // 1c. Create the GitHub repo up-front and register it in the portal, so it
-      // exists (and is visible in Repos) before the worker builds into it.
-      let repositoryId: string | undefined;
-      let repoFullPath: string | undefined;
-      try {
-        const token = await getToken();
-        const { repository } = await api.repositoriesCreate(
-          {
-            name: (repoEdited ? repoName : suggestedRepo).trim(),
-            description: `${name.trim()} — built with citshe`,
-            private: visibility !== "public",
-          },
-          token,
-        );
-        repositoryId = repository.id;
-        repoFullPath = repository.fullPath;
-      } catch (err) {
-        // Non-fatal: fall back to the worker creating the repo itself.
-        toast.message(
-          err instanceof Error && err.message
-            ? err.message
-            : "Couldn't create the repo up-front — Claude will create it.",
-        );
-      }
+      // 3. Create the GitHub repo up-front and register it in the portal. HARD —
+      // if this fails (e.g. GitHub not connected), stop and tell the user; we do
+      // NOT quietly build without a tracked repo.
+      setBuildStep("Creating the repository…");
+      const { repository } = await api.repositoriesCreate(
+        {
+          name: (repoEdited ? repoName : suggestedRepo).trim(),
+          description: `${name.trim()} — built with citshe`,
+          private: visibility !== "public",
+        },
+        await getToken(), // fresh token — org switched above
+      );
 
-      // 2. Create the build task.
+      // 4. Create the build task bound to that repo.
+      setBuildStep("Setting up the build…");
       const spec: BuildSpec = {
         mode,
         prompt: prompt.trim(),
         visibility,
-        ...(repositoryId ? { repositoryId } : {}),
-        ...(repoFullPath ? { repoFullPath } : {}),
+        repositoryId: repository.id,
+        repoFullPath: repository.fullPath,
         ...(mode === "refresh" && sourceUrl.trim()
           ? { sourceUrl: sourceUrl.trim() }
           : {}),
@@ -215,16 +219,18 @@ export function NewPortalPage() {
         buildSpec: spec,
       });
 
-      // 3. Kick it off immediately, then jump to the task to watch it work.
-      await buildTask.mutateAsync(task.id).catch(() => {
-        toast.message("Project created — start it from the board.");
-      });
+      // 5. Kick it off, then jump to the task to watch it work.
+      setBuildStep("Starting Claude…");
+      await buildTask.mutateAsync(task.id);
 
       router.push(`/tasks/${task.id}`);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Couldn't start the project.",
-      );
+      const msg =
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't start the project.";
+      setBuildError(msg);
+      setBuildStep(null);
       setBuilding(false);
     }
   };
@@ -496,6 +502,26 @@ export function NewPortalPage() {
                 value={visibility === "public" ? "Open / public" : "Only me"}
               />
             </dl>
+
+            {/* Live step while building */}
+            {building && buildStep && (
+              <div className="mt-4 flex items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/[0.04] px-3.5 py-3 text-sm text-foreground">
+                <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+                {buildStep}
+              </div>
+            )}
+
+            {/* Hard error — the build stopped, nothing silently proceeded */}
+            {buildError && (
+              <div className="mt-4 rounded-lg border border-danger/30 bg-danger/[0.05] px-3.5 py-3">
+                <p className="text-sm font-medium text-danger">
+                  Couldn&apos;t start the build
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {buildError}
+                </p>
+              </div>
+            )}
           </StepShell>
           )}
         </div>
