@@ -1301,6 +1301,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
       this.commitIdentityRule() +
+      this.secretsRule() +
       `Use the "citshe" skill to keep the human updated: leave a note at ` +
       `meaningful milestones, attach a screenshot when you test a running web ` +
       `app, and add follow-up tasks for real out-of-scope work.\n\n` +
@@ -1331,6 +1332,25 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Hard security rule injected into every worker prompt: the connected tokens
+   * live only in the container env and must NEVER be written into the repo. This
+   * is critical because the repo can be public and commits go to GitHub.
+   */
+  private secretsRule(): string {
+    return (
+      `SECRETS (critical — the repo may be public):\n` +
+      `- The connected tokens are in the environment (e.g. CLOUDFLARE_API_TOKEN, ` +
+      `VERCEL_TOKEN, NEON_API_KEY). Use them ONLY from the env; NEVER write their ` +
+      `literal values into any file, and NEVER commit them.\n` +
+      `- Before your FIRST commit, make sure .env, .env.*, .dev.vars and any ` +
+      `local secret files are in .gitignore. Put app runtime secrets (e.g. a ` +
+      `database URL) in the HOST's env vars (Cloudflare Pages / Vercel project ` +
+      `env), not in the repo.\n` +
+      `- Do NOT set up GitHub Actions secrets or push tokens to the repo.\n\n`
+    );
+  }
+
+  /**
    * Build the prompt for a "New project" task: create a brand-new repo, build a
    * site (or refresh an existing one), and deploy it live. The stack rules are
    * fixed policy; hosting has a suggested default per stack but can be
@@ -1356,13 +1376,23 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
 
     const hostingRules = [
       'HOSTING (deploy the finished site so it is live on a URL):',
-      '- Astro / static / content → Cloudflare Pages (wrangler, CLOUDFLARE_API_TOKEN). Suggested.',
-      '- Next.js / application → Vercel (vercel CLI, VERCEL_TOKEN). Suggested.',
+      'First run `env | grep -E "CLOUDFLARE|VERCEL|NEON"` to see which tokens are',
+      'connected. Only use a host whose token is present; if your first choice',
+      "isn't connected, use whichever IS and leave a citshe note about it.",
+      '- Astro / static / content → Cloudflare Pages. Deploy with:',
+      '    `wrangler pages project create <slug> --production-branch=main` (once),',
+      '    then `wrangler pages deploy <build-dir> --project-name=<slug>`',
+      '    (Astro build-dir is `dist`).',
+      '- Next.js / application → Vercel. Deploy with:',
+      '    `vercel deploy --prod --yes --token $VERCEL_TOKEN` (run `vercel pull`',
+      '    or accept defaults; do NOT open a browser).',
       '- Next.js can also run on Cloudflare if that is what is connected.',
-      'Only use a host whose token is present in the environment. Run ' +
-        '`env | grep -E "CLOUDFLARE|VERCEL|NEON"` to see what is connected. If ' +
-        'the host you would pick is NOT connected, use whichever IS, and leave a ' +
-        'citshe note explaining the choice.',
+      'This is a ONE-SHOT deploy from here — do NOT create GitHub Actions',
+      'workflows and do NOT put any token into the repo (see SECRETS).',
+      '- If the app needs a database → Neon. `neonctl projects create` (or use an',
+      '  existing project), get the Postgres connection string, and set it as the',
+      "  app's DATABASE_URL in the HOST's env vars (Cloudflare Pages / Vercel",
+      '  project env) — NEVER commit it. Run any migrations before deploy.',
       spec.hostingHint
         ? `The user forced the host: deploy to ${spec.hostingHint}.`
         : '',
@@ -1416,6 +1446,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       `you run it, so ONLY run it when the site is actually live. Also print, as ` +
       `the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
       this.commitIdentityRule() +
+      this.secretsRule() +
       `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
       `(repo created, framework scaffolded, deploying…) and attach a screenshot ` +
       `of the deployed site. Report meaningfully, don't spam.`

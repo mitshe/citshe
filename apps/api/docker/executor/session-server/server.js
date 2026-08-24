@@ -63,6 +63,46 @@ function setupGitCredentialStore() {
 }
 
 /**
+ * Install a global git pre-commit hook that BLOCKS commits containing
+ * token-shaped secrets, so the agent can never accidentally commit a connected
+ * token (CF/Vercel/Neon) into the repo — which could be public. Scoped to
+ * value-assignment patterns to avoid blocking docs that merely mention a key
+ * name. Second layer behind the prompt's SECRETS rule.
+ */
+function installSecretScanHook() {
+  try {
+    const hooksDir = path.join(HOME_DIR, '.git-hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const hook = [
+      '#!/bin/bash',
+      '# citshe: block committing secret-shaped values (tokens/keys/db urls).',
+      'staged=$(git diff --cached -U0 | grep "^+" | grep -v "^+++" || true)',
+      '# Known secret env-var assignments with a real-looking value, or a live',
+      '# Postgres URL with credentials. Deliberately narrow to avoid false hits.',
+      'if echo "$staged" | grep -Eq \\',
+      '  "(CLOUDFLARE_API_TOKEN|VERCEL_TOKEN|NEON_API_KEY|CLOUDFLARE_ACCOUNT_ID|GITHUB_TOKEN|GH_TOKEN)[\\"\\x27 ]*[:=][\\"\\x27 ]*[A-Za-z0-9_-]{16,}"; then',
+      '  echo "citshe: refusing to commit — a secret token value is staged." >&2',
+      '  echo "Keep secrets in env vars / host config, not in the repo." >&2',
+      '  exit 1',
+      'fi',
+      'if echo "$staged" | grep -Eq "postgres(ql)?://[^ :@\\"\\x27]+:[^ @\\"\\x27]+@"; then',
+      '  echo "citshe: refusing to commit — a database URL with credentials is staged." >&2',
+      '  exit 1',
+      'fi',
+      'exit 0',
+      '',
+    ].join('\n');
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    fs.writeFileSync(hookPath, hook, { mode: 0o755 });
+    // Point ALL repos in this container at the shared hooks dir.
+    execSilent(`git config --global core.hooksPath ${JSON.stringify(hooksDir)}`);
+    log('Installed git secret-scan pre-commit hook.');
+  } catch (err) {
+    log('Could not install secret-scan hook: ' + err.message);
+  }
+}
+
+/**
  * Set the git commit author from the identity citshe injects via env
  * (GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL, sourced from the API's GIT_COMMIT_*
  * config). Nothing is hardcoded here. Deploy providers like Vercel reject
@@ -900,6 +940,7 @@ async function setup() {
   rewriteSshRemotes(config.integrations);
   writeInstructions(config.instructions, config.provider);
   configureGitAuthor();
+  installSecretScanHook();
   installSkills(config.skills);
   installCitsheStreamCli();
   installCitsheTaskCli();
