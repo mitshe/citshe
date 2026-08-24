@@ -362,57 +362,73 @@ function installCitsheShotCli() {
  * Claude reads the description and knows WHEN to use each action.
  */
 function installCitsheSkill() {
-  if (!process.env.CITSHE_WORKER_TOKEN || !process.env.CITSHE_API_URL) return;
+  // Install the skill for EVERY session, not just task workers. The Stack-tools
+  // section (wrangler/vercel/neonctl) is the main value for a plain terminal and
+  // needs no worker token. The reporting scripts (note/status/shot/task) require
+  // CITSHE_WORKER_TOKEN + CITSHE_API_URL, so we only wire those in when present.
+  const hasReporting =
+    !!process.env.CITSHE_WORKER_TOKEN && !!process.env.CITSHE_API_URL;
   const hasTask = !!process.env.CITSHE_TASK_ID;
   try {
     const skillDir = path.join(HOME_DIR, '.claude', 'skills', 'citshe');
     const scriptsDir = path.join(skillDir, 'scripts');
     fs.mkdirSync(scriptsDir, { recursive: true });
 
+    const reportingSections = hasReporting
+      ? [
+          'You are running as a worker for a task shown in the citshe panel. Keep',
+          'the human in the loop by reporting through these scripts. Environment',
+          'variables (CITSHE_API_URL, CITSHE_WORKER_TOKEN, CITSHE_TASK_ID) are set.',
+          '',
+          '## Narrate progress (note)',
+          'Leave a short note in the task activity at meaningful points.',
+          '```bash',
+          '${CLAUDE_SKILL_DIR}/scripts/citshe-note.sh "Cloned repo, running the dev server"',
+          '```',
+          '',
+          '## Set task status',
+          'Move the task as you work: `in-progress` when you start, `review` when the',
+          'work is ready for a human, or `done` if it is fully complete.',
+          '```bash',
+          '${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review',
+          '```',
+          '',
+          '## Attach a screenshot (proof for web work)',
+          'When you test a running web app, capture the page and attach it.',
+          '```bash',
+          '${CLAUDE_SKILL_DIR}/scripts/citshe-shot.sh http://localhost:3000 "Home page after the change"',
+          '```',
+          '',
+          '## Add a follow-up task',
+          'For real, actionable follow-ups that are out of scope for this task.',
+          '```bash',
+          '${CLAUDE_SKILL_DIR}/scripts/citshe-task.sh "Short title" "One-line description"',
+          '```',
+          '',
+        ]
+      : [
+          'You are running in an interactive citshe terminal session (not a task',
+          'worker). There is no task to report against, but the portal\'s connected',
+          'stack tools are available as environment variables — see below.',
+          '',
+        ];
+
     const skillMd = [
       '---',
       'name: citshe',
       'description: >-',
-      '  Report progress and results back to the citshe panel while working a',
-      '  task. Use this to narrate what you are doing (note), move the task to',
-      '  Review or Done when finished (status), attach a screenshot of a running',
-      '  app as evidence (shot), and add follow-up tasks to the board (task). Use',
-      '  proactively — set status to in-progress when you start and review/done',
-      '  when finished, and leave notes at meaningful milestones.',
+      '  Act on this portal from a citshe session. Use the connected stack tools',
+      '  (Cloudflare/Vercel/Neon/Expo via wrangler/vercel/neonctl/eas, exposed as',
+      '  env vars) to deploy, inspect, and manage hosting and databases. When',
+      '  running as a task worker, also report progress back to the panel: narrate',
+      '  (note), move the task to Review/Done (status), attach a screenshot (shot),',
+      '  and add follow-up tasks (task).',
       'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*)',
       '---',
       '',
-      '# citshe — talk back to the panel',
+      '# citshe — act on this portal',
       '',
-      'You are running as a worker for a task shown in the citshe panel. Keep the',
-      'human in the loop by reporting through these scripts. Environment variables',
-      '(CITSHE_API_URL, CITSHE_WORKER_TOKEN, CITSHE_TASK_ID) are already set.',
-      '',
-      '## Narrate progress (note)',
-      'Leave a short note in the task activity at meaningful points.',
-      '```bash',
-      '${CLAUDE_SKILL_DIR}/scripts/citshe-note.sh "Cloned repo, running the dev server"',
-      '```',
-      '',
-      '## Set task status',
-      'Move the task as you work: `in-progress` when you start, `review` when the',
-      'work is ready for a human, or `done` if it is fully complete.',
-      '```bash',
-      '${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review',
-      '```',
-      '',
-      '## Attach a screenshot (proof for web work)',
-      'When you test a running web app, capture the page and attach it.',
-      '```bash',
-      '${CLAUDE_SKILL_DIR}/scripts/citshe-shot.sh http://localhost:3000 "Home page after the change"',
-      '```',
-      '',
-      '## Add a follow-up task',
-      'For real, actionable follow-ups that are out of scope for this task.',
-      '```bash',
-      '${CLAUDE_SKILL_DIR}/scripts/citshe-task.sh "Short title" "One-line description"',
-      '```',
-      '',
+      ...reportingSections,
       '## Stack tools (deploy / DB / hosting)',
       'The connected tools for this portal are exposed as environment variables,',
       'so you can act on the stack directly. Check which are set and use the',
@@ -429,6 +445,13 @@ function installCitsheSkill() {
       '',
     ].join('\n');
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMd, 'utf-8');
+
+    // The reporting scripts only make sense with a worker token + task. Skip
+    // them for plain terminal sessions — the SKILL.md already omits their docs.
+    if (!hasReporting) {
+      log('Installed citshe Claude Code skill (stack tools only — no task context)');
+      return;
+    }
 
     const shebang = '#!/bin/bash';
     const guard = (needTask) =>
