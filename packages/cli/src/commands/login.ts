@@ -11,9 +11,8 @@ import {
   clearConfig,
   normalizeBase,
   configPath,
-  DEFAULT_API_BASE,
 } from "../config.js";
-import { TOKEN_PREFIX } from "../constants.js";
+import { TOKEN_PREFIX, ENV_API_BASE } from "../constants.js";
 import { prompt, openBrowser } from "../utils.js";
 
 export interface LoginOptions {
@@ -27,11 +26,18 @@ export async function loginCommand(
   tokenArg: string | undefined,
   options: LoginOptions,
 ): Promise<void> {
-  // 1) Panel URL — prompt with the default, unless given via flag.
-  let base = options.apiBase;
+  // 1) Panel URL — from --api-base, the CITSHE_API_BASE env, or a prompt.
+  //    citshe is self-hosted; there is NO default panel address.
+  let base = options.apiBase || process.env[ENV_API_BASE];
   if (!base) {
-    const answer = await prompt(`Panel URL [${DEFAULT_API_BASE}]: `);
-    base = answer.trim() || DEFAULT_API_BASE;
+    base = await prompt(
+      "Your citshe panel URL (e.g. https://panel.example.com): ",
+    );
+  }
+  if (!base?.trim()) {
+    throw new CliError(
+      "A panel URL is required. Pass --api-base <url> or set CITSHE_API_BASE.",
+    );
   }
   const apiBase = normalizeBase(base);
 

@@ -22,11 +22,10 @@ citshe ls             # list your sessions (grouped by portal)
 citshe attach <id>    # attach that session's terminal to THIS terminal
 ```
 
-`citshe login` first asks for the **panel URL** (Enter accepts the default
-`https://rangopanel.mitshe.com`), then opens the browser where you click
-**Authorize**. Prefer a token? Generate one in **Settings → API keys → citshe
-CLI** and run `citshe login --token ctk_…` (or `--api-base <url>` to skip the
-prompt).
+citshe is self-hosted, so `citshe login` first asks for **your** panel URL
+(or pass `--api-base <url>`, or set `CITSHE_API_BASE`), then opens the browser
+where you click **Authorize**. Prefer a token? Generate one in **Settings → API
+keys → citshe CLI** and run `citshe login --token ctk_…`.
 
 One token works across **all your portals**. Detach from an attached session
 with **Ctrl-]** (or type **`~.`** at the start of a line).
@@ -50,7 +49,7 @@ citshe push [projectPath] [--org <id>]    # import a local session (coming soon)
 
 - Config is stored at `~/.citshe/config.json` (chmod 600) and holds
   `{ token, apiBase, wsBase }`.
-- Default API base is `https://rangopanel.mitshe.com`.
+- The panel URL is yours — set it at login, via `--api-base`, or `CITSHE_API_BASE`.
 - In `attach`, detach cleanly with **Ctrl-]** or by typing **`~.`** at the
   start of a line.
 

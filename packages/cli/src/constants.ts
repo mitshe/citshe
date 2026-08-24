@@ -6,8 +6,12 @@
  * one spot and every command follows.
  */
 
-/** Default citshe API host. Overridable per-login with `--api-base`. */
-export const DEFAULT_API_BASE = "https://rangopanel.mitshe.com";
+/**
+ * There is NO default panel URL — citshe is self-hosted, so the user always
+ * provides their own panel address at login (or via CITSHE_API_BASE / --api-base).
+ * Never hardcode a real deployment's domain in this public package.
+ */
+export const ENV_API_BASE = "CITSHE_API_BASE";
 
 /** Personal access tokens the user pastes from the panel start with this. */
 export const TOKEN_PREFIX = "ctk_";

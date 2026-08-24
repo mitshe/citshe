@@ -1,16 +1,12 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  CONFIG_DIR_NAME,
-  CONFIG_FILE_NAME,
-  DEFAULT_API_BASE,
-} from "./constants.js";
+import { CONFIG_DIR_NAME, CONFIG_FILE_NAME } from "./constants.js";
 
 export interface CliConfig {
   /** The ctk_ personal access token. */
   token: string;
-  /** Base URL for REST calls, e.g. https://rangopanel.mitshe.com */
+  /** Base URL for REST calls — the user's own citshe panel. */
   apiBase: string;
   /** Base URL for the socket.io connection (usually same host as apiBase). */
   wsBase: string;
@@ -68,5 +64,3 @@ export function normalizeBase(input: string): string {
   if (!/^https?:\/\//i.test(v)) v = `https://${v}`;
   return v.replace(/\/+$/, "");
 }
-
-export { DEFAULT_API_BASE };
