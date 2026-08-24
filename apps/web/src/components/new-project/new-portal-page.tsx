@@ -159,28 +159,35 @@ export function NewPortalPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-4 pt-5 sm:px-6 sm:pt-8">
-      {/* Header row: back + title + step progress */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={goBack}
-            aria-label="Back"
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <span className="text-sm font-medium text-muted-foreground">
-            New portal
-          </span>
-        </div>
-        <WizardProgress current={stepIndex + 1} total={NEW_STEPS.length} />
-      </div>
+    <div className="fixed inset-0 z-40 flex flex-col bg-background">
+      {/* Top bar: back + brand, spanning full width */}
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 pt-safe sm:px-6"
+        style={{ minHeight: "calc(3.25rem + env(safe-area-inset-top))" }}
+      >
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={goBack}
+          aria-label="Back"
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <span className="font-brand text-sm font-semibold tracking-tight">
+          New portal
+        </span>
+      </header>
 
-      {/* Step body */}
-      <div className="flex-1">
-        {step === "entry" && (
+      {/* Scrollable content, centered */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-6 sm:px-6 sm:pt-10">
+          <div className="mb-8">
+            <WizardProgress
+              current={stepIndex + 1}
+              total={NEW_STEPS.length}
+            />
+          </div>
+
+          {step === "entry" && (
           <StepShell
             title="New portal"
             subtitle="Build something new, or connect what you already have."
@@ -348,21 +355,25 @@ export function NewPortalPage() {
               />
             </dl>
           </StepShell>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Footer CTA — sticks to the bottom of the scroll area, stays inside the
-          main content column so it never runs under the sidebar. */}
-      <div className="sticky bottom-0 z-10 mt-8 -mx-4 border-t border-border bg-background/95 px-4 py-3 pb-safe backdrop-blur sm:-mx-6 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
+      {/* Footer — full-width bar, content centered to match the body column. */}
+      <footer className="shrink-0 border-t border-border bg-background px-4 py-3 pb-safe sm:px-6">
+        <div className="mx-auto flex w-full max-w-2xl items-center justify-center gap-3">
           {step === "review" ? (
             <>
-              <p className="hidden text-xs text-text-subtle sm:block">
-                You&apos;ll watch the progress on the board.
-              </p>
+              <Button
+                variant="ghost"
+                onClick={goBack}
+                className="flex-1 sm:flex-none"
+              >
+                Back
+              </Button>
               <Button
                 variant="primary"
-                className="w-full sm:ml-auto sm:w-auto"
+                className="flex-1 sm:flex-none sm:min-w-44"
                 onClick={build}
                 disabled={building}
               >
@@ -379,13 +390,13 @@ export function NewPortalPage() {
               <Button
                 variant="ghost"
                 onClick={goBack}
-                className="hidden sm:flex"
+                className="flex-1 sm:flex-none"
               >
                 Back
               </Button>
               <Button
                 variant="primary"
-                className="w-full sm:ml-auto sm:w-auto sm:min-w-40"
+                className="flex-1 sm:flex-none sm:min-w-44"
                 onClick={advance}
                 disabled={!canContinue()}
               >
@@ -395,13 +406,10 @@ export function NewPortalPage() {
             </>
           )}
         </div>
-      </div>
+      </footer>
 
       {/* "I already have a repo" → the plain create-portal dialog. */}
-      <CreateOrgDialog
-        open={plainCreateOpen}
-        onOpenChange={setPlainCreateOpen}
-      />
+      <CreateOrgDialog open={plainCreateOpen} onOpenChange={setPlainCreateOpen} />
     </div>
   );
 }
