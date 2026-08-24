@@ -63,17 +63,48 @@ function setupGitCredentialStore() {
 }
 
 /**
- * Set the git commit author. Defaults to the "3uba" GitHub no-reply identity so
- * commits are attributed to a real GitHub user (deploy providers like Vercel
- * reject the placeholder executor@citshe.com). Overridable per portal via
- * GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL injected by citshe.
+ * Set the git commit author from the identity citshe injects via env
+ * (GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL, sourced from the API's GIT_COMMIT_*
+ * config). Nothing is hardcoded here. Deploy providers like Vercel reject
+ * placeholder authors, so a real identity must be configured on the server.
  */
 function configureGitAuthor() {
-  const name = process.env.GIT_AUTHOR_NAME || '3uba';
-  const email =
-    process.env.GIT_AUTHOR_EMAIL || '75246355+3uba@users.noreply.github.com';
+  // Identity comes from env (injected by citshe from GIT_COMMIT_NAME/EMAIL).
+  // Never hardcoded here — if unset, leave the image's baked git config as-is.
+  const name = process.env.GIT_AUTHOR_NAME;
+  const email = process.env.GIT_AUTHOR_EMAIL;
+  if (!name || !email) {
+    log('Git author not configured via env — leaving existing git config.');
+    return;
+  }
+
+  // Layer 1 — global git config (user.name/email).
   execSilent(`git config --global user.name ${JSON.stringify(name)}`);
   execSilent(`git config --global user.email ${JSON.stringify(email)}`);
+
+  // Layer 2 — FORCE the identity via env in every shell Claude spawns. Git
+  // honours GIT_AUTHOR_* / GIT_COMMITTER_* over config, so even if the agent
+  // runs `git config` itself or the config is missing, commits are attributed
+  // to the configured identity. Persisted to the executor's bash profile so
+  // it's always exported. Without this, Claude sometimes invents an author.
+  try {
+    const profile = path.join(HOME_DIR, '.bashrc');
+    const block =
+      '\n# citshe: force commit identity (do not change)\n' +
+      `export GIT_AUTHOR_NAME=${JSON.stringify(name)}\n` +
+      `export GIT_AUTHOR_EMAIL=${JSON.stringify(email)}\n` +
+      `export GIT_COMMITTER_NAME=${JSON.stringify(name)}\n` +
+      `export GIT_COMMITTER_EMAIL=${JSON.stringify(email)}\n`;
+    const existing = fs.existsSync(profile)
+      ? fs.readFileSync(profile, 'utf-8')
+      : '';
+    if (!existing.includes('citshe: force commit identity')) {
+      fs.appendFileSync(profile, block);
+    }
+  } catch (err) {
+    log('Could not persist git identity to profile: ' + err.message);
+  }
+
   log(`Git author set to ${name} <${email}>`);
 }
 

@@ -91,6 +91,24 @@ export class SessionContainerService implements OnModuleInit {
   // has no credentials yet — so an already-authed org keeps its own (refreshed)
   // token. Unset the env → no seeding (old behaviour).
 
+  /**
+   * Git commit identity env, read from config (GIT_COMMIT_NAME /
+   * GIT_COMMIT_EMAIL) — never hardcoded. Sets GIT_AUTHOR_* + GIT_COMMITTER_*
+   * so every commit the worker makes is attributed to the configured identity
+   * (git honours these over `git config`). Returns [] when not configured.
+   */
+  private commitIdentityEnv(): string[] {
+    const name = this.configService.get<string>('GIT_COMMIT_NAME');
+    const email = this.configService.get<string>('GIT_COMMIT_EMAIL');
+    if (!name || !email) return [];
+    return [
+      `GIT_AUTHOR_NAME=${name}`,
+      `GIT_AUTHOR_EMAIL=${email}`,
+      `GIT_COMMITTER_NAME=${name}`,
+      `GIT_COMMITTER_EMAIL=${email}`,
+    ];
+  }
+
   /** The shared seed volume name, or null when seeding is disabled. */
   private claudeAuthSeedVolume(): string | null {
     return this.configService.get<string>('CLAUDE_AUTH_SEED_VOLUME') || null;
@@ -179,6 +197,12 @@ export class SessionContainerService implements OnModuleInit {
         Env: [
           `SESSION_CONFIG=${sessionConfig}`,
           'DISPLAY=:99',
+          // FORCE the commit identity via env (git honours GIT_AUTHOR_* /
+          // GIT_COMMITTER_* over config). Inherited by tmux + every shell, so
+          // the agent can't accidentally commit as "Citshe Builder Agent".
+          // Values come from the API env (GIT_COMMIT_NAME / GIT_COMMIT_EMAIL set
+          // in .env) — never hardcoded. Skipped entirely when not configured.
+          ...this.commitIdentityEnv(),
           // Setup script as base64 (decoded safely in Cmd, avoids shell injection)
           ...(config.environment?.setupScript
             ? [

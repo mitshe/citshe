@@ -1134,12 +1134,31 @@ export class OrchestrationService {
       `You are a worker agent. Complete this task end-to-end in the current ` +
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
+      this.commitIdentityRule() +
       `Use the "citshe" skill to keep the human updated in the panel: leave a ` +
       `note at meaningful milestones, set the task status to "review" when your ` +
       `work is ready for a human (or "done" if fully complete), attach a ` +
       `screenshot when you test a running web app, and add follow-up tasks for ` +
       `real out-of-scope work. Don't spam — report meaningfully.\n\n` +
       `TASK:\n${body}`
+    );
+  }
+
+  /**
+   * A prompt fragment telling the worker to commit as the configured git
+   * identity — NOT to invent an author or add Co-Authored-By trailers. The
+   * name/email come from config (GIT_COMMIT_NAME/EMAIL); nothing is hardcoded.
+   * Returns '' when unset (git then uses the container's own config).
+   */
+  private commitIdentityRule(): string {
+    const name = this.config.get<string>('GIT_COMMIT_NAME');
+    const email = this.config.get<string>('GIT_COMMIT_EMAIL');
+    if (!name || !email) return '';
+    return (
+      `COMMIT IDENTITY (important): commit as "${name} <${email}>". This is ` +
+      `already configured via git env — do NOT set a different author, do NOT ` +
+      `pass --author, and do NOT add any "Co-Authored-By" trailer. Every commit ` +
+      `must be authored by ${name} only.\n\n`
     );
   }
 
@@ -1225,6 +1244,7 @@ export class OrchestrationService {
       `5. Report the live URL with the citshe skill: run ` +
       `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>" and also print, ` +
       `as the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
+      this.commitIdentityRule() +
       `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
       `(repo created, framework scaffolded, deploying…), set status to "review" ` +
       `when the site is live and ready for a human, and attach a screenshot of ` +
