@@ -27,11 +27,11 @@ import {
   ChevronsUp,
 } from "lucide-react";
 import {
-  useProcessTask,
   useUpdateTask,
   useCloseTask,
   useReopenTask,
   useEnqueueTask,
+  useBuildTask,
 } from "@/lib/api/hooks";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import { getTaskStatus, getPriority } from "@/lib/status-config";
@@ -144,22 +144,28 @@ export function LabelChip({
 // ============================================================================
 
 export function useTaskActions(task: Task) {
-  const processTask = useProcessTask();
   const updateTask = useUpdateTask();
   const closeTask = useCloseTask();
   const reopenTask = useReopenTask();
   const enqueueTask = useEnqueueTask();
+  const buildTask = useBuildTask();
 
   const busy =
-    processTask.isPending ||
     updateTask.isPending ||
     closeTask.isPending ||
     reopenTask.isPending ||
-    enqueueTask.isPending;
+    enqueueTask.isPending ||
+    buildTask.isPending;
 
+  // Run on a REAL worker (Claude Code container), not the old BYOK analyze path.
+  // Build tasks (buildSpec) start immediately; normal tasks go on the queue.
   const run = async () => {
     try {
-      await processTask.mutateAsync(task.id);
+      if (task.buildSpec) {
+        await buildTask.mutateAsync(task.id);
+      } else {
+        await enqueueTask.mutateAsync(task.id);
+      }
       toast.success("Delegated to a worker");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run task");
@@ -203,7 +209,7 @@ export function useTaskActions(task: Task) {
     }
   };
 
-  return { run, moveTo, close, reopen, busy, processTask };
+  return { run, moveTo, close, reopen, busy };
 }
 
 // ============================================================================
@@ -219,7 +225,7 @@ export function TaskMenu({
   onDelete: (task: Task) => void;
   triggerClassName?: string;
 }) {
-  const { run, moveTo, close, reopen, busy, processTask } = useTaskActions(task);
+  const { run, moveTo, close, reopen, busy } = useTaskActions(task);
 
   const liveWorker =
     !!task.sessionId && LIVE_WORKER_STATUSES.includes(task.status);
@@ -252,7 +258,7 @@ export function TaskMenu({
           <Link href={`/tasks/${task.id}`}>Open</Link>
         </DropdownMenuItem>
         {isOpen && (
-          <DropdownMenuItem onClick={run} disabled={processTask.isPending}>
+          <DropdownMenuItem onClick={run} disabled={busy}>
             <Play className="mr-2 h-3.5 w-3.5" />
             Run
           </DropdownMenuItem>

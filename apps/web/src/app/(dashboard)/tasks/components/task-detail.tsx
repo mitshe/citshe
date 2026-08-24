@@ -61,7 +61,8 @@ import {
   useDeleteTask,
   useCloseTask,
   useReopenTask,
-  useProcessTask,
+  useEnqueueTask,
+  useBuildTask,
   useAddComment,
   useAuthToken,
 } from "@/lib/api/hooks";
@@ -388,9 +389,29 @@ export function TaskDetail({
   const deleteTask = useDeleteTask();
   const closeTask = useCloseTask();
   const reopenTask = useReopenTask();
-  const processTask = useProcessTask();
+  const enqueueTask = useEnqueueTask();
+  const buildTask = useBuildTask();
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  // Run the task on a REAL worker (Claude Code in a container), not the old
+  // BYOK "analyze" path (which needs an API key → "No AI provider configured").
+  // A "New project" build task (has buildSpec) starts immediately via /build;
+  // a normal task goes onto the worker queue via /queue.
+  const runningTask = enqueueTask.isPending || buildTask.isPending;
+  const runTask = async () => {
+    if (!task) return;
+    try {
+      if (task.buildSpec) {
+        await buildTask.mutateAsync(task.id);
+      } else {
+        await enqueueTask.mutateAsync(task.id);
+      }
+      toast.success("Delegated to a worker");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to run task");
+    }
+  };
 
   // Inline title editing
   const [editingTitle, setEditingTitle] = useState(false);
@@ -546,19 +567,7 @@ export function TaskDetail({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {canRun && (
-          <DropdownMenuItem
-            onClick={async () => {
-              try {
-                await processTask.mutateAsync(taskId);
-                toast.success("Delegated to a worker");
-              } catch (err) {
-                toast.error(
-                  err instanceof Error ? err.message : "Failed to run task",
-                );
-              }
-            }}
-            disabled={processTask.isPending}
-          >
+          <DropdownMenuItem onClick={runTask} disabled={runningTask}>
             <Sparkles className="w-4 h-4 mr-2" />
             Process with AI
           </DropdownMenuItem>
@@ -658,19 +667,10 @@ export function TaskDetail({
         <Button
           variant="outline"
           size="sm"
-          onClick={async () => {
-            try {
-              await processTask.mutateAsync(taskId);
-              toast.success("Delegated to a worker");
-            } catch (err) {
-              toast.error(
-                err instanceof Error ? err.message : "Failed to run task",
-              );
-            }
-          }}
-          disabled={processTask.isPending}
+          onClick={runTask}
+          disabled={runningTask}
         >
-          {processTask.isPending ? (
+          {runningTask ? (
             <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
           ) : (
             <Sparkles className="mr-2 h-3.5 w-3.5" />
