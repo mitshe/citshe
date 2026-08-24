@@ -147,7 +147,12 @@ export function Connectors({
   );
 }
 
-/** "Reuse tools from another portal" — copies GitHub/CF/Vercel/Neon on build. */
+/**
+ * "Reuse GitHub from another portal" — copies ONLY the GitHub login (one token
+ * covers all repos). Stack tools are NOT reused: each portal gets its own
+ * Cloudflare/Vercel/Neon resources, so those are always pasted below and Claude
+ * provisions them per-portal.
+ */
 function CopyFromPortal({
   portals,
   selected,
@@ -157,19 +162,14 @@ function CopyFromPortal({
   selected: string | null;
   onChange: (orgId: string | null) => void;
 }) {
-  const prettyTool = (t: string) =>
-    t === "GITHUB"
-      ? "GitHub"
-      : t.charAt(0) + t.slice(1).toLowerCase().replace(/_/g, " ");
-
   return (
     <div className="space-y-2 rounded-lg border border-border bg-surface-inset/40 p-3">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Copy className="size-4 text-muted-foreground" />
-        Reuse tools from another portal
+        Reuse GitHub from another portal
       </div>
       <p className="text-xs text-muted-foreground">
-        Copy the tokens you already connected — no need to set them up again.
+        Use the GitHub login you already connected — no need to reconnect it.
       </p>
       <div className="space-y-1.5 pt-1">
         {portals.map((p) => {
@@ -194,13 +194,11 @@ function CopyFromPortal({
               >
                 {active && <Check className="size-3" />}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {p.name}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {p.tools.map(prettyTool).join(" · ")}
-                </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {p.name}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                GitHub
               </span>
             </button>
           );

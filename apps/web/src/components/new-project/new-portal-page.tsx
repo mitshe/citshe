@@ -193,12 +193,43 @@ export function NewPortalPage() {
 
       {/* Scrollable content, centered */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-4 pb-8 pt-6 sm:px-6 sm:pt-10">
-          <div className="mb-8">
-            <WizardProgress
-              current={stepIndex + 1}
-              total={NEW_STEPS.length}
-            />
+        <div className="mx-auto w-full max-w-2xl px-4 pb-12 pt-6 sm:px-6 sm:pt-10">
+          <div className="mb-5">
+            <WizardProgress current={stepIndex + 1} total={NEW_STEPS.length} />
+          </div>
+
+          {/* Nav lives at the TOP (under the progress bar) — you read the step,
+              then act right away without hunting for buttons at the bottom. */}
+          <div className="mb-8 flex items-center gap-3">
+            <Button variant="ghost" onClick={goBack}>
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+            {step === "review" ? (
+              <Button
+                variant="primary"
+                className="ml-auto min-w-40"
+                onClick={build}
+                disabled={building}
+              >
+                {building ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Rocket className="size-4" />
+                )}
+                Build project
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                className="ml-auto min-w-40"
+                onClick={advance}
+                disabled={!canContinue()}
+              >
+                Continue
+                <ArrowRight className="size-4" />
+              </Button>
+            )}
           </div>
 
           {step === "entry" && (
@@ -375,55 +406,6 @@ export function NewPortalPage() {
           )}
         </div>
       </div>
-
-      {/* Footer — full-width bar, content centered to match the body column. */}
-      <footer className="shrink-0 border-t border-border bg-background px-4 py-3 pb-safe sm:px-6">
-        <div className="mx-auto flex w-full max-w-2xl items-center justify-center gap-3">
-          {step === "review" ? (
-            <>
-              <Button
-                variant="ghost"
-                onClick={goBack}
-                className="flex-1 sm:flex-none"
-              >
-                Back
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1 sm:flex-none sm:min-w-44"
-                onClick={build}
-                disabled={building}
-              >
-                {building ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Rocket className="size-4" />
-                )}
-                Build project
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                onClick={goBack}
-                className="flex-1 sm:flex-none"
-              >
-                Back
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1 sm:flex-none sm:min-w-44"
-                onClick={advance}
-                disabled={!canContinue()}
-              >
-                Continue
-                <ArrowRight className="size-4" />
-              </Button>
-            </>
-          )}
-        </div>
-      </footer>
 
       {/* "I already have a repo" → the plain create-portal dialog. */}
       <CreateOrgDialog open={plainCreateOpen} onOpenChange={setPlainCreateOpen} />

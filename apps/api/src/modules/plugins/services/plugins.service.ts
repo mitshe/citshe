@@ -47,51 +47,48 @@ export class PluginsService {
   }
 
   /**
-   * List connected tools across ALL orgs the user belongs to, so the New-portal
-   * wizard can offer "copy from another portal". Grouped by source org. Only
-   * CONNECTED plugins/integrations are worth copying.
+   * List portals (that the user belongs to) which have a connected GitHub
+   * integration, so the New-portal wizard can offer "reuse GitHub from another
+   * portal". Only GitHub is reusable — a single token covers all repos. Stack
+   * tools (Cloudflare/Vercel/Neon) are NOT reused: each portal gets its own
+   * resources, so the user pastes a key and Claude provisions per-portal.
    */
   async listCopyableConnections(userId: string) {
     const memberships = await this.prisma.organizationMember.findMany({
       where: { userId },
-      select: { organizationId: true, organization: { select: { name: true } } },
+      select: {
+        organizationId: true,
+        organization: { select: { name: true } },
+      },
     });
     const orgIds = memberships.map((m) => m.organizationId);
     if (orgIds.length === 0) return [];
 
-    const [plugins, integrations] = await Promise.all([
-      this.prisma.plugin.findMany({
-        where: { organizationId: { in: orgIds }, status: 'CONNECTED' },
-        select: { organizationId: true, type: true },
-      }),
-      this.prisma.integration.findMany({
-        where: { organizationId: { in: orgIds }, status: 'CONNECTED' },
-        select: { organizationId: true, type: true },
-      }),
-    ]);
+    const integrations = await this.prisma.integration.findMany({
+      where: {
+        organizationId: { in: orgIds },
+        type: 'GITHUB',
+        status: 'CONNECTED',
+      },
+      select: { organizationId: true },
+    });
+    const withGithub = new Set(integrations.map((i) => i.organizationId));
 
     return memberships
+      .filter((m) => withGithub.has(m.organizationId))
       .map((m) => ({
         organizationId: m.organizationId,
         name: m.organization.name,
-        tools: [
-          ...integrations
-            .filter((i) => i.organizationId === m.organizationId)
-            .map((i) => i.type as string),
-          ...plugins
-            .filter((p) => p.organizationId === m.organizationId)
-            .map((p) => p.type as string),
-        ],
-      }))
-      .filter((o) => o.tools.length > 0);
+        tools: ['GITHUB'],
+      }));
   }
 
   /**
-   * Copy connected tools (plugins + GitHub integration) from a source org into
-   * the target, so a fresh portal doesn't need reconfiguring from scratch. The
-   * encrypted config uses a GLOBAL key, so the ciphertext is copied verbatim —
-   * no decrypt/re-encrypt. The user must belong to BOTH orgs. Existing
-   * connections in the target are left untouched (upsert = update).
+   * Copy the GitHub integration from a source portal into the target, so a fresh
+   * portal reuses one GitHub login instead of reconnecting it. ONLY GitHub —
+   * stack tools are provisioned per-portal. The encrypted config uses a GLOBAL
+   * key, so the ciphertext is copied verbatim (no decrypt/re-encrypt). The user
+   * must belong to both orgs.
    */
   async copyConnectionsFrom(
     targetOrgId: string,
@@ -108,35 +105,15 @@ export class PluginsService {
       throw new BadRequestException('You do not have access to that portal.');
     }
 
-    const [plugins, integrations] = await Promise.all([
-      this.prisma.plugin.findMany({
-        where: { organizationId: sourceOrgId, status: 'CONNECTED' },
-      }),
-      this.prisma.integration.findMany({
-        where: { organizationId: sourceOrgId, status: 'CONNECTED' },
-      }),
-    ]);
+    const integrations = await this.prisma.integration.findMany({
+      where: {
+        organizationId: sourceOrgId,
+        type: 'GITHUB',
+        status: 'CONNECTED',
+      },
+    });
 
     let copied = 0;
-    for (const p of plugins) {
-      await this.prisma.plugin.upsert({
-        where: { organizationId_type: { organizationId: targetOrgId, type: p.type } },
-        create: {
-          organizationId: targetOrgId,
-          type: p.type,
-          status: p.status,
-          label: p.label,
-          config: p.config,
-          configIv: p.configIv,
-        },
-        update: {
-          status: p.status,
-          config: p.config,
-          configIv: p.configIv,
-        },
-      });
-      copied++;
-    }
     for (const i of integrations) {
       await this.prisma.integration.upsert({
         where: {
