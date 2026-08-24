@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Trash2, Loader2, Zap, Pencil, Github, Download, MoreHorizontal, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
@@ -188,21 +189,20 @@ export default function SkillsPage() {
   };
 
   return (
-    <div className="w-full max-w-[1400px] space-y-6 px-4 sm:px-6 py-6 sm:py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-          <p className="text-sm text-muted-foreground">
-            Reusable instructions installed as Claude Code slash commands in sessions.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectMode ? (
+    <div className="w-full max-w-[1400px] space-y-5 px-4 py-5 sm:px-6 sm:py-6">
+      <PageHeader
+        title="Skills"
+        description="Reusable instructions installed as Claude Code slash commands in sessions."
+        actions={
+          selectMode ? (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+                onClick={() => {
+                  setSelectMode(false);
+                  setSelectedIds(new Set());
+                }}
               >
                 Cancel
               </Button>
@@ -240,14 +240,14 @@ export default function SkillsPage() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={openCreate}>
+              <Button size="sm" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create skill
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-2">

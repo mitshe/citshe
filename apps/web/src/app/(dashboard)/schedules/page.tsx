@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -85,18 +86,16 @@ export default function SchedulesPage() {
 
   return (
     <div className="w-full max-w-[1000px] space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Schedules</h1>
-          <p className="text-sm text-muted-foreground">
-            Recurring tasks — a prompt on a cron. Each run lands on the board.
-          </p>
-        </div>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New schedule
-        </Button>
-      </div>
+      <PageHeader
+        title="Schedules"
+        description="Recurring tasks — a prompt on a cron. Each run lands on the board."
+        actions={
+          <Button size="sm" onClick={openNew}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New schedule
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-2">
