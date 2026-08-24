@@ -774,10 +774,29 @@ export class OrchestrationService {
       }
 
       const delivery = this.parseDeliveryResult(output);
+
+      // The AGENT owns the task status via the citshe skill: it calls
+      // `citshe-status review` (or done) when its work is actually ready. We
+      // respect that — if it already moved the task out of the working states,
+      // we DON'T overwrite it. Only if it finished the process without setting a
+      // status (forgot) do we fall back to REVIEW. This is why a task no longer
+      // flips to REVIEW the instant it starts — the status is driven by the
+      // agent's own skill call, not our guesswork.
+      const current = await this.prisma.task.findUnique({
+        where: { id: taskId },
+        select: { status: true },
+      });
+      const agentSetStatus =
+        current != null &&
+        current.status !== TaskStatus.IN_PROGRESS &&
+        current.status !== TaskStatus.ANALYZING;
+      const finalStatus =
+        agentSetStatus && current ? current.status : TaskStatus.REVIEW;
+
       await this.prisma.task.update({
         where: { id: taskId },
         data: {
-          status: TaskStatus.REVIEW,
+          status: finalStatus,
           result: {
             output: output.slice(0, 20_000),
             ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
@@ -797,8 +816,8 @@ export class OrchestrationService {
       });
       this.eventsGateway.emitTaskUpdate(organizationId, {
         taskId,
-        status: TaskStatus.REVIEW,
-        message: 'Worker finished — ready for review.',
+        status: finalStatus,
+        message: 'Worker finished.',
       });
       this.eventsGateway.emitTaskCompleted(organizationId, taskId, {
         type: 'worker_finished',
@@ -1152,11 +1171,13 @@ export class OrchestrationService {
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
       this.commitIdentityRule() +
-      `Use the "citshe" skill to keep the human updated in the panel: leave a ` +
-      `note at meaningful milestones, set the task status to "review" when your ` +
-      `work is ready for a human (or "done" if fully complete), attach a ` +
-      `screenshot when you test a running web app, and add follow-up tasks for ` +
-      `real out-of-scope work. Don't spam — report meaningfully.\n\n` +
+      `Use the "citshe" skill to keep the human updated: leave a note at ` +
+      `meaningful milestones, attach a screenshot when you test a running web ` +
+      `app, and add follow-up tasks for real out-of-scope work.\n\n` +
+      `WHEN YOU ARE DONE, run ` +
+      `\${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review — this is how the ` +
+      `panel knows you finished. The task stays "in progress" until you run it, ` +
+      `so run it ONLY when your work is actually ready. Don't spam.\n\n` +
       `TASK:\n${body}`
     );
   }
@@ -1258,14 +1279,16 @@ export class OrchestrationService {
       `good — real content, clean design, responsive, sensible SEO.\n` +
       `3. Commit and push (the default branch, origin is already set).\n` +
       `4. Deploy it to the chosen host so it is live on a public URL.\n` +
-      `5. Report the live URL with the citshe skill: run ` +
-      `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>" and also print, ` +
-      `as the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
+      `5. Report the live URL: run ` +
+      `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n` +
+      `6. FINISH: run \${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review — this ` +
+      `is how the panel knows you are DONE. The task stays "in progress" until ` +
+      `you run it, so ONLY run it when the site is actually live. Also print, as ` +
+      `the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
       this.commitIdentityRule() +
       `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
-      `(repo created, framework scaffolded, deploying…), set status to "review" ` +
-      `when the site is live and ready for a human, and attach a screenshot of ` +
-      `the deployed site. Report meaningfully, don't spam.`
+      `(repo created, framework scaffolded, deploying…) and attach a screenshot ` +
+      `of the deployed site. Report meaningfully, don't spam.`
     );
   }
 
