@@ -108,16 +108,18 @@ export default function HomePage() {
     if (!latest) return null;
     const done = ["COMPLETED", "REVIEW"].includes(latest.status);
     const failed = latest.status === "FAILED";
-    const siteUrl =
+    const res =
       latest.result && typeof latest.result === "object"
-        ? ((latest.result as Record<string, unknown>).siteUrl as
-            | string
-            | undefined)
-        : undefined;
-    // Keep showing a finished build only while it still matters (has a URL, or
-    // is the freshest thing going on). Hide old, closed builds.
-    if (done && !siteUrl && latest.status === "COMPLETED") return null;
-    return { task: latest, done, failed, siteUrl };
+        ? (latest.result as Record<string, unknown>)
+        : {};
+    const siteUrl = res.siteUrl as string | undefined;
+    const deployError = res.deployError as string | undefined;
+    // Keep showing a finished build only while it still matters (has a URL, a
+    // deploy error to explain, or is the freshest thing going on). Hide old,
+    // closed builds with nothing to show.
+    if (done && !siteUrl && !deployError && latest.status === "COMPLETED")
+      return null;
+    return { task: latest, done, failed, siteUrl, deployError };
   }, [tasks]);
 
   const greeting =
@@ -487,12 +489,14 @@ function BuildHero({
   task,
   failed,
   siteUrl,
+  deployError,
   repos,
 }: {
   task: Task;
   done: boolean;
   failed: boolean;
   siteUrl?: string;
+  deployError?: string;
   repos: RepoLite[];
 }) {
   const spec = (task.buildSpec ?? {}) as {
@@ -518,18 +522,32 @@ function BuildHero({
     return null;
   })();
 
-  // Three states: building (live), deployed (has URL), failed.
-  const state = failed ? "failed" : siteUrl ? "live" : "building";
+  // States: building, deployed (has URL), built-but-not-deployed, failed.
+  const state = failed
+    ? "failed"
+    : siteUrl
+      ? "live"
+      : deployError
+        ? "nodeploy"
+        : "building";
   const title =
     state === "live"
       ? "Site is live"
       : state === "failed"
         ? "Build failed"
-        : spec.mode === "refresh"
-          ? "Refreshing your site"
+        : state === "nodeploy"
+          ? "Built — not deployed"
+          : spec.mode === "refresh"
+            ? "Refreshing your site"
           : "Building your project";
   const dotState =
-    state === "live" ? "ok" : state === "failed" ? "failed" : "running";
+    state === "live"
+      ? "ok"
+      : state === "failed"
+        ? "failed"
+        : state === "nodeploy"
+          ? "warn"
+          : "running";
 
   const host = siteUrl?.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
@@ -547,6 +565,8 @@ function BuildHero({
         >
           {host}
         </a>
+      ) : state === "nodeploy" && deployError ? (
+        <span className="truncate text-sm text-warn">{deployError}</span>
       ) : state === "building" && latestNote ? (
         <span className="truncate text-sm text-muted-foreground">
           {latestNote}

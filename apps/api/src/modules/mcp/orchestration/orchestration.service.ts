@@ -841,6 +841,9 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
             ...(delivery.branch ? { branch: delivery.branch } : {}),
             ...(delivery.siteUrl ? { siteUrl: delivery.siteUrl } : {}),
+            ...(delivery.deployError
+              ? { deployError: delivery.deployError }
+              : {}),
           },
         },
       });
@@ -1444,7 +1447,11 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       `6. FINISH: run \${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review — this ` +
       `is how the panel knows you are DONE. The task stays "in progress" until ` +
       `you run it, so ONLY run it when the site is actually live. Also print, as ` +
-      `the VERY LAST line of your output, exactly: SITE_URL: <live url>\n\n` +
+      `the VERY LAST line of your output, exactly: SITE_URL: <live url>\n` +
+      `If you CANNOT deploy (no hosting token connected, or deploy failed), do ` +
+      `the build + commit + push anyway, then instead of SITE_URL print exactly: ` +
+      `DEPLOY_FAILED: <one-line reason> — so the panel can tell the human what ` +
+      `to fix, rather than showing an empty result.\n\n` +
       this.commitIdentityRule() +
       this.secretsRule() +
       `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
@@ -1484,14 +1491,26 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     prUrl?: string;
     branch?: string;
     siteUrl?: string;
+    deployError?: string;
   } {
-    const result: { prUrl?: string; branch?: string; siteUrl?: string } = {};
+    const result: {
+      prUrl?: string;
+      branch?: string;
+      siteUrl?: string;
+      deployError?: string;
+    } = {};
     // A build task deploys a site — capture its live URL (last one wins).
     const siteMatches = output.match(/SITE_URL:\s*(\S+)/g);
     if (siteMatches) {
       const last = siteMatches[siteMatches.length - 1];
       const m = last.match(/SITE_URL:\s*(\S+)/);
       if (m) result.siteUrl = m[1];
+    }
+    // The worker built + pushed but couldn't deploy — surface the reason so the
+    // panel shows "couldn't put it online: …" instead of an empty result.
+    if (!result.siteUrl) {
+      const df = output.match(/DEPLOY_FAILED:\s*(.+)/);
+      if (df) result.deployError = df[1].trim().slice(0, 300);
     }
     const prMatch = output.match(/PR_URL:\s*(\S+)/);
     if (prMatch) result.prUrl = prMatch[1];
