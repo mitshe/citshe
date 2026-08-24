@@ -23,7 +23,6 @@ import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { RadioCard } from "@/components/ui/radio-card";
 import { WizardProgress } from "@/components/ui/wizard-progress";
-import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
 import { useAuthContext } from "@/lib/auth";
 import { useAuthToken } from "@/lib/api/hooks/shared";
 import { api } from "@/lib/api/client";
@@ -154,7 +153,6 @@ export function NewPortalPage() {
   const [building, setBuilding] = useState(false);
   const [buildStep, setBuildStep] = useState<string | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
-  const [plainCreateOpen, setPlainCreateOpen] = useState(false);
 
   const stepIndex = NEW_STEPS.indexOf(step);
 
@@ -193,11 +191,6 @@ export function NewPortalPage() {
   };
 
   const advance = () => {
-    if (step === "entry" && entry === "existing") {
-      // "I already have a repo" → the plain create-portal dialog.
-      setPlainCreateOpen(true);
-      return;
-    }
     const next = NEW_STEPS[stepIndex + 1];
     if (next) setStep(next);
   };
@@ -336,12 +329,13 @@ export function NewPortalPage() {
                   hint="With a guide →"
                 />
                 <RadioCard
-                  selected={entry === "existing"}
-                  onSelect={() => setEntry("existing")}
+                  selected={false}
+                  onSelect={() => undefined}
+                  disabled
                   icon={<GitBranch className="size-4" />}
                   title="I already have a repo"
-                  description="Connect an existing project from GitHub."
-                  hint="Quick connect →"
+                  description="Connect an existing GitHub project."
+                  hint="Coming soon"
                 />
               </div>
             </StepShell>
@@ -574,9 +568,6 @@ export function NewPortalPage() {
           )}
         </div>
       </div>
-
-      {/* "I already have a repo" → the plain create-portal dialog. */}
-      <CreateOrgDialog open={plainCreateOpen} onOpenChange={setPlainCreateOpen} />
     </div>
   );
 }
