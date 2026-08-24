@@ -25,6 +25,7 @@ import { WizardProgress } from "@/components/ui/wizard-progress";
 import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
 import { useAuthContext } from "@/lib/auth";
 import { useCreateTask, useBuildTask } from "@/lib/api/hooks/tasks";
+import { useCopyConnections } from "@/lib/api/hooks/plugins";
 import { Connectors } from "./connectors";
 import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
 
@@ -59,6 +60,11 @@ export function NewPortalPage() {
   const { createOrganization } = useAuthContext();
   const createTask = useCreateTask();
   const buildTask = useBuildTask();
+  const copyConnections = useCopyConnections();
+
+  // "Copy tools from another portal" — the source org id, applied after the new
+  // portal is created (the target org doesn't exist until then).
+  const [copyFromOrgId, setCopyFromOrgId] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>("entry");
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -125,6 +131,14 @@ export function NewPortalPage() {
     try {
       // 1. Create the portal (this also switches the active org).
       await createOrganization(name.trim());
+
+      // 1b. Optionally copy connected tools from another portal (now that the
+      // new org is the active one, the copy targets it).
+      if (copyFromOrgId) {
+        await copyConnections.mutateAsync(copyFromOrgId).catch(() => {
+          toast.message("Couldn't copy tools — connect them on the board.");
+        });
+      }
 
       // 2. Create the build task.
       const spec: BuildSpec = {
@@ -322,7 +336,10 @@ export function NewPortalPage() {
             title="Last thing — access"
             subtitle="citshe needs the accounts it will build your project on. You connect these once."
           >
-            <Connectors />
+            <Connectors
+              copyFromOrgId={copyFromOrgId}
+              onCopyFromChange={setCopyFromOrgId}
+            />
             <p className="mt-3 text-xs text-text-subtle">
               GitHub is required. The rest are optional — if a tool is missing
               when Claude needs it, it will ask on the board.

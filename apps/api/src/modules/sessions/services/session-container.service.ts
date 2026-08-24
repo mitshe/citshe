@@ -82,6 +82,41 @@ export class SessionContainerService implements OnModuleInit {
     await this.cleanupStaleContainers();
   }
 
+  // ─── Claude auth seeding ──────────────────────────────────────────
+  // Each org has its own `citshe-executor-home-<org>` volume, so a NEW portal
+  // starts with an empty home and no Claude login ("Not logged in · Please run
+  // /login"). To fix this once for all portals, a shared volume named by
+  // CLAUDE_AUTH_SEED_VOLUME holds a `.credentials.json`, mounted read-only at
+  // /seed. On container start we copy it into the org's home ONLY if that org
+  // has no credentials yet — so an already-authed org keeps its own (refreshed)
+  // token. Unset the env → no seeding (old behaviour).
+
+  /** The shared seed volume name, or null when seeding is disabled. */
+  private claudeAuthSeedVolume(): string | null {
+    return this.configService.get<string>('CLAUDE_AUTH_SEED_VOLUME') || null;
+  }
+
+  /** RO bind of the seed volume at /seed (empty when disabled). */
+  private claudeAuthSeedBind(): string[] {
+    const vol = this.claudeAuthSeedVolume();
+    return vol ? [`${vol}:/seed:ro`] : [];
+  }
+
+  /**
+   * Startup shell that seeds Claude credentials into a fresh org home. Runs as
+   * root before dropping to executor; no-op when seeding is off or the org is
+   * already authed. Always ends with a trailing "; ".
+   */
+  private claudeAuthSeedCmd(): string {
+    if (!this.claudeAuthSeedVolume()) return '';
+    return (
+      `if [ -s /seed/.credentials.json ] && [ ! -s /home/executor/.claude/.credentials.json ]; then ` +
+      `mkdir -p /home/executor/.claude && ` +
+      `cp /seed/.credentials.json /home/executor/.claude/.credentials.json && ` +
+      `chown -R executor:executor /home/executor/.claude; fi; `
+    );
+  }
+
   // ─── Container Lifecycle ────────────────────────────────────────
 
   async createAndStart(
@@ -128,6 +163,12 @@ export class SessionContainerService implements OnModuleInit {
         Entrypoint: ['bash', '-c'],
         Cmd: [
           `chown -R executor:executor /home/executor 2>/dev/null; ` +
+            // Seed Claude auth for a fresh per-org home volume: if this org has
+            // no credentials yet, copy them from the shared seed (mounted RO at
+            // /seed). Existing/authed orgs keep their own (possibly refreshed)
+            // credentials. This is why a NEW portal is "Not logged in" without
+            // it — every org gets its own empty /home/executor volume.
+            this.claudeAuthSeedCmd() +
             `if [ -d /var/lib/docker ]; then dockerd &>/var/log/dockerd.log & for i in $(seq 1 30); do docker info &>/dev/null && break || sleep 1; done; fi; ` +
             (config.environment?.setupScript
               ? `echo "$SETUP_SCRIPT_B64" | base64 -d > /tmp/.setup.sh && chmod +x /tmp/.setup.sh && su -s /bin/bash executor -c "bash /tmp/.setup.sh" && rm -f /tmp/.setup.sh; `
@@ -172,6 +213,7 @@ export class SessionContainerService implements OnModuleInit {
         HostConfig: {
           Binds: [
             `citshe-executor-home-${config.organizationId}:/home/executor`,
+            ...this.claudeAuthSeedBind(),
             ...(config.enableDocker
               ? [`citshe-dind-${config.sessionId}:/var/lib/docker`]
               : []),
@@ -497,6 +539,7 @@ export class SessionContainerService implements OnModuleInit {
       Cmd: [
         [
           'chown -R executor:executor /home/executor 2>/dev/null',
+          this.claudeAuthSeedCmd().replace(/;\s*$/, ''),
           config.enableDocker
             ? 'if [ -d /var/lib/docker ]; then dockerd &>/var/log/dockerd.log & for i in $(seq 1 30); do docker info &>/dev/null && break || sleep 1; done; fi'
             : '',
@@ -516,6 +559,7 @@ export class SessionContainerService implements OnModuleInit {
       HostConfig: {
         Binds: [
           `citshe-executor-home-${config.organizationId}:/home/executor`,
+          ...this.claudeAuthSeedBind(),
           ...(config.enableDocker
             ? [`citshe-dind-${config.sessionId}:/var/lib/docker`]
             : []),

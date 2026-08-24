@@ -714,6 +714,18 @@ export const api = {
     list: (token: string) =>
       request<{ plugins: Plugin[] }>("/plugins", { token }),
 
+    copyableConnections: (token: string) =>
+      request<{
+        portals: { organizationId: string; name: string; tools: string[] }[];
+      }>("/plugins/copyable-connections", { token }),
+
+    copyConnections: (sourceOrganizationId: string, token: string) =>
+      request<{ copied: number }>("/plugins/copy-connections", {
+        method: "POST",
+        body: JSON.stringify({ sourceOrganizationId }),
+        token,
+      }),
+
     connect: (data: ConnectPluginDto, token: string) =>
       request<{ plugin: Plugin }>("/plugins", {
         method: "POST",

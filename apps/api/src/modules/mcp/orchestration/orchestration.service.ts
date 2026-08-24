@@ -756,6 +756,13 @@ export class OrchestrationService {
       // via a printed marker.
       const output = await this.runClaudeInTmux(session.containerId, prompt);
 
+      // Claude never actually ran (e.g. not authenticated) — the worker printed
+      // an error and exited 0, so don't mislabel it as "ready for review".
+      const hardError = this.detectWorkerHardError(output);
+      if (hardError) {
+        throw new Error(hardError);
+      }
+
       const delivery = this.parseDeliveryResult(output);
       await this.prisma.task.update({
         where: { id: taskId },
@@ -1217,6 +1224,28 @@ export class OrchestrationService {
    * was told to print last), so the task carries a real link, not a blind
    * "went to review".
    */
+  /**
+   * Spot outputs where Claude never really ran, so the task isn't mislabeled as
+   * "review". The worker command exits 0 even when claude prints an error (e.g.
+   * "Not logged in · Please run /login"), which otherwise sailed through to
+   * REVIEW with an empty result. Returns a human message or null.
+   */
+  private detectWorkerHardError(output: string): string | null {
+    const head = output.slice(0, 4000);
+    if (
+      /Not logged in|Please run \/login|Invalid API key|Credit balance/i.test(
+        head,
+      )
+    ) {
+      return (
+        'Claude is not authenticated in this portal. Open a terminal in this ' +
+        'portal and run `claude /login` once (the login is per-portal), then ' +
+        'retry the task.'
+      );
+    }
+    return null;
+  }
+
   private parseDeliveryResult(output: string): {
     prUrl?: string;
     branch?: string;

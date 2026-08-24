@@ -46,6 +46,120 @@ export class PluginsService {
     return plugins.map((p) => this.toResponse(p));
   }
 
+  /**
+   * List connected tools across ALL orgs the user belongs to, so the New-portal
+   * wizard can offer "copy from another portal". Grouped by source org. Only
+   * CONNECTED plugins/integrations are worth copying.
+   */
+  async listCopyableConnections(userId: string) {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      select: { organizationId: true, organization: { select: { name: true } } },
+    });
+    const orgIds = memberships.map((m) => m.organizationId);
+    if (orgIds.length === 0) return [];
+
+    const [plugins, integrations] = await Promise.all([
+      this.prisma.plugin.findMany({
+        where: { organizationId: { in: orgIds }, status: 'CONNECTED' },
+        select: { organizationId: true, type: true },
+      }),
+      this.prisma.integration.findMany({
+        where: { organizationId: { in: orgIds }, status: 'CONNECTED' },
+        select: { organizationId: true, type: true },
+      }),
+    ]);
+
+    return memberships
+      .map((m) => ({
+        organizationId: m.organizationId,
+        name: m.organization.name,
+        tools: [
+          ...integrations
+            .filter((i) => i.organizationId === m.organizationId)
+            .map((i) => i.type as string),
+          ...plugins
+            .filter((p) => p.organizationId === m.organizationId)
+            .map((p) => p.type as string),
+        ],
+      }))
+      .filter((o) => o.tools.length > 0);
+  }
+
+  /**
+   * Copy connected tools (plugins + GitHub integration) from a source org into
+   * the target, so a fresh portal doesn't need reconfiguring from scratch. The
+   * encrypted config uses a GLOBAL key, so the ciphertext is copied verbatim —
+   * no decrypt/re-encrypt. The user must belong to BOTH orgs. Existing
+   * connections in the target are left untouched (upsert = update).
+   */
+  async copyConnectionsFrom(
+    targetOrgId: string,
+    sourceOrgId: string,
+    userId: string,
+  ): Promise<{ copied: number }> {
+    if (targetOrgId === sourceOrgId) return { copied: 0 };
+
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: { userId, organizationId: sourceOrgId },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new BadRequestException('You do not have access to that portal.');
+    }
+
+    const [plugins, integrations] = await Promise.all([
+      this.prisma.plugin.findMany({
+        where: { organizationId: sourceOrgId, status: 'CONNECTED' },
+      }),
+      this.prisma.integration.findMany({
+        where: { organizationId: sourceOrgId, status: 'CONNECTED' },
+      }),
+    ]);
+
+    let copied = 0;
+    for (const p of plugins) {
+      await this.prisma.plugin.upsert({
+        where: { organizationId_type: { organizationId: targetOrgId, type: p.type } },
+        create: {
+          organizationId: targetOrgId,
+          type: p.type,
+          status: p.status,
+          label: p.label,
+          config: p.config,
+          configIv: p.configIv,
+        },
+        update: {
+          status: p.status,
+          config: p.config,
+          configIv: p.configIv,
+        },
+      });
+      copied++;
+    }
+    for (const i of integrations) {
+      await this.prisma.integration.upsert({
+        where: {
+          organizationId_type: { organizationId: targetOrgId, type: i.type },
+        },
+        create: {
+          organizationId: targetOrgId,
+          type: i.type,
+          status: i.status,
+          config: i.config,
+          configIv: i.configIv,
+        },
+        update: {
+          status: i.status,
+          config: i.config,
+          configIv: i.configIv,
+        },
+      });
+      copied++;
+    }
+    return { copied };
+  }
+
   async connect(organizationId: string, dto: ConnectPluginDto) {
     const type = this.asType(dto.type);
     const config = this.requireConfig(dto.config);
