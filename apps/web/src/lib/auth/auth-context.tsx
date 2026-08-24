@@ -93,6 +93,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { id: org.id, name: org.name, role: "OWNER" as const };
   }, []);
 
+  // Usuwa PUSTĄ organizację (sprzątanie po porzuceniu wizarda New portal).
+  // Odświeża listę org usera, żeby usunięta zniknęła z przełącznika.
+  const deleteOrganization = useCallback(async (organizationId: string) => {
+    await selfhostedAuth.deleteOrganization(organizationId);
+    const userData = await selfhostedAuth.getMe();
+    if (userData) setUser(userData);
+  }, []);
+
   const organizations = user?.organizations ?? [];
   const currentOrg =
     organizations.find((o) => o.id === orgId) ?? organizations[0] ?? null;
@@ -110,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     currentOrg,
     switchOrganization,
     createOrganization,
+    deleteOrganization,
     isSwitchingOrg,
     getToken,
     signOut,

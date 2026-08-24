@@ -74,11 +74,19 @@ const PROMPT_CHIPS = [
 
 export function NewPortalPage() {
   const router = useRouter();
-  const { switchOrganization } = useAuthContext();
+  const { createOrganization, deleteOrganization } = useAuthContext();
   const getToken = useAuthToken();
 
   // GitHub connected — gates the Connect step (a project needs a repo).
   const [githubConnected, setGithubConnected] = useState(false);
+
+  // ID portalu (nowej org) utworzonego dla tego wizarda. Portal powstaje PUSTY
+  // po kroku "describe", żeby connectory (GitHub/Cloudflare/...) podłączać do
+  // NIEGO od zera — zero dziedziczenia z innych portali. Gdy user porzuci wizard
+  // przed Build, tę pustą org usuwamy (cleanup).
+  const [portalOrgId, setPortalOrgId] = useState<string | null>(null);
+  const [creatingPortal, setCreatingPortal] = useState(false);
+  const [built, setBuilt] = useState(false);
 
   const [step, setStep] = useState<Step>("entry");
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -108,12 +116,30 @@ export function NewPortalPage() {
 
   const stepIndex = NEW_STEPS.indexOf(step);
 
-  const leave = () => router.push("/home");
+  // Sprząta pustą org portalu, jeśli została utworzona a projekt NIE zbudowany.
+  const cleanupPortal = async () => {
+    if (portalOrgId && !built) {
+      await deleteOrganization(portalOrgId).catch(() => undefined);
+    }
+  };
+
+  const leave = () => {
+    void cleanupPortal();
+    router.push("/home");
+  };
 
   const goBack = () => {
     if (stepIndex <= 0) {
       leave();
       return;
+    }
+    // Cofając SPRZED "connect" na "describe" — portal jeszcze niepotrzebny;
+    // usuwamy pustą org, żeby ponowne "Continue" utworzyło ją świeżo z aktualną
+    // nazwą (i żeby nie zostawić sieroty).
+    if (step === "connect" && portalOrgId) {
+      void cleanupPortal();
+      setPortalOrgId(null);
+      setGithubConnected(false);
     }
     setStep(NEW_STEPS[stepIndex - 1]);
   };
@@ -143,12 +169,28 @@ export function NewPortalPage() {
     }
   };
 
-  const advance = () => {
+  const advance = async () => {
     if (step === "entry" && entry === "existing") {
       // "I already have a repo" → the plain create-portal dialog.
       setPlainCreateOpen(true);
       return;
     }
+
+    // Przechodząc z "describe" → "connect": TWORZYMY pusty portal (nową org) i
+    // przełączamy na niego, żeby connectory podłączać do NIEGO od zera (nowy JWT
+    // z jego orgId). Bez tego connect step pokazywałby connectory starej org.
+    if (step === "describe" && !portalOrgId) {
+      setCreatingPortal(true);
+      try {
+        const org = await createOrganization(name.trim());
+        setPortalOrgId(org.id);
+      } catch {
+        setCreatingPortal(false);
+        return; // nie przechodź dalej, jeśli nie udało się utworzyć portalu
+      }
+      setCreatingPortal(false);
+    }
+
     const next = NEW_STEPS[stepIndex + 1];
     if (next) setStep(next);
   };
@@ -171,9 +213,9 @@ export function NewPortalPage() {
         );
       }
 
-      // ONE atomic call: the backend creates portal + GitHub repo + build task
-      // in a single transaction — all-or-nothing, so a failure NEVER leaves an
-      // orphan portal behind (the bug where every retry made a new org).
+      // Portal (org) JUŻ istnieje — utworzyliśmy go na kroku "describe" i
+      // jesteśmy w nim (JWT ma jego orgId). Backend tworzy tylko repo + task
+      // w tej org, używając GitHub podłączonego do niej w kroku "connect".
       setBuildStep("Creating your project…");
       const buildSpec: Record<string, unknown> = {
         mode,
@@ -185,7 +227,7 @@ export function NewPortalPage() {
         ...(stackHint ? { stackHint } : {}),
         ...(hostingHint ? { hostingHint } : {}),
       };
-      const { organizationId, taskId } = await api.newProject(
+      const { taskId } = await api.newProject(
         {
           name: name.trim(),
           repoName: (repoEdited ? repoName : suggestedRepo).trim(),
@@ -194,9 +236,9 @@ export function NewPortalPage() {
         token,
       );
 
-      // Switch the panel to the new portal, then jump to the build task.
+      // Portal ma teraz repo → NIE jest już "pusty", więc cleanup go nie usunie.
+      setBuilt(true);
       setBuildStep("Opening your project…");
-      await switchOrganization(organizationId).catch(() => undefined);
       router.push(`/tasks/${taskId}`);
     } catch (err) {
       const msg =
@@ -260,11 +302,17 @@ export function NewPortalPage() {
               <Button
                 variant="primary"
                 className="ml-auto min-w-40"
-                onClick={advance}
-                disabled={!canContinue()}
+                onClick={() => void advance()}
+                disabled={!canContinue() || creatingPortal}
               >
-                Continue
-                <ArrowRight className="size-4" />
+                {creatingPortal ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    Continue
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
               </Button>
             )}
           </div>

@@ -43,6 +43,7 @@ export interface AuthContextValue {
   currentOrg: AuthOrganization | null;
   switchOrganization: (organizationId: string) => Promise<void>;
   createOrganization: (name: string) => Promise<AuthOrganization>;
+  deleteOrganization: (organizationId: string) => Promise<void>;
   isSwitchingOrg: boolean;
   getToken: () => Promise<string | null>;
   signOut: () => Promise<void>;

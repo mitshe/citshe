@@ -482,6 +482,37 @@ export class UsersService {
     };
   }
 
+  /**
+   * Usuwa organizację (portal). TYLKO owner i TYLKO gdy portal jest PUSTY
+   * (bez repozytoriów) — zabezpieczenie, żeby nie skasować portalu z pracą.
+   * Używane do sprzątania po porzuceniu wizarda "New portal" (org powstaje
+   * na początku, więc porzucenie zostawiłoby pustą org — usuwamy ją).
+   */
+  async deleteEmptyOrganization(userId: string, organizationId: string): Promise<void> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { ownerId: true, _count: { select: { repositories: true } } },
+    });
+    if (!org) {
+      throw new BadRequestException('Organization not found');
+    }
+    if (org.ownerId !== userId) {
+      throw new UnauthorizedException('Only the owner can delete this portal');
+    }
+    if (org._count.repositories > 0) {
+      throw new BadRequestException('Portal is not empty — it has repositories');
+    }
+
+    // Kasujemy zależne wiersze i org w transakcji (integracje/pluginy/członkowie).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.integration.deleteMany({ where: { organizationId } });
+      await tx.plugin.deleteMany({ where: { organizationId } });
+      await tx.task.deleteMany({ where: { organizationId } });
+      await tx.organizationMember.deleteMany({ where: { organizationId } });
+      await tx.organization.delete({ where: { id: organizationId } });
+    });
+  }
+
   // ============================================================================
   // Team management (selfhosted)
   // ============================================================================

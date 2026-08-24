@@ -321,6 +321,23 @@ export class UsersController {
   }
 
   /**
+   * Usuwa PUSTĄ organizację (portal) — sprzątanie po porzuceniu wizarda
+   * "New portal". Tylko owner, tylko gdy brak repozytoriów.
+   */
+  @Delete('organizations/:organizationId')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteOrganization(
+    @Req() req: AuthenticatedRequest,
+    @Param('organizationId') organizationId: string,
+  ) {
+    await this.usersService.deleteEmptyOrganization(
+      req.auth.userId,
+      organizationId,
+    );
+  }
+
+  /**
    * Logout from all devices
    */
   @Post('logout-all')

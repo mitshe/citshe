@@ -16,18 +16,15 @@ export interface NewProjectInput {
 }
 
 /**
- * Creates a whole "New project" ATOMICALLY: portal + GitHub repo + Repository
- * row + build task, all-or-nothing. If any step fails, nothing is left behind
- * (no orphan portals). The GitHub integration is copied from the CURRENT org
- * (which the wizard verified has GitHub) into the new portal — the same GitHub
- * App installation covers both, so the copied credentials work.
+ * Buduje repo + task w BIEŻĄCEJ organizacji (portalu). Portal (org) już istnieje
+ * — wizard tworzy go WCZEŚNIEJ (pustą org), a użytkownik podłącza do niego
+ * GitHub/Cloudflare/itd. od zera w kroku "connect". ZERO dziedziczenia/kopiowania
+ * credentials między portalami — każdy portal ma własne, świeżo podłączone.
  *
  * Order matters for atomicity:
- *   1. Verify GitHub on the current org (fail fast).
- *   2. Create the repo on GitHub (external, non-transactional) FIRST — if this
- *      fails, no DB rows were written yet.
- *   3. In ONE Prisma transaction: create org + member + copy GitHub integration
- *      + create Repository row + create Task. Any failure rolls all of it back.
+ *   1. Verify GitHub on THIS org (fail fast — user musiał go podłączyć w wizardzie).
+ *   2. Create the repo on GitHub (external, non-transactional) FIRST.
+ *   3. In ONE Prisma transaction: create Repository row + create Task.
  *   4. Outside the txn: kick off the build (best-effort; the task already exists).
  */
 @Injectable()
@@ -52,16 +49,16 @@ export class NewProjectService {
       throw new BadRequestException('Invalid repository name.');
     }
 
-    // 1. Verify GitHub on the CURRENT org — this is what we copy into the new
-    // portal. The wizard already gates on it, but never trust the client.
-    const sourceIntegration = await this.prisma.integration.findFirst({
+    // 1. Verify GitHub on THIS org (portal). Użytkownik podłączył go w wizardzie
+    // do tego portalu — nic nie dziedziczymy z innych org.
+    const integration = await this.prisma.integration.findFirst({
       where: {
         organizationId: currentOrgId,
         type: IntegrationType.GITHUB,
         status: 'CONNECTED',
       },
     });
-    if (!sourceIntegration) {
+    if (!integration) {
       throw new BadRequestException(
         'Connect GitHub first — the project needs a place for its code.',
       );
@@ -71,7 +68,7 @@ export class NewProjectService {
     // so a GitHub failure leaves nothing behind.
     const adapter = await this.adapterFactory.createGitProviderFromIntegration(
       currentOrgId,
-      sourceIntegration.id,
+      integration.id,
     );
     if (!(adapter instanceof GitHubAdapter)) {
       throw new BadRequestException('The connected integration is not GitHub.');
@@ -83,36 +80,13 @@ export class NewProjectService {
       autoInit: true,
     });
 
-    // 3. Everything DB-side in ONE transaction → all-or-nothing.
+    // 3. Repo + task w BIEŻĄCEJ org w ONE transaction (org już istnieje).
     const result = await this.prisma
       .$transaction(async (tx) => {
-        const org = await tx.organization.create({
-          data: { name, slug: this.slug(name), ownerId: userId },
-        });
-        await tx.organizationMember.create({
-          data: { organizationId: org.id, userId, role: 'OWNER' },
-        });
-
-        // Copy the GitHub integration (ciphertext copied verbatim — global key).
-        await tx.integration.create({
-          data: {
-            organizationId: org.id,
-            type: IntegrationType.GITHUB,
-            status: sourceIntegration.status,
-            config: sourceIntegration.config,
-            configIv: sourceIntegration.configIv,
-          },
-        });
-
         const repo = await tx.repository.create({
           data: {
-            organizationId: org.id,
-            integrationId: (
-              await tx.integration.findFirstOrThrow({
-                where: { organizationId: org.id, type: IntegrationType.GITHUB },
-                select: { id: true },
-              })
-            ).id,
+            organizationId: currentOrgId,
+            integrationId: integration.id,
             provider: GitProvider.GITHUB,
             externalId: remote.fullName,
             name: remote.name,
@@ -137,7 +111,7 @@ export class NewProjectService {
             : `Build: ${name}`;
         const task = await tx.task.create({
           data: {
-            organizationId: org.id,
+            organizationId: currentOrgId,
             repositoryId: null, // build task creates into repo via buildSpec
             title: title.slice(0, 200),
             buildSpec: spec as unknown as Prisma.InputJsonValue,
@@ -147,7 +121,7 @@ export class NewProjectService {
         });
 
         return {
-          organizationId: org.id,
+          organizationId: currentOrgId,
           taskId: task.id,
           repoFullPath: repo.fullPath,
         };
@@ -171,17 +145,5 @@ export class NewProjectService {
       );
 
     return result;
-  }
-
-  private slug(name: string): string {
-    const base = name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40);
-    // Uniqueness is enforced by the DB unique constraint; add a short suffix.
-    const suffix = Math.random().toString(36).slice(2, 8);
-    return `${base || 'portal'}-${suffix}`;
   }
 }

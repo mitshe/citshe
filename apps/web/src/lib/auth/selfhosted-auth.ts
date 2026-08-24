@@ -268,6 +268,29 @@ class SelfhostedAuthService {
   }
 
   /**
+   * Usuwa PUSTĄ organizację (portal) — sprzątanie po porzuceniu wizarda
+   * "New portal". Backend odmówi, jeśli portal ma repozytoria.
+   */
+  async deleteOrganization(organizationId: string): Promise<void> {
+    const token = await this.getToken();
+    const response = await fetch(`/auth/organizations/${organizationId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 404) {
+      const text = await response.text();
+      let message = "Failed to delete organization";
+      try {
+        message = JSON.parse(text).message || message;
+      } catch {
+        message = text || message;
+      }
+      throw new Error(message);
+    }
+  }
+
+  /**
    * Get current user info
    */
   async getMe(): Promise<SelfhostedUser | null> {
