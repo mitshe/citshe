@@ -116,6 +116,18 @@ export class NewProjectService {
       );
     }
 
+    // 0. Gate on the Claude engine server-side (the wizard checks this too, but
+    // a direct API call would otherwise create a repo + portal for a build that
+    // can't run). Do this BEFORE the GitHub repo so a dead engine leaves nothing.
+    const engine = await this.orchestration.engineStatus();
+    if (!engine.ok) {
+      throw new BadRequestException(
+        engine.reason === 'unknown'
+          ? "Couldn't reach the build engine right now. Please try again in a moment."
+          : 'The build engine needs to be reconnected before new sites can be built. Please contact the person who set up citshe.',
+      );
+    }
+
     // 1. Create the repo on GitHub using the pasted token FIRST (external, before
     // any DB write). A bad token / taken name fails here and writes nothing.
     const adapter = new GitHubAdapter({ accessToken: githubToken });

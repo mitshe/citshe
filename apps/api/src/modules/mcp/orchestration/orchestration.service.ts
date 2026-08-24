@@ -48,6 +48,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     this.watchdogTimer = setInterval(() => {
       void this.sweepStuckTasks().catch(() => undefined);
       void this.reapIdleWorkers().catch(() => undefined);
+      void this.reconcileUnstartedTasks().catch(() => undefined);
     }, this.WATCHDOG_INTERVAL_MS);
     // Don't keep the process alive just for the timer.
     this.watchdogTimer.unref?.();
@@ -100,6 +101,13 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
    * so a later terminal/resume just spins a fresh container with the same auth).
    */
   private readonly WORKER_IDLE_REAP_MS = 30 * 60_000;
+  /**
+   * A task that's still PENDING/QUEUED this long after creation with no BullMQ
+   * job backing it slipped through the kick-off (e.g. Redis was down when the
+   * new-project flow called startBuildTask). The watchdog re-enqueues it so a
+   * build never silently sits forever with no worker and no error.
+   */
+  private readonly UNSTARTED_TASK_MS = 3 * 60_000;
 
   /**
    * Snapshot of the queue: tasks grouped by lifecycle + the workers currently
@@ -673,6 +681,20 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       );
       return;
     }
+    // If the task already has a live worker (a retry re-delivered while the
+    // first run is mid-flight), don't start a second container.
+    if (task.sessionId) {
+      const live = await this.prisma.agentSession.findFirst({
+        where: { id: task.sessionId, status: { in: ['CREATING', 'RUNNING'] } },
+        select: { id: true },
+      });
+      if (live) {
+        this.logger.log(
+          `executeTask: task ${taskId} already has a live worker — skipping.`,
+        );
+        return;
+      }
+    }
 
     // Respect the hard global stop even if a job slipped through.
     const org = await this.prisma.organization.findUnique({
@@ -703,27 +725,67 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     });
     const integrationIds = gitIntegrations.map((i) => i.id);
 
-    // Create the worker thread (same container path as terminals/sessions).
-    const session = await this.sessionsService.create(
-      organizationId,
-      task.createdBy,
-      {
-        name: `worker: ${task.title}`.slice(0, 80),
-        repositoryIds,
-        integrationIds,
-        instructions: this.buildWorkerInstructions(
-          task.title,
-          task.description,
-          task.deliveryMode ?? 'PR',
-          [],
-          (task.buildSpec as BuildSpec | null) ?? null,
-        ),
+    // Atomically claim the task before spinning up a container: flip it to
+    // IN_PROGRESS only if it's still in a dispatchable state. If a concurrent
+    // job already claimed it, updateMany affects 0 rows and we bail WITHOUT
+    // creating a second worker. Mirrors the guard in dispatchTask so both
+    // dispatch paths (BullMQ build tasks + the MCP orchestrator) share the
+    // same invariant.
+    const claim = await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: {
+          in: [
+            TaskStatus.PENDING,
+            TaskStatus.QUEUED,
+            TaskStatus.ANALYZING,
+            TaskStatus.FAILED,
+          ],
+        },
       },
-    );
+      data: { status: TaskStatus.IN_PROGRESS },
+    });
+    if (claim.count === 0) {
+      this.logger.log(
+        `executeTask: task ${taskId} was claimed by another worker — skipping.`,
+      );
+      return;
+    }
+
+    // Create the worker thread (same container path as terminals/sessions). If
+    // this throws, roll the task back to QUEUED so BullMQ's retry can re-claim
+    // it instead of leaving it stuck IN_PROGRESS.
+    let session;
+    try {
+      session = await this.sessionsService.create(
+        organizationId,
+        task.createdBy,
+        {
+          name: `worker: ${task.title}`.slice(0, 80),
+          repositoryIds,
+          integrationIds,
+          instructions: this.buildWorkerInstructions(
+            task.title,
+            task.description,
+            task.deliveryMode ?? 'PR',
+            [],
+            (task.buildSpec as BuildSpec | null) ?? null,
+          ),
+        },
+      );
+    } catch (err) {
+      await this.prisma.task
+        .update({
+          where: { id: taskId },
+          data: { status: TaskStatus.QUEUED },
+        })
+        .catch(() => undefined);
+      throw err;
+    }
 
     await this.prisma.task.update({
       where: { id: taskId },
-      data: { sessionId: session.id, status: TaskStatus.IN_PROGRESS },
+      data: { sessionId: session.id },
     });
     this.eventsGateway.emitTaskUpdate(organizationId, {
       taskId,
@@ -1295,6 +1357,78 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       ).catch((err) =>
         this.logger.error(
           `Watchdog could not fail task ${t.id}: ${(err as Error).message}`,
+        ),
+      );
+    }
+  }
+
+  /**
+   * Watchdog sweep: rescue build tasks that never got a worker. A task can be
+   * left PENDING/QUEUED with no BullMQ job if the kick-off failed silently (Redis
+   * down, process killed between the new-project txn and startBuildTask). Nothing
+   * else recovers these — drainQueue only runs on worker completion, sweepStuck
+   * only looks at IN_PROGRESS. So find old PENDING/QUEUED tasks with no pending
+   * job and no live worker, and re-enqueue them (respecting queue-pause).
+   */
+  private async reconcileUnstartedTasks(): Promise<void> {
+    const cutoff = new Date(Date.now() - this.UNSTARTED_TASK_MS);
+    const candidates = await this.prisma.task.findMany({
+      where: {
+        status: { in: [TaskStatus.PENDING, TaskStatus.QUEUED] },
+        createdAt: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        queueOrder: true,
+        sessionId: true,
+        status: true,
+      },
+      take: 50,
+    });
+    if (candidates.length === 0) return;
+
+    for (const t of candidates) {
+      // Skip if it already has a live worker (a claim in flight).
+      if (t.sessionId) {
+        const live = await this.prisma.agentSession
+          .findFirst({
+            where: {
+              id: t.sessionId,
+              status: { in: ['CREATING', 'RUNNING'] },
+            },
+            select: { id: true },
+          })
+          .catch(() => null);
+        if (live) continue;
+      }
+
+      // Skip if a BullMQ job is already queued/active for it.
+      const pending = await this.findPendingJob(t.organizationId, t.id).catch(
+        () => null,
+      );
+      if (pending) continue;
+
+      // Don't fight a paused queue — leave it QUEUED for the resume to drain.
+      const org = await this.prisma.organization.findUnique({
+        where: { id: t.organizationId },
+        select: { queuePaused: true },
+      });
+      if (org?.queuePaused) continue;
+
+      this.logger.warn(
+        `Watchdog: task ${t.id} was never started (no job, no worker) — re-enqueueing.`,
+      );
+      if (t.status !== TaskStatus.QUEUED) {
+        await this.updateTaskStatus(
+          t.organizationId,
+          t.id,
+          TaskStatus.QUEUED,
+        ).catch(() => undefined);
+      }
+      await this.addTaskJob(t.organizationId, t.id, t.queueOrder).catch((err) =>
+        this.logger.error(
+          `Watchdog could not re-enqueue task ${t.id}: ${(err as Error).message}`,
         ),
       );
     }
