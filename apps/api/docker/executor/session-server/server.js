@@ -338,6 +338,96 @@ function installCitsheTaskCli() {
 }
 
 /**
+ * Install `citshe-stream <out-file>` — a formatter for `claude --print
+ * --output-format stream-json`. Reads the JSON event stream on stdin, prints a
+ * clean, human-readable LIVE transcript to the pane (Claude's text as it
+ * streams, plus "› Edit file.astro" / "› Bash: npm run build" tool lines), and
+ * writes ONLY Claude's final plain text to <out-file> for the task summary.
+ * Without this the worker ran headless `--print` which shows nothing until the
+ * very end (the "Claude thinks in memory / dead terminal" problem).
+ */
+function installCitsheStreamCli() {
+  const binDir = '/home/executor/bin';
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    const script = String.raw`#!/usr/bin/env node
+// citshe-stream <out-file> — render claude stream-json to a live transcript.
+const fs = require('fs');
+const outFile = process.argv[2] || '/dev/null';
+let buf = '';
+let finalText = '';         // accumulates Claude's final assistant text
+let lastWasText = false;    // pretty spacing between text and tool lines
+const W = (s) => process.stdout.write(s);
+const toolLine = (name, input) => {
+  let detail = '';
+  try {
+    if (input) {
+      if (input.file_path) detail = input.file_path.replace(/^\/workspace\//, '');
+      else if (input.command) detail = String(input.command).split('\n')[0].slice(0, 80);
+      else if (input.url) detail = input.url;
+      else if (input.pattern) detail = input.pattern;
+      else if (input.description) detail = input.description;
+    }
+  } catch {}
+  return '\x1b[38;5;39m›\x1b[0m \x1b[1m' + name + '\x1b[0m' + (detail ? '  \x1b[2m' + detail + '\x1b[0m' : '');
+};
+const handle = (ev) => {
+  try {
+    const t = ev.type;
+    // Live text as it streams (partial deltas).
+    if (t === 'stream_event' && ev.event) {
+      const e = ev.event;
+      if (e.type === 'content_block_delta' && e.delta && e.delta.type === 'text_delta') {
+        W(e.delta.text || '');
+        finalText += e.delta.text || '';
+        lastWasText = true;
+      }
+      return;
+    }
+    // A completed assistant message: surface any tool_use as a "› tool" line.
+    if (t === 'assistant' && ev.message && Array.isArray(ev.message.content)) {
+      for (const b of ev.message.content) {
+        if (b.type === 'tool_use') {
+          if (lastWasText) { W('\n'); lastWasText = false; }
+          W(toolLine(b.name, b.input) + '\n');
+        }
+      }
+      return;
+    }
+    // Final result — print a blank line to close the transcript.
+    if (t === 'result') {
+      if (lastWasText) W('\n');
+      return;
+    }
+  } catch {}
+};
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buf += chunk;
+  let nl;
+  while ((nl = buf.indexOf('\n')) >= 0) {
+    const line = buf.slice(0, nl);
+    buf = buf.slice(nl + 1);
+    if (!line.trim()) continue;
+    let ev;
+    try { ev = JSON.parse(line); } catch { W(line + '\n'); continue; }
+    handle(ev);
+  }
+});
+process.stdin.on('end', () => {
+  if (buf.trim()) { try { handle(JSON.parse(buf)); } catch {} }
+  try { fs.writeFileSync(outFile, finalText.trim() + '\n'); } catch {}
+  process.exit(0);
+});
+`;
+    fs.writeFileSync(path.join(binDir, 'citshe-stream'), script, { mode: 0o755 });
+    log('Installed citshe-stream (live claude transcript formatter)');
+  } catch (err) {
+    log('Could not install citshe-stream: ' + err.message);
+  }
+}
+
+/**
  * Install `citshe-shot <url|file.png> [caption]` so the agent can attach a
  * screenshot to its task's activity feed while testing. A URL is rendered with
  * headless Chromium (Playwright); a file path is uploaded as-is. Needs
@@ -811,6 +901,7 @@ async function setup() {
   writeInstructions(config.instructions, config.provider);
   configureGitAuthor();
   installSkills(config.skills);
+  installCitsheStreamCli();
   installCitsheTaskCli();
   installCitsheShotCli();
   installCitsheSkill();

@@ -942,7 +942,12 @@ export class OrchestrationService {
     const LOG = '/tmp/citshe-agent.log';
     const OUT = '/tmp/citshe-agent.out';
     const PROMPT = '/tmp/citshe-prompt';
-    const DONE = '__CITSHE_DONE__';
+    // Completion is signalled by writing this SEPARATE file after claude exits —
+    // NOT by a marker echoed in the pane (the shell echoes the command itself,
+    // which made the poller "see" the marker instantly and flip the task to
+    // REVIEW ~0.5s after START, with an empty result).
+    const DONEFILE = '/tmp/citshe-agent.done';
+    const DONE = '__CITSHE_DONE__'; // legacy marker (kept for cleanTranscript)
     const tmux = 'tmux -f /etc/tmux.conf';
     const bash = (script: string) =>
       this.containerService.execCommand(
@@ -971,26 +976,33 @@ export class OrchestrationService {
         `echo '${promptB64}' | base64 -d > ${PROMPT}`,
         `: > ${LOG}`,
         `: > ${OUT}`,
+        `rm -f ${DONEFILE}`,
         // Fresh agent window each run.
         `${tmux} kill-window -t citshe:agent 2>/dev/null || true`,
         `${tmux} new-window -t citshe -n agent -c /workspace`,
         `${tmux} pipe-pane -t citshe:agent -o 'cat >> ${LOG}'`,
-        // tee claude's stdout to a CLEAN file (${OUT}) for the summary, while
-        // still showing it in the pane for live watch. The pane capture (${LOG})
-        // is full of terminal control noise; ${OUT} is just Claude's answer.
-        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; claude --print --permission-mode bypassPermissions < ${PROMPT} | tee ${OUT}; echo ${DONE}$?' Enter`,
+        // Stream claude's events (stream-json) through the citshe formatter so
+        // the pane shows LIVE, readable progress (Claude's text + "› tool …")
+        // instead of a dead prompt while it "thinks in memory". The formatter
+        // also writes the plain final text to ${OUT} for the task summary.
+        // Completion is signalled by writing ${DONEFILE} AFTER claude exits —
+        // never by a pane marker (which the shell echo would false-trigger).
+        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; ` +
+          `claude --print --permission-mode bypassPermissions ` +
+          `--output-format stream-json --include-partial-messages --verbose ` +
+          `< ${PROMPT} 2>&1 | citshe-stream ${OUT}; ` +
+          `echo $? > ${DONEFILE}' Enter`,
       ].join('; '),
     );
 
-    // Poll the log for the done-marker (cheap — grep a file), up to the worker
-    // timeout. Live viewing happens via tmux attach, not this poll.
-    // If the bypass-mode acknowledgment ever appears, auto-accept it once by
-    // sending "2" + Enter ("Yes, I accept") so the worker never blocks.
+    // Poll a SEPARATE done-file (written only after claude exits) — not the pane
+    // capture, which contains the echoed command and used to false-trigger.
+    // If the bypass-mode acknowledgment ever appears, auto-accept it once.
     const deadline = Date.now() + this.WORKER_EXEC_TIMEOUT_MS;
     let acceptedDialog = false;
     while (Date.now() < deadline) {
-      const hit = await bash(`grep -c '${DONE}' ${LOG} || true`);
-      if (parseInt(hit.trim(), 10) > 0) break;
+      const done = await bash(`test -f ${DONEFILE} && echo 1 || true`);
+      if (done.trim() === '1') break;
       if (!acceptedDialog) {
         const dlg = await bash(
           `grep -c 'Bypass Permissions mode' ${LOG} || true`,
@@ -1003,10 +1015,10 @@ export class OrchestrationService {
       await this.sleep(3000);
     }
 
-    // Prefer the clean stdout tee (${OUT}) — it's just Claude's final answer.
-    // Fall back to scrubbing the noisy pane capture if the tee is empty.
+    // The formatter wrote Claude's plain final text to ${OUT}. Fall back to
+    // scrubbing the noisy pane capture only if that's empty.
     const out = (await bash(`cat ${OUT} 2>/dev/null || true`)).trim();
-    if (out) return this.cleanTranscript(out, DONE);
+    if (out) return out;
     const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
     return this.cleanTranscript(raw, DONE);
   }
