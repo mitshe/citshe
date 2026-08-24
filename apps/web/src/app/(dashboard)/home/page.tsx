@@ -527,67 +527,51 @@ function BuildHero({
         ? "Open the task to see what happened and retry."
         : "Claude is scaffolding, building and deploying. This runs in the background — you can leave this page.";
 
+  const accent =
+    state === "live" ? "text-ok" : state === "failed" ? "text-danger" : "text-primary";
+
   return (
-    <section
-      className={cn(
-        "relative overflow-hidden rounded-xl border p-5 sm:p-6",
-        state === "live"
-          ? "border-ok/30 bg-ok/[0.04]"
-          : state === "failed"
-            ? "border-danger/30 bg-danger/[0.04]"
-            : "border-primary/30 bg-primary/[0.04]",
-      )}
-    >
-      <div className="flex items-start gap-4">
+    <section className="rounded-lg border border-border bg-surface-card p-4 sm:p-5">
+      <div className="flex items-start gap-3">
         <span
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-lg",
-            state === "live"
-              ? "bg-ok/15 text-ok"
-              : state === "failed"
-                ? "bg-danger/15 text-danger"
-                : "bg-primary/15 text-primary",
+            "flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-inset",
+            accent,
           )}
         >
           {state === "live" ? (
-            <Globe className="size-5" />
+            <Globe className="size-4" />
           ) : state === "failed" ? (
-            <AlertCircle className="size-5" />
+            <AlertCircle className="size-4" />
           ) : (
-            <Rocket className="size-5" />
+            <Rocket className="size-4" />
           )}
         </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {state === "building" && (
-              <StatusDot state="running" size={9} pulse />
-            )}
-            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            {state === "building" && <StatusDot state="running" size={8} pulse />}
+            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
               {title}
             </h2>
           </div>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+          <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
             {subtitle}
           </p>
 
-          {/* Resource chips: repo + task */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {repoUrl && (
-              <a
-                href={repoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-linear hover:text-foreground"
-              >
-                <FolderGit2 className="size-3.5" />
-                {repo?.name ?? spec.repoFullPath}
-              </a>
-            )}
-          </div>
+          {repoUrl && (
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-inset px-2.5 py-1 text-xs font-medium text-muted-foreground transition-linear hover:text-foreground"
+            >
+              <FolderGit2 className="size-3.5" />
+              {repo?.name ?? spec.repoFullPath}
+            </a>
+          )}
 
-          {/* Actions */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
             {siteUrl && (
               <a href={siteUrl} target="_blank" rel="noopener noreferrer">
                 <Button variant="primary" size="sm">
@@ -598,7 +582,7 @@ function BuildHero({
               </a>
             )}
             <Link href={`/tasks/${task.id}`}>
-              <Button variant={siteUrl ? "outline" : "primary"} size="sm">
+              <Button variant="outline" size="sm">
                 {state === "building" ? "Watch it build" : "Open task"}
                 <ArrowRight className="size-3.5" />
               </Button>
