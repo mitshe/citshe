@@ -18,9 +18,30 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AuthGuard } from '@/shared/auth';
-import { OrganizationId } from '../../shared/decorators/organization.decorator';
 import { UserId } from '../../shared/decorators/organization.decorator';
 import { NewProjectService } from './new-project.service';
+
+class NewProjectKeysDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  github: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  cloudflare?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  vercel?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  neon?: string;
+}
 
 class NewProjectBuildSpecDto {
   @IsIn(['scratch', 'refresh'])
@@ -64,6 +85,11 @@ class CreateNewProjectDto {
 
   @IsObject()
   @ValidateNested()
+  @Type(() => NewProjectKeysDto)
+  keys: NewProjectKeysDto;
+
+  @IsObject()
+  @ValidateNested()
   @Type(() => NewProjectBuildSpecDto)
   buildSpec: NewProjectBuildSpecDto;
 }
@@ -80,14 +106,11 @@ export class NewProjectController {
     summary: 'Create a portal + repo + build task atomically (all-or-nothing)',
   })
   @ApiResponse({ status: 201, description: 'Project created and building' })
-  async create(
-    @OrganizationId() organizationId: string,
-    @UserId() userId: string,
-    @Body() dto: CreateNewProjectDto,
-  ) {
-    return this.newProject.create(organizationId, userId, {
+  async create(@UserId() userId: string, @Body() dto: CreateNewProjectDto) {
+    return this.newProject.create(userId, {
       name: dto.name,
       repoName: dto.repoName,
+      keys: dto.keys,
       buildSpec: dto.buildSpec,
     });
   }

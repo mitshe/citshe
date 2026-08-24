@@ -738,6 +738,12 @@ export const api = {
     data: {
       name: string;
       repoName: string;
+      keys: {
+        github?: string;
+        cloudflare?: string;
+        vercel?: string;
+        neon?: string;
+      };
       buildSpec: Record<string, unknown>;
     },
     token: string,
