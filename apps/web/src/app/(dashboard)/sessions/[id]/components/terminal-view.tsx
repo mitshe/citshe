@@ -476,8 +476,10 @@ export function TerminalView({
     >
       <div
         ref={containerRef}
-        onClick={focusTerminal}
-        onTouchStart={isTouch ? focusTerminal : undefined}
+        // On touch devices, tapping the terminal must NOT open the keyboard —
+        // that would fight scrolling. The keyboard only opens via the ⌨ button
+        // in the key bar. On desktop, a click focuses as usual.
+        onClick={isTouch ? undefined : focusTerminal}
         // Small breathing room so text isn't glued to the panel edge; the fit
         // addon accounts for this padding when computing cols/rows.
         style={{

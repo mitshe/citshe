@@ -81,6 +81,18 @@ export function MobileKeyBar({ onSend, onFocus, safeBottom }: MobileKeyBarProps)
         safeBottom && "pb-safe",
       )}
     >
+      {/* Keyboard first: on touch, this is the ONLY way to open the soft
+          keyboard (tapping the terminal just scrolls). Accented so it stands
+          out as the primary action. */}
+      <Key
+        icon={<KeyboardIcon className="h-4 w-4" />}
+        onClick={onFocus}
+        aria-label="Show keyboard"
+        primary
+      />
+
+      <Divider />
+
       <Key label="Esc" onClick={() => sendSeq(ESC)} />
       <Key label="Tab" onClick={() => sendSeq(TAB)} />
       <Key
@@ -125,7 +137,6 @@ export function MobileKeyBar({ onSend, onFocus, safeBottom }: MobileKeyBarProps)
       <Divider />
 
       <Key icon={<ClipboardPaste className="h-4 w-4" />} onClick={paste} aria-label="Paste" />
-      <Key icon={<KeyboardIcon className="h-4 w-4" />} onClick={onFocus} aria-label="Show keyboard" />
     </div>
   );
 }
@@ -139,12 +150,15 @@ function Key({
   icon,
   onClick,
   armed,
+  primary,
   "aria-label": ariaLabel,
 }: {
   label?: string;
   icon?: React.ReactNode;
   onClick: () => void;
   armed?: boolean;
+  /** Accented look — for the primary action (the keyboard toggle). */
+  primary?: boolean;
   "aria-label"?: string;
 }) {
   return (
@@ -157,6 +171,8 @@ function Key({
       className={cn(
         "flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-inset px-3 text-sm font-medium text-foreground transition-linear active:bg-surface-hover",
         armed && "border-primary bg-primary/15 text-primary",
+        primary &&
+          "border-primary/60 bg-primary/15 text-primary active:bg-primary/25",
       )}
     >
       {icon ?? label}
