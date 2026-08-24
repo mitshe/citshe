@@ -469,6 +469,23 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         message: `Task is already ${task.status}.`,
       };
     }
+    // Concurrency guard (#4): two near-simultaneous dispatches of the SAME task
+    // (a BullMQ retry racing drainQueue, say) could both pass the read-only
+    // check above and each spin up a worker. Atomically claim the task by moving
+    // it OUT of a dispatchable state; whoever's updateMany hits 0 rows lost the
+    // race and bails before creating a second worker container.
+    if (task.sessionId) {
+      const live = await this.prisma.agentSession.findFirst({
+        where: { id: task.sessionId, status: { in: ['CREATING', 'RUNNING'] } },
+        select: { id: true },
+      });
+      if (live) {
+        return {
+          status: 'skipped',
+          message: `Task already has a live worker (${task.sessionId}).`,
+        };
+      }
+    }
 
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -511,23 +528,63 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         ).map((i) => i.id)
       : undefined;
 
-    // Create the worker thread.
-    const session = await this.sessionsService.create(organizationId, userId, {
-      name: `worker: ${task.title}`.slice(0, 80),
-      repositoryIds,
-      ...(buildIntegrationIds ? { integrationIds: buildIntegrationIds } : {}),
-      instructions: this.buildWorkerInstructions(
-        task.title,
-        task.description,
-        task.deliveryMode ?? 'PR',
-        [],
-        (task.buildSpec as BuildSpec | null) ?? null,
-      ),
+    // Atomically claim the task (#4): flip it to IN_PROGRESS only if it's still
+    // in a dispatchable state. If another dispatch already claimed it, our
+    // updateMany affects 0 rows and we bail WITHOUT creating a worker container.
+    const claim = await this.prisma.task.updateMany({
+      where: {
+        id: taskId,
+        status: {
+          in: [
+            TaskStatus.PENDING,
+            TaskStatus.QUEUED,
+            TaskStatus.ANALYZING,
+            TaskStatus.FAILED,
+          ],
+        },
+      },
+      data: { status: TaskStatus.IN_PROGRESS },
     });
+    if (claim.count === 0) {
+      return {
+        status: 'skipped',
+        message: 'Task was already claimed by another worker.',
+      };
+    }
+
+    // Create the worker thread. If this throws, we've already claimed the task
+    // (IN_PROGRESS) but have no worker — roll it back to QUEUED so it can be
+    // retried instead of hanging until the watchdog reaps it (#5).
+    let session;
+    try {
+      session = await this.sessionsService.create(organizationId, userId, {
+        name: `worker: ${task.title}`.slice(0, 80),
+        repositoryIds,
+        ...(buildIntegrationIds ? { integrationIds: buildIntegrationIds } : {}),
+        instructions: this.buildWorkerInstructions(
+          task.title,
+          task.description,
+          task.deliveryMode ?? 'PR',
+          [],
+          (task.buildSpec as BuildSpec | null) ?? null,
+        ),
+      });
+    } catch (err) {
+      await this.prisma.task
+        .update({
+          where: { id: taskId },
+          data: { status: TaskStatus.QUEUED },
+        })
+        .catch(() => undefined);
+      this.logger.error(
+        `Couldn't start worker for task ${taskId}; re-queued: ${(err as Error).message}`,
+      );
+      throw err;
+    }
 
     await this.prisma.task.update({
       where: { id: taskId },
-      data: { sessionId: session.id, status: TaskStatus.IN_PROGRESS },
+      data: { sessionId: session.id },
     });
     this.eventsGateway.emitTaskUpdate(organizationId, {
       taskId,
