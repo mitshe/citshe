@@ -239,15 +239,23 @@ export class EventsGateway
     }
 
     const clientData = this.connectedClients.get(client.id);
-    if (!clientData?.organizationId) {
-      return { event: 'error', data: { message: 'Organization not set' } };
-    }
 
-    // Verify task belongs to client's organization
-    const task = await this.prisma.task.findFirst({
-      where: { id: taskId, organizationId: clientData.organizationId },
-      select: { id: true },
-    });
+    // Authorize against the panel org OR the CLI's org set — mirroring
+    // handleSubscribeSession. Previously this only accepted `organizationId`,
+    // so every CLI client got "Organization not set" and never received task
+    // updates. Also makes the tenant-boundary check explicit and consistent.
+    let task: { id: string } | null = null;
+    if (clientData?.organizationId) {
+      task = await this.prisma.task.findFirst({
+        where: { id: taskId, organizationId: clientData.organizationId },
+        select: { id: true },
+      });
+    } else if (clientData?.cliOrgIds && clientData.userId) {
+      task = await this.prisma.task.findFirst({
+        where: { id: taskId, organizationId: { in: clientData.cliOrgIds } },
+        select: { id: true },
+      });
+    }
 
     if (!task) {
       this.logger.warn(
@@ -260,7 +268,7 @@ export class EventsGateway
     }
 
     void client.join(`task:${taskId}`);
-    clientData.rooms.add(`task:${taskId}`);
+    clientData?.rooms.add(`task:${taskId}`);
     this.logger.log(`Client ${client.id} subscribed to task:${taskId}`);
     return { event: 'subscribed', data: { taskId } };
   }

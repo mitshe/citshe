@@ -118,12 +118,18 @@ export class CliService {
     if (!req || req.expiresAt < new Date()) return { status: 'expired' };
     if (req.status === 'denied') return { status: 'denied' };
     if (req.status === 'approved' && req.token) {
-      // Deliver the token exactly once, then clear it.
-      await this.prisma.cliAuthRequest.update({
-        where: { deviceCode },
+      // Deliver the token exactly ONCE. Read-and-nullify atomically so two
+      // concurrent polls can't both pass the check and receive the same token
+      // (TOCTOU): only the poll whose updateMany actually flipped a row (count
+      // === 1) is the winner and returns it; the loser sees "pending".
+      const claimed = await this.prisma.cliAuthRequest.updateMany({
+        where: { deviceCode, token: { not: null } },
         data: { token: null },
       });
-      return { status: 'approved', token: req.token };
+      if (claimed.count === 1) {
+        return { status: 'approved', token: req.token };
+      }
+      return { status: 'pending' };
     }
     return { status: 'pending' };
   }
