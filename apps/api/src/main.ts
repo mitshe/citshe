@@ -13,11 +13,13 @@ async function bootstrap() {
   });
 
   // Allow base64 screenshot uploads (citshe-shot) — a viewport PNG is small but
-  // base64 inflates it, so lift the default 100kb JSON limit. Use Nest's own
-  // body-parser helper so we don't import `express` directly (it isn't a
-  // resolvable dependency in the pruned production image).
-  app.useBodyParser('json', { limit: '12mb' });
-  app.useBodyParser('urlencoded', { extended: true, limit: '12mb' });
+  // base64 inflates it, so lift the default 100kb JSON limit. `citshe push`
+  // also uploads a whole Claude Code conversation history (~20MB cap), so the
+  // limit has to cover that too. Use Nest's own body-parser helper so we don't
+  // import `express` directly (it isn't a resolvable dependency in the pruned
+  // production image).
+  app.useBodyParser('json', { limit: '24mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '24mb' });
   const logger = new Logger('Bootstrap');
   const config = app.get(ConfigService<AppConfig>);
 

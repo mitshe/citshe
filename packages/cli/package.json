@@ -1,19 +1,40 @@
 {
   "name": "@citshe/cli",
   "version": "0.1.0",
-  "private": true,
-  "description": "Thin local CLI for the citshe panel — connect to Claude Code worker sessions running on your VPS.",
+  "description": "Thin local CLI for the citshe panel — attach to Claude Code sessions running on your VPS from your local terminal.",
   "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "citshe",
+    "claude",
+    "claude-code",
+    "cli",
+    "terminal"
+  ],
+  "homepage": "https://github.com/mitshe/citshe/tree/master/packages/cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mitshe/citshe.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/mitshe/citshe/issues"
+  },
   "bin": {
     "citshe": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "tsup"
   },
   "dependencies": {
     "chalk": "^5.4.1",

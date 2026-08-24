@@ -5,7 +5,6 @@ import {
   Get,
   Headers,
   HttpCode,
-  HttpException,
   HttpStatus,
   Param,
   Post,
@@ -16,6 +15,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@/shared/auth';
 import { UserId } from '../../../shared/decorators/organization.decorator';
 import { CliService } from '../services/cli.service';
+import {
+  SessionImportService,
+  ImportSessionInput,
+} from '../services/session-import.service';
 
 /**
  * The citshe CLI API. Two auth modes:
@@ -27,7 +30,10 @@ import { CliService } from '../services/cli.service';
 @ApiTags('CLI')
 @Controller('api/v1/cli')
 export class CliController {
-  constructor(private readonly cli: CliService) {}
+  constructor(
+    private readonly cli: CliService,
+    private readonly sessionImport: SessionImportService,
+  ) {}
 
   private async ctx(authorization: string | undefined) {
     const token = authorization?.replace(/^Bearer\s+/i, '').trim();
@@ -51,15 +57,14 @@ export class CliController {
   }
 
   @Post('sessions/import')
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Import a local Claude Code session (CLI token)' })
-  async import(@Headers('authorization') authorization?: string) {
-    await this.ctx(authorization); // authenticate even though not built yet
-    // Importing a local .jsonl and resuming it on the VPS needs project-path
-    // remapping into /workspace + `claude --resume` wiring — not shipped yet.
-    throw new HttpException(
-      'Session import is coming soon — use `citshe ls` + `attach` for now.',
-      HttpStatus.NOT_IMPLEMENTED,
-    );
+  async import(
+    @Body() body: ImportSessionInput,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const ctx = await this.ctx(authorization);
+    return this.sessionImport.importSession(ctx, body);
   }
 
   // ─── Token management (panel, user AuthGuard) ───────────────────
