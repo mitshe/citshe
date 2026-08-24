@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Plus, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthContext } from "@/lib/auth";
@@ -18,8 +18,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/ui/status-dot";
-import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
-import { NewPortalWizard } from "@/components/new-project/new-portal-wizard";
 
 function initials(name: string): string {
   const clean = name.replace(/\.(com|pl|org|net|io)$/i, "");
@@ -52,21 +50,11 @@ function OrgSquare({
 export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
   const { organizations, currentOrg, switchOrganization, isSwitchingOrg } =
     useAuthContext();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const router = useRouter();
 
-  // The wizard is the primary "new portal" entry; its "I already have a repo"
-  // branch hands off to the plain create dialog.
-  const wizard = (
-    <NewPortalWizard
-      open={wizardOpen}
-      onClose={() => setWizardOpen(false)}
-      onSkipToPlain={() => {
-        setWizardOpen(false);
-        setCreateOpen(true);
-      }}
-    />
-  );
+  // "New portal" is a full page (the wizard). Existing-repo connect lives on
+  // that page too.
+  const newPortal = () => router.push("/new-portal");
 
   // No portals yet → "Add portal" affordance.
   if (organizations.length === 0) {
@@ -76,7 +64,7 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                onClick={() => setWizardOpen(true)}
+                onClick={newPortal}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <Plus className="h-4 w-4" />
@@ -84,23 +72,17 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
             </TooltipTrigger>
             <TooltipContent side="right">Add portal</TooltipContent>
           </Tooltip>
-          <CreateOrgDialog open={createOpen} onOpenChange={setCreateOpen} />
-          {wizard}
         </>
       );
     }
     return (
-      <>
-        <button
-          onClick={() => setWizardOpen(true)}
-          className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add portal</span>
-        </button>
-        <CreateOrgDialog open={createOpen} onOpenChange={setCreateOpen} />
-        {wizard}
-      </>
+      <button
+        onClick={newPortal}
+        className="flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2 py-1.5 text-sm text-muted-foreground transition-linear hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <Plus className="h-4 w-4" />
+        <span>Add portal</span>
+      </button>
     );
   }
 
@@ -155,10 +137,7 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setWizardOpen(true)}
-            className="gap-2 py-1.5"
-          >
+          <DropdownMenuItem onClick={newPortal} className="gap-2 py-1.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-dashed border-border">
               <Plus className="h-3 w-3" />
             </span>
@@ -166,8 +145,6 @@ export function OrgSwitcher({ collapsed = false }: { collapsed?: boolean }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <CreateOrgDialog open={createOpen} onOpenChange={setCreateOpen} />
-      {wizard}
     </>
   );
 }
