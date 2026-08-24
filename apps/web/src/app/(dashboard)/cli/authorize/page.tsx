@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,51 +71,62 @@ export default function CliAuthorizePage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-16">
-      <div className="rounded-xl border border-border bg-surface-card p-6 text-center">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-surface-inset text-primary">
-          <Terminal className="h-6 w-6" />
-        </div>
-
+    <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
+      <div className="w-full max-w-sm text-center">
         {state === "done" ? (
           <>
-            <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-ok" />
-            <h1 className="text-lg font-semibold">You&apos;re signed in</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Head back to your terminal — the CLI is authorized.
+            <StatusIcon variant="ok">
+              <CheckCircle2 className="h-7 w-7" />
+            </StatusIcon>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight">
+              You&apos;re signed in
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Head back to your terminal — the CLI is authorized. You can close
+              this tab.
             </p>
           </>
         ) : state === "denied" ? (
           <>
-            <XCircle className="mx-auto mb-2 h-8 w-8 text-danger" />
-            <h1 className="text-lg font-semibold">Login denied</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              You can close this tab.
+            <StatusIcon variant="danger">
+              <XCircle className="h-7 w-7" />
+            </StatusIcon>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight">
+              Login denied
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Nothing was authorized. You can close this tab.
             </p>
           </>
         ) : (
           <>
-            <h1 className="text-lg font-semibold">Authorize the citshe CLI</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Confirm the code shown in your terminal.
+            <StatusIcon variant="brand">
+              <Terminal className="h-7 w-7" />
+            </StatusIcon>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight">
+              Authorize the citshe CLI
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Check that this matches the code shown in your terminal.
             </p>
 
-            <div className="mt-4">
+            <div className="mt-6">
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 onBlur={() => code && check(code)}
                 placeholder="ABCD-EFGH"
-                className="text-center font-mono text-lg tracking-widest"
+                className="h-12 text-center font-mono text-xl font-semibold tracking-[0.3em]"
               />
               {state === "invalid" && (
                 <p className="mt-2 text-xs text-danger">
-                  That code is invalid or expired.
+                  That code is invalid or has expired. Start again from your
+                  terminal.
                 </p>
               )}
             </div>
 
-            <div className="mt-5 flex gap-2">
+            <div className="mt-6 flex gap-2.5">
               <Button
                 variant="outline"
                 className="flex-1"
@@ -138,6 +149,29 @@ export default function CliAuthorizePage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A single large status icon in a soft tinted circle. */
+function StatusIcon({
+  variant,
+  children,
+}: {
+  variant: "brand" | "ok" | "danger";
+  children: ReactNode;
+}) {
+  const tint =
+    variant === "ok"
+      ? "bg-ok/10 text-ok"
+      : variant === "danger"
+        ? "bg-danger/10 text-danger"
+        : "bg-primary/10 text-primary";
+  return (
+    <div
+      className={`mx-auto flex size-16 items-center justify-center rounded-2xl ${tint}`}
+    >
+      {children}
     </div>
   );
 }

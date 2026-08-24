@@ -30,7 +30,8 @@ export async function attachCommand(
     ),
   );
 
-  const socket: Socket = io(config.wsBase, {
+  // The gateway lives on the "/events" namespace (same as the web app).
+  const socket: Socket = io(`${config.wsBase}/events`, {
     path: SOCKET_PATH,
     transports: ["websocket", "polling"],
     reconnection: true,
@@ -113,8 +114,25 @@ export async function attachCommand(
   });
 
   socket.on(SOCKET_EVENTS.authenticated, () => {
-    // Join the session room, then ensure the terminal is running and stream it.
-    socket.emit(SOCKET_EVENTS.subscribeSession, { sessionId });
+    // Join the session room FIRST (wait for its ack so the room membership is
+    // in place), then ensure the terminal is running and stream it.
+    socket.emit(
+      SOCKET_EVENTS.subscribeSession,
+      { sessionId },
+      (sub?: { event?: string; data?: { message?: string } }) => {
+        if (sub?.event === "error") {
+          detach(
+            chalk.red(`Subscribe failed: ${sub.data?.message ?? "unknown"}`),
+            1,
+          );
+          return;
+        }
+        startAttach();
+      },
+    );
+  });
+
+  const startAttach = () => {
     socket.emit(
       SOCKET_EVENTS.sessionAttach,
       { sessionId, terminalId },
@@ -142,7 +160,7 @@ export async function attachCommand(
         );
       },
     );
-  });
+  };
 
   socket.on(SOCKET_EVENTS.sessionOutput, (payload: {
     terminalId?: string;
