@@ -76,14 +76,55 @@ jobs:
           REDIS_URL: redis://localhost:6379
           ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
-  build-and-push:
-    name: Build & Push Images
+  version:
+    name: Version
     runs-on: ubuntu-latest
     needs: [lint-typecheck, test]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            VERSION=${{ github.event.inputs.version }}
+          else
+            VERSION=latest
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: [version]
     permissions:
       contents: read
       packages: write
+    strategy:
+      # Build all three images in parallel (was sequential api→web→executor).
+      # fail-fast off so a flaky one doesn't cancel the others.
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: .
+            file: apps/api/Dockerfile
+            # mode=max: small image, cheap to cache every layer.
+            cache_mode: max
+          - image: web
+            context: .
+            file: apps/web/Dockerfile
+            cache_mode: max
+          - image: executor
+            context: apps/api/docker/executor
+            file: apps/api/docker/executor/Dockerfile
+            # mode=min: the 7GB executor's full-layer cache is huge and slow to
+            # write; min caches only the final image layers, which is enough
+            # since the heavy base layers rarely change.
+            cache_mode: min
 
     steps:
       - uses: actions/checkout@v4
@@ -98,56 +139,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version
-        id: version
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-          elif [[ "${{ github.event.inputs.version }}" != "" ]]; then
-            VERSION=${{ github.event.inputs.version }}
-          else
-            VERSION=latest
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Build and push api
+      - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: apps/api/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           provenance: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push web
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          provenance: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push executor
-        uses: docker/build-push-action@v6
-        with:
-          context: apps/api/docker/executor
-          file: apps/api/docker/executor/Dockerfile
-          push: true
-          provenance: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-executor:${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Summary
-        run: |
-          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-----|" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-executor | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.image }}:${{ needs.version.outputs.version }}
+          # Per-image cache scope so the three parallel builds don't clobber
+          # each other's GHA cache.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=${{ matrix.cache_mode }},scope=${{ matrix.image }}

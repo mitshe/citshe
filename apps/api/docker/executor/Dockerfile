@@ -81,12 +81,12 @@ RUN mkdir -p /workspace && chown executor:executor /workspace
 RUN mkdir -p /task && chown executor:executor /task
 RUN mkdir -p /runner && chown executor:executor /runner
 
-# Workflow runner + session server
-COPY --chown=executor:executor workflow-runner /runner
-COPY --chown=executor:executor session-server /session
-WORKDIR /runner
-RUN npm install && npm run build
-WORKDIR /workspace
+# NOTE: the workflow-runner / session-server COPY + build used to live HERE, in
+# `base`, before all the heavy layers (Chrome, Playwright, VNC in `full`). That
+# meant every edit to session-server/server.js busted the cache for ~1.9GB of
+# downstream layers → ~12min rebuilds. They now live at the END of the `lite`
+# and `full` stages (after the heavy layers), so a session-server change
+# rebuilds only a few small layers in seconds.
 
 # tmux config — terminals are tmux windows in one shared "citshe" session, so
 # multiple citshe clients can attach to the same window (watch + take over).
@@ -113,20 +113,11 @@ RUN git config --global init.defaultBranch main \
     && git config --global user.name "3uba"
 
 # ============================================================================
-# LITE — terminal only, no browser/GUI (~2GB smaller)
+# HEAVY-FULL — adds Chrome, Playwright, Xvfb, VNC, noVNC for browser streaming.
+# This stage holds the big, rarely-changing downloads so app code (below) can
+# sit on top of it and stay cached across session-server edits.
 # ============================================================================
-FROM base AS lite
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node --version && git --version && claude --version || exit 1
-
-ENTRYPOINT ["node", "/runner/dist/runner.js"]
-CMD []
-
-# ============================================================================
-# FULL — adds Chrome, Playwright, Xvfb, VNC, noVNC for browser streaming
-# ============================================================================
-FROM base AS full
+FROM base AS heavy-full
 
 USER root
 
@@ -152,6 +143,39 @@ RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
 # Playwright Chromium (as executor)
 USER executor
 RUN npx playwright install chromium
+
+# ============================================================================
+# APP CODE — the workflow-runner + session-server. Added at the END of each
+# target (after the heavy layers) so editing session-server/server.js only
+# rebuilds these small layers, not Chrome/Playwright/VNC. Duplicated in lite +
+# full because Docker stages can't share trailing instructions.
+# ============================================================================
+
+# ---- LITE: terminal only, no browser/GUI (~2GB smaller) --------------------
+FROM base AS lite
+USER root
+COPY --chown=executor:executor workflow-runner /runner
+COPY --chown=executor:executor session-server /session
+WORKDIR /runner
+RUN npm install && npm run build
+WORKDIR /workspace
+USER executor
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node --version && git --version && claude --version || exit 1
+
+ENTRYPOINT ["node", "/runner/dist/runner.js"]
+CMD []
+
+# ---- FULL: heavy-full + app code -------------------------------------------
+FROM heavy-full AS full
+USER root
+COPY --chown=executor:executor workflow-runner /runner
+COPY --chown=executor:executor session-server /session
+WORKDIR /runner
+RUN npm install && npm run build
+WORKDIR /workspace
+USER executor
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node --version && git --version && claude --version || exit 1
