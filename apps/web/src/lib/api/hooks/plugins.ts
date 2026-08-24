@@ -35,38 +35,6 @@ export function usePluginStatus(type: string, enabled = true) {
   });
 }
 
-/** Other portals' connected tools, so the wizard can offer "copy from". */
-export function useCopyableConnections(enabled = true) {
-  const getToken = useAuthToken();
-
-  return useQuery({
-    queryKey: [...queryKeys.plugins.all, "copyable"],
-    queryFn: async () => {
-      const token = await getToken();
-      const { portals } = await api.plugins.copyableConnections(token);
-      return portals;
-    },
-    enabled,
-  });
-}
-
-/** Copy connected tools from another portal into the current one. */
-export function useCopyConnections() {
-  const getToken = useAuthToken();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (sourceOrganizationId: string) => {
-      const token = await getToken();
-      return api.plugins.copyConnections(sourceOrganizationId, token);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.integrations.all });
-    },
-  });
-}
-
 export function useConnectPlugin() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

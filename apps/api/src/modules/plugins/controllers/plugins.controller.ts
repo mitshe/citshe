@@ -22,7 +22,6 @@ import { PluginsService } from '../services/plugins.service';
 import { ConnectPluginDto } from '../dto/plugin.dto';
 import { AuthGuard } from '@/shared/auth';
 import { OrganizationId } from '../../../shared/decorators/organization.decorator';
-import { UserId } from '../../../shared/decorators/organization.decorator';
 
 @ApiTags('Plugins')
 @ApiBearerAuth('bearer')
@@ -36,30 +35,6 @@ export class PluginsController {
   async list(@OrganizationId() organizationId: string) {
     const plugins = await this.plugins.findAll(organizationId);
     return { plugins };
-  }
-
-  @Get('copyable-connections')
-  @ApiOperation({
-    summary: "List other portals' connected tools (for copy-from)",
-  })
-  async copyableConnections(@UserId() userId: string) {
-    const portals = await this.plugins.listCopyableConnections(userId);
-    return { portals };
-  }
-
-  @Post('copy-connections')
-  @ApiOperation({ summary: 'Copy connected tools from another portal' })
-  @HttpCode(HttpStatus.OK)
-  async copyConnections(
-    @OrganizationId() organizationId: string,
-    @UserId() userId: string,
-    @Body() dto: { sourceOrganizationId: string },
-  ) {
-    return this.plugins.copyConnectionsFrom(
-      organizationId,
-      dto.sourceOrganizationId,
-      userId,
-    );
   }
 
   @Post()

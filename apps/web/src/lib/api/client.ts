@@ -59,7 +59,15 @@ export class ApiError extends Error {
     public statusText: string,
     public data?: unknown,
   ) {
-    super(`API Error: ${status} ${statusText}`);
+    // Prefer the server's human message ("Connect GitHub first …") over the
+    // raw "API Error: 400 Bad Request", so UI that shows err.message reads well.
+    const serverMsg =
+      data &&
+      typeof data === "object" &&
+      typeof (data as { message?: unknown }).message === "string"
+        ? ((data as { message: string }).message)
+        : null;
+    super(serverMsg || `API Error: ${status} ${statusText}`);
     this.name = "ApiError";
   }
 }
@@ -725,21 +733,23 @@ export const api = {
       { method: "POST", body: JSON.stringify(data), token },
     ),
 
+  // Atomic "New project": portal + repo + build task, all-or-nothing.
+  newProject: (
+    data: {
+      name: string;
+      repoName: string;
+      buildSpec: Record<string, unknown>;
+    },
+    token: string,
+  ) =>
+    request<{ organizationId: string; taskId: string; repoFullPath: string }>(
+      "/new-project",
+      { method: "POST", body: JSON.stringify(data), token },
+    ),
+
   plugins: {
     list: (token: string) =>
       request<{ plugins: Plugin[] }>("/plugins", { token }),
-
-    copyableConnections: (token: string) =>
-      request<{
-        portals: { organizationId: string; name: string; tools: string[] }[];
-      }>("/plugins/copyable-connections", { token }),
-
-    copyConnections: (sourceOrganizationId: string, token: string) =>
-      request<{ copied: number }>("/plugins/copy-connections", {
-        method: "POST",
-        body: JSON.stringify({ sourceOrganizationId }),
-        token,
-      }),
 
     connect: (data: ConnectPluginDto, token: string) =>
       request<{ plugin: Plugin }>("/plugins", {

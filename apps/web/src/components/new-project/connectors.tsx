@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   ChevronDown,
-  Copy,
   ExternalLink,
   Loader2,
   Plus,
@@ -15,11 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusDot } from "@/components/ui/status-dot";
-import {
-  usePlugins,
-  useConnectPlugin,
-  useCopyableConnections,
-} from "@/lib/api/hooks/plugins";
+import { usePlugins, useConnectPlugin } from "@/lib/api/hooks/plugins";
 import {
   useIntegrations,
   useCreateIntegration,
@@ -109,101 +104,33 @@ const CONNECTORS: ConnectorDef[] = [
 ];
 
 export function Connectors({
-  copyFromOrgId,
-  onCopyFromChange,
+  onGithubStatus,
 }: {
-  copyFromOrgId?: string | null;
-  onCopyFromChange?: (orgId: string | null) => void;
+  /** Reports whether GitHub is connected (so the wizard can gate Continue). */
+  onGithubStatus?: (connected: boolean) => void;
 }) {
   const { data: plugins } = usePlugins();
   const { data: integrations } = useIntegrations();
-  const { data: copyable } = useCopyableConnections(!!onCopyFromChange);
+
+  const githubConnected = !!integrations?.some(
+    (i) => i.type === "GITHUB" && i.status === "CONNECTED",
+  );
+
+  // Bubble GitHub status up whenever it changes.
+  useEffect(() => {
+    onGithubStatus?.(githubConnected);
+  }, [githubConnected, onGithubStatus]);
 
   const isConnected = (key: ConnectorKey): boolean => {
-    if (key === "GITHUB") {
-      return !!integrations?.some(
-        (i) => i.type === "GITHUB" && i.status === "CONNECTED",
-      );
-    }
+    if (key === "GITHUB") return githubConnected;
     return !!plugins?.some((p) => p.type === key && p.status === "CONNECTED");
   };
 
   return (
-    <div className="space-y-4">
-      {onCopyFromChange && copyable && copyable.length > 0 && (
-        <CopyFromPortal
-          portals={copyable}
-          selected={copyFromOrgId ?? null}
-          onChange={onCopyFromChange}
-        />
-      )}
-
-      <div className="divide-y divide-border rounded-lg border border-border">
-        {CONNECTORS.map((c) => (
-          <ConnectorRow key={c.key} def={c} connected={isConnected(c.key)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * "Reuse GitHub from another portal" — copies ONLY the GitHub login (one token
- * covers all repos). Stack tools are NOT reused: each portal gets its own
- * Cloudflare/Vercel/Neon resources, so those are always pasted below and Claude
- * provisions them per-portal.
- */
-function CopyFromPortal({
-  portals,
-  selected,
-  onChange,
-}: {
-  portals: { organizationId: string; name: string; tools: string[] }[];
-  selected: string | null;
-  onChange: (orgId: string | null) => void;
-}) {
-  return (
-    <div className="space-y-2 rounded-lg border border-border bg-surface-inset/40 p-3">
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <Copy className="size-4 text-muted-foreground" />
-        Reuse GitHub from another portal
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Use the GitHub login you already connected — no need to reconnect it.
-      </p>
-      <div className="space-y-1.5 pt-1">
-        {portals.map((p) => {
-          const active = selected === p.organizationId;
-          return (
-            <button
-              key={p.organizationId}
-              type="button"
-              onClick={() => onChange(active ? null : p.organizationId)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md border border-border bg-surface-card px-3 py-2 text-left transition-linear hover:border-border-strong",
-                active && "border-primary bg-primary/[0.06]",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border-strong",
-                )}
-              >
-                {active && <Check className="size-3" />}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                {p.name}
-              </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                GitHub
-              </span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="divide-y divide-border rounded-lg border border-border">
+      {CONNECTORS.map((c) => (
+        <ConnectorRow key={c.key} def={c} connected={isConnected(c.key)} />
+      ))}
     </div>
   );
 }

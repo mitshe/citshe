@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   GitBranch,
@@ -23,8 +24,6 @@ import { RadioCard } from "@/components/ui/radio-card";
 import { WizardProgress } from "@/components/ui/wizard-progress";
 import { CreateOrgDialog } from "@/components/layout/create-org-dialog";
 import { useAuthContext } from "@/lib/auth";
-import { useCreateTask, useBuildTask } from "@/lib/api/hooks/tasks";
-import { useCopyConnections } from "@/lib/api/hooks/plugins";
 import { useAuthToken } from "@/lib/api/hooks/shared";
 import { api } from "@/lib/api/client";
 import { Connectors } from "./connectors";
@@ -75,15 +74,11 @@ const PROMPT_CHIPS = [
 
 export function NewPortalPage() {
   const router = useRouter();
-  const { createOrganization } = useAuthContext();
-  const createTask = useCreateTask();
-  const buildTask = useBuildTask();
-  const copyConnections = useCopyConnections();
+  const { switchOrganization } = useAuthContext();
   const getToken = useAuthToken();
 
-  // "Copy tools from another portal" — the source org id, applied after the new
-  // portal is created (the target org doesn't exist until then).
-  const [copyFromOrgId, setCopyFromOrgId] = useState<string | null>(null);
+  // GitHub connected — gates the Connect step (a project needs a repo).
+  const [githubConnected, setGithubConnected] = useState(false);
 
   const [step, setStep] = useState<Step>("entry");
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -136,7 +131,9 @@ export function NewPortalPage() {
           (mode !== "refresh" || isValidUrl(sourceUrl))
         );
       case "connect":
-        return true; // GitHub is validated at build time
+        // GitHub is REQUIRED — the project needs a repo. Block Continue until
+        // it's connected (or a portal is picked to reuse it from).
+        return githubConnected;
       case "repo": {
         const n = (repoEdited ? repoName : suggestedRepo).trim();
         return n.length > 0 && /^[A-Za-z0-9._-]+$/.test(n);
@@ -174,56 +171,33 @@ export function NewPortalPage() {
         );
       }
 
-      // 1. Create the portal (this also switches the active org).
-      setBuildStep("Creating the portal…");
-      await createOrganization(name.trim());
-
-      // 2. Reuse GitHub from another portal, if chosen. HARD — the repo step
-      // needs GitHub, so a failure here must stop (no silent fallback).
-      if (copyFromOrgId) {
-        setBuildStep("Reusing your GitHub login…");
-        await copyConnections.mutateAsync(copyFromOrgId);
-      }
-
-      // 3. Create the GitHub repo up-front and register it in the portal. HARD —
-      // if this fails (e.g. GitHub not connected), stop and tell the user; we do
-      // NOT quietly build without a tracked repo.
-      setBuildStep("Creating the repository…");
-      const { repository } = await api.repositoriesCreate(
-        {
-          name: (repoEdited ? repoName : suggestedRepo).trim(),
-          description: `${name.trim()} — built with citshe`,
-          private: visibility !== "public",
-        },
-        await getToken(), // fresh token — org switched above
-      );
-
-      // 4. Create the build task bound to that repo.
-      setBuildStep("Setting up the build…");
-      const spec: BuildSpec = {
+      // ONE atomic call: the backend creates portal + GitHub repo + build task
+      // in a single transaction — all-or-nothing, so a failure NEVER leaves an
+      // orphan portal behind (the bug where every retry made a new org).
+      setBuildStep("Creating your project…");
+      const buildSpec: Record<string, unknown> = {
         mode,
         prompt: prompt.trim(),
         visibility,
-        repositoryId: repository.id,
-        repoFullPath: repository.fullPath,
         ...(mode === "refresh" && sourceUrl.trim()
           ? { sourceUrl: sourceUrl.trim() }
           : {}),
         ...(stackHint ? { stackHint } : {}),
         ...(hostingHint ? { hostingHint } : {}),
       };
-      const title =
-        mode === "refresh" ? `Refresh: ${name.trim()}` : `Build: ${name.trim()}`;
-      const task = await createTask.mutateAsync({
-        title: title.slice(0, 200),
-        buildSpec: spec,
-      });
+      const { organizationId, taskId } = await api.newProject(
+        {
+          name: name.trim(),
+          repoName: (repoEdited ? repoName : suggestedRepo).trim(),
+          buildSpec,
+        },
+        token,
+      );
 
-      // 5. Kick it off, then jump to the task to watch it work.
-      setBuildStep("Starting Claude…");
-      await buildTask.mutateAsync(task.id);
-
-      router.push(`/tasks/${task.id}`);
+      // Switch the panel to the new portal, then jump to the build task.
+      setBuildStep("Opening your project…");
+      await switchOrganization(organizationId).catch(() => undefined);
+      router.push(`/tasks/${taskId}`);
     } catch (err) {
       const msg =
         err instanceof Error && err.message
@@ -430,14 +404,19 @@ export function NewPortalPage() {
             title="Last thing — access"
             subtitle="citshe needs the accounts it will build your project on. You connect these once."
           >
-            <Connectors
-              copyFromOrgId={copyFromOrgId}
-              onCopyFromChange={setCopyFromOrgId}
-            />
-            <p className="mt-3 text-xs text-text-subtle">
-              GitHub is required. The rest are optional — if a tool is missing
-              when Claude needs it, it will ask on the board.
-            </p>
+            <Connectors onGithubStatus={setGithubConnected} />
+            {githubConnected ? (
+              <p className="mt-3 text-xs text-text-subtle">
+                The rest are optional — if a tool is missing when Claude needs
+                it, it will ask on the board.
+              </p>
+            ) : (
+              <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-warn">
+                <AlertCircle className="size-3.5" />
+                Connect GitHub to continue — your project needs a place for its
+                code.
+              </p>
+            )}
           </StepShell>
         )}
 

@@ -36,6 +36,7 @@ import { AuditApiModule } from './modules/audit/audit.module';
 import { UsersModule } from './modules/users/users.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { McpModule } from './modules/mcp/mcp.module';
+import { NewProjectModule } from './modules/new-project/new-project.module';
 import { SkillsModule } from './modules/skills/skills.module';
 import { SchedulesModule } from './modules/schedules/schedules.module';
 import { CliModule } from './modules/cli/cli.module';
@@ -160,6 +161,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     UsersModule,
     SessionsModule,
     McpModule,
+    NewProjectModule,
     SkillsModule,
     SchedulesModule,
     CliModule,
