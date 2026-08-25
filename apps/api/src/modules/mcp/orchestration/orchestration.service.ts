@@ -426,6 +426,16 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     const existing = await this.findPendingJob(organizationId, taskId);
     if (existing) return false;
 
+    // CRITICAL: the jobId is `task-<id>` (stable per task). BullMQ REFUSES to
+    // add a job whose id already exists — even a completed/failed one from a
+    // previous run. So a re-run ("Send back to Claude") or a watchdog
+    // re-enqueue would silently no-op and the task would sit QUEUED forever.
+    // Remove any leftover finished job first so add() actually enqueues.
+    const stale = await this.taskQueue.getJob(`task-${taskId}`);
+    if (stale) {
+      await stale.remove().catch(() => undefined);
+    }
+
     await this.taskQueue.add(
       'run',
       { taskId, organizationId },
