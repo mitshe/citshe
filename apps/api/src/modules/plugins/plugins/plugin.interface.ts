@@ -59,7 +59,10 @@ export interface PluginWarning {
   severity: 'warn' | 'info';
   label: string;
   description?: string;
+  /** A write-action (e.g. "Add domain") — runs through runAction. */
   action?: PluginAction;
+  /** A plain link to fix it yourself (e.g. the provider dashboard). */
+  link?: PluginLink;
 }
 
 /** Normalized status every plugin returns — the shape the UI renders. */

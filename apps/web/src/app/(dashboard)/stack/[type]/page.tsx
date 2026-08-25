@@ -591,11 +591,21 @@ function PluginDashboard({
                   </p>
                 )}
               </div>
-              {w.action && (
+              {w.link ? (
+                <a
+                  href={w.link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-linear hover:bg-surface-hover"
+                >
+                  {w.link.label}
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </a>
+              ) : w.action ? (
                 <div className="shrink-0">
                   <PluginActionButton type={type} action={w.action} />
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}

@@ -778,10 +778,12 @@ class CloudflarePlugin implements StackPlugin {
             const source = proj.source as Record<string, unknown> | null;
             const hasGit = !!source && !!source.type;
 
-            const openInCf: PluginAction = {
-              id: `open:${latestProject}`,
+            // A plain link (not a runAction) straight to this project's page in
+            // the Cloudflare dashboard — where the user connects a repo / flips
+            // auto-deploy on. It's a fix-it-yourself step, not something we run.
+            const openInCf = {
               label: 'Open in Cloudflare',
-              target: latestProject,
+              url: `https://dash.cloudflare.com/${accountId}/pages/view/${latestProject}`,
             };
 
             if (!hasGit) {
@@ -791,7 +793,7 @@ class CloudflarePlugin implements StackPlugin {
                 label: 'No Git connection',
                 description:
                   'This site is deployed by manual upload. Connect its repo in Cloudflare (one-time, ~2 min) so every push auto-deploys.',
-                action: openInCf,
+                link: openInCf,
               });
             } else {
               // Git connected — is the production auto-deploy trigger on?
@@ -819,7 +821,7 @@ class CloudflarePlugin implements StackPlugin {
                   label: 'Auto-deploy off',
                   description:
                     'A repo is connected but production auto-deploy is off — pushes won’t deploy until you enable it in Cloudflare.',
-                  action: openInCf,
+                  link: openInCf,
                 });
               }
             }
