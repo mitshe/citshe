@@ -64,11 +64,6 @@ import {
   queryKeys,
 } from "@/lib/api/hooks";
 import { useSocket } from "@/lib/socket/socket-context";
-import {
-  ActivityTimeline,
-  normalizeAgentLogs,
-  extractResultSummary,
-} from "../../tasks/components/activity-timeline";
 import { toast } from "sonner";
 import type { SessionStatus } from "@/lib/api/types";
 
@@ -1062,28 +1057,36 @@ export default function SessionDetailPage() {
 
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-hidden">
-            {/* Progress tab — the human activity feed for the worker's task. */}
+            {/* Progress tab — the SAME live, formatted stream the worker prints
+                ("› Bash …", "› Skill", Claude's own text) rendered read-only.
+                This is the human read-through of what Claude is doing; the
+                interactive Terminal tab (below) owns the attach, this one just
+                watches the shared output stream. */}
             {tabs
               .filter((t) => t.type === "progress")
               .map((tab) => (
                 <div
                   key={tab.id}
-                  className="h-full w-full overflow-y-auto"
-                  style={{ display: activeTabId === tab.id ? "block" : "none" }}
+                  className="bg-surface-inset"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: activeTabId === tab.id ? "block" : "none",
+                  }}
                 >
-                  {workerTask ? (
-                    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
-                      <ActivityTimeline
-                        taskId={workerTask.id}
-                        agentLogs={normalizeAgentLogs(workerTask.agentLogs)}
-                        resultSummary={extractResultSummary(workerTask.result)}
-                        emptyLabel="No progress yet — Claude is just getting started."
-                      />
+                  {isCreating ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      Starting up — Claude will begin shortly…
                     </div>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      No task attached to this session.
-                    </div>
+                    <TerminalView
+                      sessionId={sessionId}
+                      terminalId={agentTerminalId}
+                      isRunning={isRunning}
+                      cmd={buildAgentCmd()}
+                      isVisible={activeTabId === tab.id}
+                      readOnly
+                    />
                   )}
                 </div>
               ))}

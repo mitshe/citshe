@@ -339,6 +339,16 @@ function extractSiteUrl(result: Task["result"]): string | null {
 
 const CLOSED_STATUSES: TaskStatus[] = ["COMPLETED", "CANCELLED", "FAILED"];
 const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
+// Statuses from which the user can (re)run the task through a worker. REVIEW and
+// COMPLETED are included so you can send a finished task BACK to Claude with
+// review notes; IN_PROGRESS/ANALYZING (already running) and CANCELLED are not.
+const RERUNNABLE_STATUSES: TaskStatus[] = [
+  "PENDING",
+  "QUEUED",
+  "REVIEW",
+  "COMPLETED",
+  "FAILED",
+];
 
 // Statuses the user can pick inline (open/working states only).
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
@@ -407,7 +417,9 @@ export function TaskDetail({
       } else {
         await enqueueTask.mutateAsync(task.id);
       }
-      toast.success("Delegated to a worker");
+      toast.success(
+        isReRun ? "Sent back to Claude with your notes" : "Delegated to a worker",
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run task");
     }
@@ -526,7 +538,15 @@ export function TaskDetail({
 
   const isTaskClosed =
     task.closedAt != null || CLOSED_STATUSES.includes(task.status);
-  const canRun = OPEN_STATUSES.includes(task.status);
+  const canRun = RERUNNABLE_STATUSES.includes(task.status);
+  // A task that already ran once (REVIEW / has a session) is a RE-RUN — the
+  // action becomes "Send back to Claude" (with your review notes) rather than
+  // the first "Process with AI".
+  const isReRun =
+    task.status === "REVIEW" ||
+    task.status === "COMPLETED" ||
+    (!!task.sessionId && !OPEN_STATUSES.includes(task.status));
+  const runLabel = isReRun ? "Send back to Claude" : "Process with AI";
   const labels = task.labels ?? [];
   const agentLogs = normalizeAgentLogs(task.agentLogs);
   const resultSummary = extractResultSummary(task.result);
@@ -569,7 +589,7 @@ export function TaskDetail({
         {canRun && (
           <DropdownMenuItem onClick={runTask} disabled={runningTask}>
             <Sparkles className="w-4 h-4 mr-2" />
-            Process with AI
+            {runLabel}
           </DropdownMenuItem>
         )}
         {fullPageHref && (
@@ -675,7 +695,7 @@ export function TaskDetail({
           ) : (
             <Sparkles className="mr-2 h-3.5 w-3.5" />
           )}
-          Process with AI
+          {runLabel}
         </Button>
       )}
       {siteUrl && (

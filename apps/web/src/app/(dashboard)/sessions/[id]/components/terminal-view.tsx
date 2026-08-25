@@ -11,12 +11,21 @@ export function TerminalView({
   isRunning,
   cmd,
   isVisible = true,
+  readOnly = false,
 }: {
   sessionId: string;
   terminalId: string;
   isRunning: boolean;
   cmd?: string[];
   isVisible?: boolean;
+  /**
+   * Read-only "watch" mode: render the live stream but never send input and
+   * never (re)start the attach. Used by the session's "Progress" tab, which
+   * shows the SAME formatted stream as the interactive Terminal tab (the latter
+   * owns the attach; a second start() would flap the tmux client). No input
+   * handler, no mobile key bar, no cursor blink.
+   */
+  readOnly?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<HTMLDivElement>(null);
@@ -72,7 +81,8 @@ export function TerminalView({
       if (disposed) return;
 
       terminal = new Terminal({
-        cursorBlink: true,
+        cursorBlink: !readOnly,
+        disableStdin: readOnly,
         fontFamily:
           "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
         // Smaller on phones so a usable number of columns fits at ~375px.
@@ -347,20 +357,23 @@ export function TerminalView({
     unsubscribeFromSession,
   ]);
 
-  // Forward keyboard input via WebSocket
+  // Forward keyboard input via WebSocket (never in read-only "watch" mode).
   useEffect(() => {
-    if (!xtermRef.current || !socket || !isRunning) return;
+    if (readOnly || !xtermRef.current || !socket || !isRunning) return;
 
     const disposable = xtermRef.current.onData((data: string) => {
       socket.emit("session:input", { terminalId, input: data });
     });
 
     return () => disposable.dispose();
-  }, [terminalReady, socket, terminalId, isRunning]);
+  }, [terminalReady, socket, terminalId, isRunning, readOnly]);
 
-  // Start terminal process
+  // Start terminal process. Read-only "watch" tabs (Progress) do NOT start the
+  // attach — the interactive Terminal tab owns it; both render the same output
+  // via the shared session:output stream, so a second start() would only flap
+  // the tmux client. We still hydrate the scrollback buffer below.
   useEffect(() => {
-    if (!terminalReady || !isRunning) return;
+    if (readOnly || !terminalReady || !isRunning) return;
 
     startTerminal
       .mutateAsync({ sessionId, terminalId, cmd })
@@ -479,7 +492,7 @@ export function TerminalView({
         // On touch devices, tapping the terminal must NOT open the keyboard —
         // that would fight scrolling. The keyboard only opens via the ⌨ button
         // in the key bar. On desktop, a click focuses as usual.
-        onClick={isTouch ? undefined : focusTerminal}
+        onClick={isTouch || readOnly ? undefined : focusTerminal}
         // Small breathing room so text isn't glued to the panel edge; the fit
         // addon accounts for this padding when computing cols/rows.
         style={{
@@ -493,7 +506,7 @@ export function TerminalView({
       >
         <div ref={termRef} style={{ width: "100%", height: "100%" }} />
       </div>
-      {isTouch && isRunning && (
+      {isTouch && isRunning && !readOnly && (
         <MobileKeyBar
           onSend={sendSequence}
           onFocus={focusTerminal}

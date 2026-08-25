@@ -305,11 +305,15 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       status: TaskStatus.QUEUED,
     });
 
+    // enqueueTask is an EXPLICIT user action ("Process with AI" / "Send back to
+    // Claude"), so dispatch it now rather than waiting on the autoPull toggle —
+    // autoPull governs the automatic draining of the board, not a manual run.
+    // Still respect a hard queue-pause.
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { queuePaused: true, autoPull: true },
+      select: { queuePaused: true },
     });
-    if (org?.autoPull && !org.queuePaused) {
+    if (!org?.queuePaused) {
       await this.addTaskJob(organizationId, taskId, queueOrder);
     }
 
@@ -911,12 +915,17 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       });
 
       const comments = await this.collectUserComments(taskId);
+      // On a re-run ("Send back to Claude"), continue the SAME branch/PR the
+      // previous run left in task.result, so iteration adds commits to one PR
+      // instead of opening a new one each time.
+      const priorDelivery = await this.getPriorDelivery(taskId);
       const prompt = this.buildWorkerInstructions(
         task.title,
         task.description,
         task.deliveryMode ?? 'PR',
         comments,
         (task.buildSpec as BuildSpec | null) ?? null,
+        priorDelivery,
       );
       // Run Claude INTERACTIVELY inside the shared tmux "agent" window so you
       // can watch it live and even take over (attach to the same window). We
@@ -1121,6 +1130,32 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
    * comments that appear AFTER the most recent "executing" entry; if the worker
    * never ran, all comments count.
    */
+  /**
+   * The branch/PR a previous run of this task produced (from task.result), so a
+   * re-run can continue on the SAME branch and push to the SAME pull request.
+   * Returns null on the first run (no prior result).
+   */
+  private async getPriorDelivery(
+    taskId: string,
+  ): Promise<{ branch?: string; prUrl?: string } | null> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { result: true },
+    });
+    const r = (task?.result ?? null) as Record<string, unknown> | null;
+    if (!r) return null;
+    const branch =
+      typeof r.branch === 'string' && r.branch.trim()
+        ? r.branch.trim()
+        : undefined;
+    const prUrl =
+      typeof r.prUrl === 'string' && r.prUrl.trim()
+        ? r.prUrl.trim()
+        : undefined;
+    if (!branch && !prUrl) return null;
+    return { branch, prUrl };
+  }
+
   private async collectUserComments(taskId: string): Promise<string[]> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -1497,6 +1532,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     deliveryMode: DeliveryMode = 'PR',
     comments: string[] = [],
     buildSpec?: BuildSpec | null,
+    priorDelivery?: { branch?: string; prUrl?: string } | null,
   ): string {
     // "New project" wizard tasks get a dedicated builder prompt: the worker
     // creates its own repo, builds a site, and deploys it.
@@ -1515,16 +1551,32 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         : base;
 
     // The worker prints a machine-readable marker as its LAST line so citshe
-    // can record the real PR link / pushed branch on the task.
-    const delivery =
-      deliveryMode === 'DIRECT_PUSH'
-        ? `When done, commit your changes and push them directly to the default ` +
-          `branch (master/main). Do NOT open a pull request. As the VERY LAST ` +
-          `line of your output, print exactly: PUSHED: <branch>@<short-sha>`
-        : `When done, commit your changes on a new branch named ` +
-          `citshe/<short-slug> and open a pull request against the default ` +
-          `branch. As the VERY LAST line of your output, print exactly: ` +
-          `PR_URL: <full pull request url>`;
+    // can record the real PR link / pushed branch on the task. On a re-run we
+    // point it at the EXISTING branch/PR so iteration adds commits to one PR.
+    let delivery: string;
+    if (deliveryMode === 'DIRECT_PUSH') {
+      delivery =
+        `When done, commit your changes and push them directly to the default ` +
+        `branch (master/main). Do NOT open a pull request. As the VERY LAST ` +
+        `line of your output, print exactly: PUSHED: <branch>@<short-sha>`;
+    } else if (priorDelivery?.branch) {
+      // Re-run: continue on the branch the previous run created.
+      const prNote = priorDelivery.prUrl
+        ? ` (pull request: ${priorDelivery.prUrl})`
+        : '';
+      delivery =
+        `This task already has work in progress on the branch ` +
+        `\`${priorDelivery.branch}\`${prNote}. Check it out, make the changes ` +
+        `on THAT branch and push more commits to the SAME pull request — do ` +
+        `NOT open a new PR. As the VERY LAST line of your output, print ` +
+        `exactly: PR_URL: <full pull request url>`;
+    } else {
+      delivery =
+        `When done, commit your changes on a new branch named ` +
+        `citshe/<short-slug> and open a pull request against the default ` +
+        `branch. As the VERY LAST line of your output, print exactly: ` +
+        `PR_URL: <full pull request url>`;
+    }
 
     return (
       `You are a worker agent. Complete this task end-to-end in the current ` +

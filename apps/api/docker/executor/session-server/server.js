@@ -1009,10 +1009,28 @@ function startClaudeAuthSeedSync() {
   const syncOnce = () => {
     try {
       const mine = readExpiry(MINE);
-      if (mine == null) return; // our token is blank/unreadable
+      // PROACTIVE REFRESH: the access token lives only ~8h. If we wait for it to
+      // expire, a NEW portal seeding from here gets a dead token ("OAuth session
+      // expired"). So when OUR token is within ~2h of expiry, poke `claude auth
+      // status` — that makes the CLI refresh the access token from the (long-
+      // lived) refresh token BEFORE it dies. Cheap, no inference call.
+      const now = Date.now();
+      if (typeof mine === 'number' && mine > 0 && mine - now < 2 * 3600_000) {
+        try {
+          execSilent('claude auth status', {
+            env: { ...process.env, HOME: HOME_DIR },
+            timeout: 20_000,
+          });
+        } catch {
+          // status may exit non-zero; the refresh side-effect still happens.
+        }
+      }
+
+      const mineNow = readExpiry(MINE); // re-read after a possible refresh
+      if (mineNow == null) return; // our token is blank/unreadable
       const seed = readExpiry(SEED);
       // Push when the seed is missing/blank, or ours is strictly newer.
-      if (seed == null || mine > seed) {
+      if (seed == null || mineNow > seed) {
         const tmp = '/seed/.credentials.json.tmp';
         fs.copyFileSync(MINE, tmp);
         fs.renameSync(tmp, SEED); // atomic replace
@@ -1024,9 +1042,10 @@ function startClaudeAuthSeedSync() {
     }
   };
 
-  // Sync shortly after start (Claude may refresh on first run), then hourly.
+  // Sync shortly after start, then every 15 min so a refreshed token propagates
+  // to the seed well before the ~8h access-token lifetime runs out.
   setTimeout(syncOnce, 60_000);
-  setInterval(syncOnce, 60 * 60_000);
+  setInterval(syncOnce, 15 * 60_000);
 }
 
 /**
