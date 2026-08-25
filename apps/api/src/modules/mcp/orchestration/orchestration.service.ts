@@ -1206,7 +1206,13 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         // also writes the plain final text to ${OUT} for the task summary.
         // Completion is signalled by writing ${DONEFILE} AFTER claude exits —
         // never by a pane marker (which the shell echo would false-trigger).
+        // Export PATH too (not just HOME): tmux runs an already-started shell
+        // whose PATH was frozen by /etc/profile, which resets it and drops
+        // ~/bin — so `citshe-stream` (installed in /home/executor/bin) was
+        // "command not found". Prepend it explicitly so the pipe formatter is
+        // always found, regardless of how the shell was launched.
         `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; ` +
+          `export PATH="/home/executor/bin:$PATH"; ` +
           `claude --print --permission-mode bypassPermissions ` +
           `--output-format stream-json --include-partial-messages --verbose ` +
           `< ${PROMPT} 2>&1 | citshe-stream ${OUT}; ` +

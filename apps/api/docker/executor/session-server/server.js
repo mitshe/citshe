@@ -386,6 +386,30 @@ function installCitsheTaskCli() {
  * Without this the worker ran headless `--print` which shows nothing until the
  * very end (the "Claude thinks in memory / dead terminal" problem).
  */
+/**
+ * Guarantee ~/bin is on PATH for EVERY shell in the container.
+ *
+ * The Dockerfile sets `ENV PATH=/home/executor/bin:...`, but /etc/profile
+ * resets PATH from scratch for login shells, and tmux runs a shell whose PATH
+ * is frozen before ~/bin exists — so `citshe-stream`, `citshe-task`, etc.
+ * (installed into ~/bin at runtime) come up "command not found". Append an
+ * idempotent PATH export to the shell rc files so any shell finds them.
+ */
+function ensureBinOnPath() {
+  const binDir = '/home/executor/bin';
+  const marker = '# --- citshe bin path ---';
+  const block = `\n${marker}\ncase ":$PATH:" in *":${binDir}:"*) ;; *) export PATH="${binDir}:$PATH";; esac\n`;
+  for (const rc of ['.bashrc', '.profile', '.zshrc']) {
+    const p = path.join(HOME_DIR, rc);
+    try {
+      const existing = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+      if (!existing.includes(marker)) fs.appendFileSync(p, block);
+    } catch (err) {
+      log(`Could not ensure ~/bin on PATH in ${rc}: ${err.message}`);
+    }
+  }
+}
+
 function installCitsheStreamCli() {
   const binDir = '/home/executor/bin';
   try {
@@ -942,6 +966,7 @@ async function setup() {
   configureGitAuthor();
   installSecretScanHook();
   installSkills(config.skills);
+  ensureBinOnPath();
   installCitsheStreamCli();
   installCitsheTaskCli();
   installCitsheShotCli();
