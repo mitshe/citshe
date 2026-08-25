@@ -567,9 +567,11 @@ function BuildHero({
         </a>
       ) : state === "nodeploy" && deployError ? (
         <span className="truncate text-sm text-warn">{deployError}</span>
-      ) : state === "building" && latestNote ? (
+      ) : state === "building" ? (
+        // Show the live worker note once it arrives; until then reassure rather
+        // than showing an opaque repo slug (or nothing) beside the pulse.
         <span className="truncate text-sm text-muted-foreground">
-          {latestNote}
+          {latestNote ?? "Setting things up — this takes a few minutes…"}
         </span>
       ) : (
         repoUrl && (
