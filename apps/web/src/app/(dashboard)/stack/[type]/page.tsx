@@ -12,6 +12,7 @@ import {
   Boxes,
   ChevronDown,
   AlertTriangle,
+  Info,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -558,6 +559,49 @@ function PluginDashboard({
       </Block>
     ) : null;
 
+  // Setup checklist: "you should finish this" hints the plugin surfaced (e.g.
+  // Cloudflare Pages with no Git connection / no custom domain). Not errors —
+  // things you can do yourself, with a link into the provider.
+  const warnings = status?.warnings ?? [];
+  const checklistEl =
+    warnings.length > 0 ? (
+      <div className="space-y-2">
+        {warnings.map((w) => {
+          const warn = w.severity === "warn";
+          return (
+            <div
+              key={w.code}
+              className={cn(
+                "flex items-start gap-2.5 rounded-lg border px-3.5 py-3",
+                warn
+                  ? "border-warn/30 bg-warn/[0.05]"
+                  : "border-border bg-surface-hover/40",
+              )}
+            >
+              {warn ? (
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
+              ) : (
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">{w.label}</p>
+                {w.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {w.description}
+                  </p>
+                )}
+              </div>
+              {w.action && (
+                <div className="shrink-0">
+                  <PluginActionButton type={type} action={w.action} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ) : null;
+
   // Overview trends band (capped at 3). When there's a Metrics tab, invite
   // the reader to the full grid.
   const trendsEl = hasTrends ? (
@@ -720,6 +764,7 @@ function PluginDashboard({
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-6">
           {heroEl}
+          {checklistEl}
           {tilesEl}
           {actionsEl}
           {trendsEl}
@@ -755,6 +800,7 @@ function PluginDashboard({
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div className="min-w-0 space-y-6">
             {heroEl}
+            {checklistEl}
             {tilesEl}
             {actionsEl}
             {trendsEl}

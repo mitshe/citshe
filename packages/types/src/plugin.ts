@@ -87,6 +87,23 @@ export interface PluginAction {
   prompt?: string;
 }
 
+/**
+ * A "you should finish setting this up" hint — shown as a checklist item, not
+ * an error. E.g. a Cloudflare Pages project deployed by manual upload with no
+ * Git connection, or running on *.pages.dev with no custom domain. We surface
+ * it rather than auto-fixing it (some steps, like Git-connect, are a one-time
+ * click in the provider's own dashboard).
+ */
+export interface PluginWarning {
+  /** Stable id for the check, e.g. "no_git_connection". */
+  code: string;
+  severity: "warn" | "info";
+  label: string;
+  description?: string;
+  /** Optional link/action (usually just "Open in <provider>"). */
+  action?: PluginAction;
+}
+
 /** Normalized status every plugin returns — the shape the UI renders. */
 export interface PluginStatus {
   type: PluginType;
@@ -96,6 +113,8 @@ export interface PluginStatus {
   items?: PluginItem[];
   links?: PluginLink[];
   actions?: PluginAction[];
+  /** Setup hints ("connect a repo", "add a domain") — shown as a checklist. */
+  warnings?: PluginWarning[];
   error?: string;
 }
 

@@ -48,6 +48,20 @@ export interface PluginAction {
   prompt?: string;
 }
 
+/**
+ * A "you should finish setting this up" hint — shown as a checklist item, not
+ * an error. E.g. a Cloudflare Pages project with no Git connection or no custom
+ * domain. Surfaced rather than auto-fixed (some steps are a one-time click in
+ * the provider's own dashboard).
+ */
+export interface PluginWarning {
+  code: string;
+  severity: 'warn' | 'info';
+  label: string;
+  description?: string;
+  action?: PluginAction;
+}
+
 /** Normalized status every plugin returns — the shape the UI renders. */
 export interface PluginStatus {
   type: PluginType;
@@ -57,6 +71,8 @@ export interface PluginStatus {
   items?: PluginItem[];
   links?: PluginLink[];
   actions?: PluginAction[];
+  /** Setup hints ("connect a repo", "add a domain") — shown as a checklist. */
+  warnings?: PluginWarning[];
   error?: string;
 }
 
@@ -171,7 +187,9 @@ export interface PreviewDeployment {
 export interface StackPlugin {
   type: PluginType;
   /** Validate a config (used by the connect dialog's Test button). */
-  testConnection(config: PluginConfig): Promise<{ ok: boolean; error?: string }>;
+  testConnection(
+    config: PluginConfig,
+  ): Promise<{ ok: boolean; error?: string }>;
   /** Fetch the live, normalized status shown on the card / home dashboard. */
   getStatus(config: PluginConfig): Promise<PluginStatus>;
   /** Run a write-action exposed in status.actions. Optional. */

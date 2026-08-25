@@ -7,6 +7,7 @@ import {
   PluginItem,
   PluginAction,
   PluginActionResult,
+  PluginWarning,
   PreviewDeployment,
   PluginResourceGroup,
   PluginResourceItem,
@@ -653,6 +654,7 @@ class CloudflarePlugin implements StackPlugin {
     const metrics: PluginMetric[] = [];
     const items: PluginItem[] = [];
     const actions: PluginAction[] = [];
+    const warnings: PluginWarning[] = [];
     let latestProject: string | undefined;
     let headline: { label: string; state: HealthState } = {
       label: 'Connected',
@@ -732,7 +734,9 @@ class CloudflarePlugin implements StackPlugin {
           });
         }
 
-        // Surface the custom domains already on the freshest project.
+        // Surface the custom domains already on the freshest project, and count
+        // them so we can flag "no custom domain" (running only on *.pages.dev).
+        let customDomainCount = 0;
         if (latestProject) {
           try {
             const dj = await this.get(
@@ -740,6 +744,11 @@ class CloudflarePlugin implements StackPlugin {
               `/accounts/${accountId}/pages/projects/${latestProject}/domains`,
             );
             const domains: Array<Record<string, unknown>> = dj?.result ?? [];
+            for (const d of domains) {
+              const name = (d.name as string) || '';
+              // *.pages.dev is the built-in default, not a custom domain.
+              if (name && !name.endsWith('.pages.dev')) customDomainCount++;
+            }
             for (const d of domains.slice(0, 5)) {
               const st = (d.status as string) || '';
               items.push({
@@ -750,6 +759,88 @@ class CloudflarePlugin implements StackPlugin {
             }
           } catch {
             // domains listing optional
+          }
+        }
+
+        // Setup checklist: read the project detail to see whether it's wired to
+        // a Git repo (auto-deploy) or deployed by manual upload (Wrangler). We
+        // signal these rather than auto-fixing them — connecting a repo is a
+        // one-time click in Cloudflare's own dashboard (OAuth, not API).
+        if (latestProject) {
+          try {
+            const pj = await this.get(
+              apiToken,
+              `/accounts/${accountId}/pages/projects/${latestProject}`,
+            );
+            const proj = (pj?.result ?? {}) as Record<string, unknown>;
+            // `source` is present (type: 'github'/'gitlab') when a repo is
+            // connected; absent/null for direct-upload projects.
+            const source = proj.source as Record<string, unknown> | null;
+            const hasGit = !!source && !!source.type;
+
+            const openInCf: PluginAction = {
+              id: `open:${latestProject}`,
+              label: 'Open in Cloudflare',
+              target: latestProject,
+            };
+
+            if (!hasGit) {
+              warnings.push({
+                code: 'no_git_connection',
+                severity: 'warn',
+                label: 'No Git connection',
+                description:
+                  'This site is deployed by manual upload. Connect its repo in Cloudflare (one-time, ~2 min) so every push auto-deploys.',
+                action: openInCf,
+              });
+            } else {
+              // Git connected — is the production auto-deploy trigger on?
+              const cfg = (proj.deployment_configs ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const prod = (cfg.production ?? {}) as Record<string, unknown>;
+              const trigger = prod.deployment_trigger as
+                | Record<string, unknown>
+                | undefined;
+              // Cloudflare marks auto-deploy off when the trigger type is
+              // 'ad_hoc' (manual) rather than 'github:push'/'git' etc.
+              const triggerType = (
+                (trigger?.type as string) || ''
+              ).toLowerCase();
+              const autoOff =
+                !trigger ||
+                triggerType === 'ad_hoc' ||
+                triggerType === 'manual';
+              if (autoOff) {
+                warnings.push({
+                  code: 'autodeploy_off',
+                  severity: 'warn',
+                  label: 'Auto-deploy off',
+                  description:
+                    'A repo is connected but production auto-deploy is off — pushes won’t deploy until you enable it in Cloudflare.',
+                  action: openInCf,
+                });
+              }
+            }
+
+            if (customDomainCount === 0) {
+              warnings.push({
+                code: 'no_custom_domain',
+                severity: 'info',
+                label: 'No custom domain',
+                description:
+                  'Running on the default *.pages.dev address. Add your own domain in Cloudflare when you’re ready.',
+                action: {
+                  id: `add-domain:${latestProject}`,
+                  label: 'Add domain',
+                  target: latestProject,
+                  prompt: `Custom domain to attach to ${latestProject} (e.g. app.example.com)`,
+                },
+              });
+            }
+          } catch {
+            // project-detail read optional — no checklist if it fails
           }
         }
 
@@ -1086,6 +1177,7 @@ class CloudflarePlugin implements StackPlugin {
       metrics,
       items: items.length ? items : undefined,
       actions: actions.length ? actions : undefined,
+      warnings: warnings.length ? warnings : undefined,
       links: [
         {
           label: 'Open in Cloudflare',
