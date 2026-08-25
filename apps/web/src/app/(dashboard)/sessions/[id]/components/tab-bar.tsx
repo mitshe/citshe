@@ -1,13 +1,20 @@
 "use client";
 
-import { X, Terminal as TerminalIcon, FileText, Globe, Plus } from "lucide-react";
+import {
+  X,
+  Terminal as TerminalIcon,
+  FileText,
+  Globe,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showContextMenu } from "./context-menu";
 
 export interface Tab {
   id: string;
   title: string;
-  type: "terminal" | "file" | "browser";
+  type: "terminal" | "file" | "browser" | "progress";
   filePath?: string;
   terminalId?: string;
   cmd?: string[];
@@ -104,7 +111,9 @@ export function TabBar({
             }
           }}
         >
-          {tab.type === "terminal" ? (
+          {tab.type === "progress" ? (
+            <Sparkles className="w-3.5 h-3.5" />
+          ) : tab.type === "terminal" ? (
             <TerminalIcon className="w-3.5 h-3.5" />
           ) : tab.type === "browser" ? (
             <Globe className="w-3.5 h-3.5" />

@@ -8,6 +8,8 @@ export const queryKeys = {
     list: (projectId?: string) =>
       [...queryKeys.tasks.all, "list", { projectId }] as const,
     detail: (id: string) => [...queryKeys.tasks.all, "detail", id] as const,
+    bySession: (sessionId: string) =>
+      [...queryKeys.tasks.all, "by-session", sessionId] as const,
   },
   schedules: {
     all: ["schedules"] as const,

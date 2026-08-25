@@ -122,6 +122,23 @@ export class TasksController {
     return this.tasksService.findAll(organizationId, filter);
   }
 
+  @Get('by-session/:sessionId')
+  @ApiOperation({
+    summary: 'Get the task a worker session is running (or null)',
+  })
+  @ApiResponse({ status: 200, description: 'Returns the task or null' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findBySession(
+    @OrganizationId() organizationId: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const task = await this.tasksService.findBySession(
+      organizationId,
+      sessionId,
+    );
+    return { task };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a task by ID' })
   @ApiResponse({

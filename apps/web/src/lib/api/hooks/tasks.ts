@@ -45,6 +45,21 @@ export function useTask(id: string) {
   });
 }
 
+/** The task a worker session is running (or null). Powers the session's Progress tab. */
+export function useTaskBySession(sessionId: string, enabled = true) {
+  const getToken = useAuthToken();
+
+  return useQuery({
+    queryKey: queryKeys.tasks.bySession(sessionId),
+    queryFn: async () => {
+      const token = await getToken();
+      const { task } = await api.tasks.bySession(sessionId, token);
+      return task;
+    },
+    enabled: enabled && !!sessionId,
+  });
+}
+
 export function useCreateTask() {
   const getToken = useAuthToken();
   const queryClient = useQueryClient();

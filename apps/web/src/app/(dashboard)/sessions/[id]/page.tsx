@@ -60,9 +60,15 @@ import {
   useDeleteSessionFile,
   useWriteSessionFile,
   usePushAndCreatePR,
+  useTaskBySession,
   queryKeys,
 } from "@/lib/api/hooks";
 import { useSocket } from "@/lib/socket/socket-context";
+import {
+  ActivityTimeline,
+  normalizeAgentLogs,
+  extractResultSummary,
+} from "../../tasks/components/activity-timeline";
 import { toast } from "sonner";
 import type { SessionStatus } from "@/lib/api/types";
 
@@ -112,6 +118,9 @@ export default function SessionDetailPage() {
 
   const queryClient = useQueryClient();
   const { data: session, isLoading, refetch } = useSession(sessionId);
+  // The task this session is a worker for (null for an ad-hoc terminal). Powers
+  // the "Progress" tab — the human activity feed next to the raw terminal.
+  const { data: workerTask } = useTaskBySession(sessionId);
   const { data: files = [], isLoading: filesLoading } = useSessionFiles(sessionId);
   const { data: gitStatuses = [] } = useSessionGitStatus(sessionId);
   const resumeSession = useResumeSession();
@@ -126,6 +135,7 @@ export default function SessionDetailPage() {
 
   // Tab state
   const agentTerminalId = `${sessionId}:agent`;
+  const progressTabId = `${sessionId}:progress`;
 
   // Build agent terminal command from session config
   const buildAgentCmd = useCallback((): string[] => {
@@ -151,29 +161,36 @@ export default function SessionDetailPage() {
 
   const [tabs, setTabs] = useState<Tab[]>([]);
 
-  // Initialize tabs when session loads
+  const [activeTabId, setActiveTabId] = useState(agentTerminalId);
+
+  // Initialize tabs when session loads. A worker session (one running a task)
+  // gets a "Progress" tab FIRST — the human activity feed (Claude's notes,
+  // screenshots, summary) — shown by default so a non-dev watches that instead
+  // of the raw terminal. The Terminal tab stays for the developer view.
   useEffect(() => {
     if (!session || tabs.length > 0) return;
     const hasAgent = !!session.aiCredentialId;
     const agentTitle = hasAgent
       ? `Agent: ${session.name}`
       : `Terminal: ${session.name}`;
-    // Only a terminal tab. The in-app browser preview was removed — it never
-    // worked reliably (localhost:PORT refused to connect) and Claude can test
-    // in its own container instead.
-    const initialTabs: Tab[] = [
-      {
-        id: agentTerminalId,
-        title: agentTitle,
-        type: "terminal",
-        closeable: true,
-        terminalId: agentTerminalId,
-        cmd: buildAgentCmd(),
-      },
-    ];
-    setTabs(initialTabs);
-  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [activeTabId, setActiveTabId] = useState(agentTerminalId);
+    const terminalTab: Tab = {
+      id: agentTerminalId,
+      title: agentTitle,
+      type: "terminal",
+      closeable: true,
+      terminalId: agentTerminalId,
+      cmd: buildAgentCmd(),
+    };
+    if (workerTask) {
+      setTabs([
+        { id: progressTabId, title: "Progress", type: "progress", closeable: false },
+        terminalTab,
+      ]);
+      setActiveTabId(progressTabId);
+    } else {
+      setTabs([terminalTab]);
+    }
+  }, [session, workerTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inline session-name editing (header)
   const [editingName, setEditingName] = useState(false);
@@ -253,6 +270,24 @@ export default function SessionDetailPage() {
       socket.off("session:status", handleStatus);
     };
   }, [socket, sessionId, refetch]);
+
+  // Keep the Progress tab live: refetch the worker task when the agent logs
+  // activity or the task status changes (notes/screenshots/summary arrive).
+  useEffect(() => {
+    if (!socket || !sessionId) return;
+    const refresh = () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.tasks.bySession(sessionId),
+      });
+    socket.on("agent:log", refresh);
+    socket.on("task:update", refresh);
+    socket.on("task:completed", refresh);
+    return () => {
+      socket.off("agent:log", refresh);
+      socket.off("task:update", refresh);
+      socket.off("task:completed", refresh);
+    };
+  }, [socket, sessionId, queryClient]);
 
   // Fallback polling when session is CREATING
   const currentStatus = session?.status as string | undefined;
@@ -1027,6 +1062,32 @@ export default function SessionDetailPage() {
 
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-hidden">
+            {/* Progress tab — the human activity feed for the worker's task. */}
+            {tabs
+              .filter((t) => t.type === "progress")
+              .map((tab) => (
+                <div
+                  key={tab.id}
+                  className="h-full w-full overflow-y-auto"
+                  style={{ display: activeTabId === tab.id ? "block" : "none" }}
+                >
+                  {workerTask ? (
+                    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+                      <ActivityTimeline
+                        taskId={workerTask.id}
+                        agentLogs={normalizeAgentLogs(workerTask.agentLogs)}
+                        resultSummary={extractResultSummary(workerTask.result)}
+                        emptyLabel="No progress yet — Claude is just getting started."
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      No task attached to this session.
+                    </div>
+                  )}
+                </div>
+              ))}
+
             {/* Terminal tabs */}
             {tabs
               .filter((t) => t.type === "terminal")

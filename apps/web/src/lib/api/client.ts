@@ -134,6 +134,12 @@ export const api = {
     get: (id: string, token: string) =>
       request<{ task: Task }>(`/tasks/${id}`, { token }),
 
+    // The task a worker session is running (or null for an ad-hoc terminal).
+    bySession: (sessionId: string, token: string) =>
+      request<{ task: Task | null }>(`/tasks/by-session/${sessionId}`, {
+        token,
+      }),
+
     create: (data: CreateTaskDto, token: string) =>
       request<{ task: Task }>("/tasks", {
         method: "POST",

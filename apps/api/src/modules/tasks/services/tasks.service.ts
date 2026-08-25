@@ -123,6 +123,20 @@ export class TasksService {
   }
 
   /**
+   * The task a worker session is running (Task.sessionId = this session). Used
+   * by the session view's "Progress" tab to show the human activity feed next
+   * to the raw terminal. Returns null (not 404) for ad-hoc terminals with no
+   * task, so the caller can simply hide the tab.
+   */
+  async findBySession(organizationId: string, sessionId: string) {
+    return this.prisma.task.findFirst({
+      where: { organizationId, sessionId },
+      include: { repository: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /**
    * Attach a screenshot (usually from a worker's `citshe-shot`) to a task and
    * append a `screenshot` entry to its activity feed. Bytes are stored in the
    * DB; the UI loads them from GET /tasks/:id/attachments/:attachmentId.
