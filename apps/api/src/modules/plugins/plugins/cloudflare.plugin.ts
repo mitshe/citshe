@@ -15,13 +15,25 @@ import {
 } from './plugin.interface';
 import { pluginRegistry } from './plugin.registry';
 
-/** Fuzzy match a repo name to a project name (ignore separators/case). */
+/**
+ * Fuzzy match a repo name to a Cloudflare resource name (project/zone/worker/
+ * bucket). Ignores separators/case. Matches when either normalized name contains
+ * the other (e.g. repo "dronexamine-com" ↔ zone "dronexamine.com"), OR when they
+ * share the same brand token — the first separator-delimited word (e.g. repo
+ * "maistero-com" ↔ bucket "maistero-main", zone "maistero.com" — all "maistero").
+ * The brand token must be reasonably distinctive (≥4 chars) so short generic
+ * prefixes like "app-" or "web-" don't over-match across unrelated portals.
+ */
 function nameMatches(project: string, repo?: string): boolean {
   if (!repo) return true;
   const norm = (s: string) => s.toLowerCase().replace(/[-_.]/g, '');
   const p = norm(project);
   const r = norm(repo.split('/').pop() || repo);
-  return p.includes(r) || r.includes(p);
+  if (p.includes(r) || r.includes(p)) return true;
+  // Brand token = first word before any separator, from the repo's basename.
+  const brand = (repo.split('/').pop() || repo).toLowerCase().split(/[-_.]/)[0];
+  const projBrand = project.toLowerCase().split(/[-_.]/)[0];
+  return brand.length >= 4 && brand === projBrand;
 }
 
 const API = 'https://api.cloudflare.com/client/v4';
@@ -570,34 +582,38 @@ class CloudflarePlugin implements StackPlugin {
       groups.push({ kind: 'zones', label: 'Domains', items: zoneItems });
     }
 
-    const workers = await safeList(
-      `/accounts/${accountId}/workers/scripts`,
-      (w) => ({
-        id: w.id as string,
-        name: w.id as string,
-        meta: w.modified_on ? timeAgo(w.modified_on as string) : undefined,
-      }),
-      (j) => (j.result as Array<Record<string, unknown>>) ?? [],
-    );
+    const workers = (
+      await safeList(
+        `/accounts/${accountId}/workers/scripts`,
+        (w) => ({
+          id: w.id as string,
+          name: w.id as string,
+          meta: w.modified_on ? timeAgo(w.modified_on as string) : undefined,
+        }),
+        (j) => (j.result as Array<Record<string, unknown>>) ?? [],
+      )
+    ).filter((w) => inScope(w.name, scopeRepos));
     if (workers.length)
       groups.push({ kind: 'workers', label: 'Workers', items: workers });
 
-    const r2 = await safeList(
-      `/accounts/${accountId}/r2/buckets`,
-      (b) => {
-        const loc = (b.location as string) || '';
-        const cls = (b.storage_class as string) || '';
-        return {
-          id: b.name as string,
-          name: b.name as string,
-          meta: [loc, cls].filter(Boolean).join(' · ') || undefined,
-        };
-      },
-      (j) =>
-        ((j.result as Record<string, unknown>)?.buckets as Array<
-          Record<string, unknown>
-        >) ?? [],
-    );
+    const r2 = (
+      await safeList(
+        `/accounts/${accountId}/r2/buckets`,
+        (b) => {
+          const loc = (b.location as string) || '';
+          const cls = (b.storage_class as string) || '';
+          return {
+            id: b.name as string,
+            name: b.name as string,
+            meta: [loc, cls].filter(Boolean).join(' · ') || undefined,
+          };
+        },
+        (j) =>
+          ((j.result as Record<string, unknown>)?.buckets as Array<
+            Record<string, unknown>
+          >) ?? [],
+      )
+    ).filter((b) => inScope(b.name, scopeRepos));
     if (r2.length) groups.push({ kind: 'r2', label: 'R2 buckets', items: r2 });
 
     return groups;
