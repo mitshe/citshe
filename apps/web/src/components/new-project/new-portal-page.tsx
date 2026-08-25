@@ -7,12 +7,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ExternalLink,
-  GitBranch,
   Loader2,
   RefreshCw,
   Rocket,
   Settings2,
-  Sparkles,
   Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
 import { RadioCard } from "@/components/ui/radio-card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { WizardProgress } from "@/components/ui/wizard-progress";
 import { useAuthContext } from "@/lib/auth";
 import { useAuthToken } from "@/lib/api/hooks/shared";
@@ -32,7 +31,10 @@ import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
  * The "New portal" flow, rendered as a full page (route: /new-portal).
  *
  * Model (deliberately dead-simple, zero fetching):
- *   entry → mode → describe → access → repo → review → Build
+ *   mode → describe → access → repo → review → Build
+ *
+ * (An "existing repo" entry point is planned; until it ships the flow only
+ * builds new projects, so we don't gate the user behind a one-option chooser.)
  *
  * The "access" step is just EMPTY key inputs — the wizard never asks the API
  * "what's connected", because a new portal has nothing and inherits nothing.
@@ -41,17 +43,9 @@ import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
  * repo, and starts the build — all-or-nothing, so a failure leaves no orphan.
  */
 
-type Entry = "new" | "existing";
-type Step = "entry" | "mode" | "describe" | "access" | "repo" | "review";
+type Step = "mode" | "describe" | "access" | "repo" | "review";
 
-const NEW_STEPS: Step[] = [
-  "entry",
-  "mode",
-  "describe",
-  "access",
-  "repo",
-  "review",
-];
+const NEW_STEPS: Step[] = ["mode", "describe", "access", "repo", "review"];
 
 /** GitHub-safe repo slug from a portal name (letters/digits/-, lowercased). */
 function slugify(s: string): string {
@@ -126,8 +120,7 @@ export function NewPortalPage() {
   const { switchOrganization } = useAuthContext();
   const getToken = useAuthToken();
 
-  const [step, setStep] = useState<Step>("entry");
-  const [entry, setEntry] = useState<Entry | null>(null);
+  const [step, setStep] = useState<Step>("mode");
   const [mode, setMode] = useState<BuildMode | null>(null);
 
   const [name, setName] = useState("");
@@ -174,8 +167,6 @@ export function NewPortalPage() {
 
   const canContinue = (): boolean => {
     switch (step) {
-      case "entry":
-        return entry !== null;
       case "mode":
         return mode !== null;
       case "describe":
@@ -353,37 +344,10 @@ export function NewPortalPage() {
             )}
           </div>
 
-          {step === "entry" && (
-            <StepShell
-              title="New portal"
-              subtitle="Build something new, or connect what you already have."
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <RadioCard
-                  selected={entry === "new"}
-                  onSelect={() => setEntry("new")}
-                  icon={<Sparkles className="size-4" />}
-                  title="New project"
-                  description="citshe builds a website or app from nothing."
-                  hint="With a guide →"
-                />
-                <RadioCard
-                  selected={false}
-                  onSelect={() => undefined}
-                  disabled
-                  icon={<GitBranch className="size-4" />}
-                  title="I already have a repo"
-                  description="Connect an existing GitHub project."
-                  hint="Coming soon"
-                />
-              </div>
-            </StepShell>
-          )}
-
           {step === "mode" && (
             <StepShell
-              title="Starting from a blank page?"
-              subtitle="Pick how Claude should begin."
+              title="How should we start?"
+              subtitle="Pick how Claude should begin your project."
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <RadioCard
@@ -415,11 +379,10 @@ export function NewPortalPage() {
             >
               <div className="space-y-5">
                 <div className="space-y-1.5">
-                  <Label htmlFor="portal-name">Portal name</Label>
+                  <Label htmlFor="portal-name">Project name</Label>
                   <Input
                     id="portal-name"
-                    autoFocus
-                    placeholder="e.g. dronexamine.com"
+                    placeholder="e.g. My drone-exam blog"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
@@ -435,7 +398,7 @@ export function NewPortalPage() {
                       value={sourceUrl}
                       onChange={(e) => setSourceUrl(e.target.value)}
                     />
-                    <p className="text-[11px] text-text-subtle">
+                    <p className="text-xs text-text-subtle">
                       Claude will visit it to learn the style and what they do.
                     </p>
                   </div>
@@ -488,8 +451,8 @@ export function NewPortalPage() {
 
           {step === "access" && (
             <StepShell
-              title="Add your keys"
-              subtitle="Paste the tokens for this project. Nothing is shared between portals — you add them fresh each time."
+              title="Connect your accounts"
+              subtitle="citshe needs permission to save your code to GitHub. Paste the code below — GitHub is required, the rest are optional."
             >
               <div className="space-y-3">
                 {KEY_FIELDS.map((f) => (
@@ -524,7 +487,7 @@ export function NewPortalPage() {
                   GitHub is required — your project needs a place for its code.
                 </p>
               ) : null}
-              <p className="mt-2 text-[11px] text-text-subtle">
+              <p className="mt-2 text-xs text-text-subtle">
                 Keys are encrypted. Cloudflare/Vercel/Neon are optional — Claude
                 uses whichever you provide.
               </p>
@@ -538,7 +501,7 @@ export function NewPortalPage() {
             >
               <div className="space-y-2">
                 <Label htmlFor="repo-name">Repository name</Label>
-                <div className="flex items-center gap-2 rounded-md border border-border bg-surface-inset/50 px-3 focus-within:border-border-strong">
+                <div className="flex items-center gap-2 rounded-md border border-border bg-surface-inset px-3 transition-linear focus-within:border-ring focus-within:ring-2 focus-within:ring-ring">
                   <span className="shrink-0 text-sm text-text-subtle">
                     github.com/you/
                   </span>
@@ -551,11 +514,10 @@ export function NewPortalPage() {
                       setRepoName(e.target.value);
                     }}
                     placeholder="my-project"
-                    autoFocus
                   />
                 </div>
                 <p className="text-xs text-text-subtle">
-                  We suggested one from your portal name — change it or continue.
+                  We suggested one from your project name — change it or continue.
                   {visibility === "public"
                     ? " This repo will be public."
                     : " Private by default."}
@@ -602,9 +564,15 @@ export function NewPortalPage() {
               </dl>
 
               {building && buildStep && (
-                <div className="mt-4 flex items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/[0.04] px-3.5 py-3 text-sm text-foreground">
-                  <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
-                  {buildStep}
+                <div className="mt-4 rounded-lg border border-primary/30 bg-primary/[0.06] px-3.5 py-3">
+                  <div className="flex items-center gap-2.5 text-sm text-foreground">
+                    <StatusDot state="running" size={8} pulse />
+                    {buildStep}
+                  </div>
+                  <p className="mt-1.5 pl-[18px] text-xs text-text-subtle">
+                    This usually takes a few minutes — you can leave this
+                    screen, we&apos;ll keep building.
+                  </p>
                 </div>
               )}
 
@@ -613,9 +581,7 @@ export function NewPortalPage() {
                   <p className="text-sm font-medium text-danger">
                     Couldn&apos;t start the build
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {buildError}
-                  </p>
+                  <p className="mt-1 text-sm text-text-subtle">{buildError}</p>
                 </div>
               )}
             </StepShell>
@@ -645,7 +611,7 @@ function KeyRow({
               required
             </span>
           ) : (
-            <span className="text-[11px] text-text-subtle">optional</span>
+            <span className="text-xs text-text-subtle">optional</span>
           )}
         </div>
         <a
@@ -657,7 +623,7 @@ function KeyRow({
           How to get it <ExternalLink className="size-3" />
         </a>
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">{def.purpose}</p>
+      <p className="mt-0.5 text-xs text-text-subtle">{def.purpose}</p>
       <Input
         type="password"
         autoComplete="off"
@@ -666,7 +632,7 @@ function KeyRow({
         onChange={(e) => onChange(e.target.value)}
         placeholder={`Paste your ${def.name} ${def.label.toLowerCase()}`}
       />
-      <p className="mt-1.5 text-[11px] text-text-subtle">{def.guide}</p>
+      <p className="mt-1.5 text-xs text-text-subtle">{def.guide}</p>
     </div>
   );
 }
