@@ -76,6 +76,13 @@ class ValidateGithubDto {
   github: string;
 }
 
+class ImproveDescriptionDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10000)
+  description: string;
+}
+
 class CreateNewProjectDto {
   @IsString()
   @MinLength(1)
@@ -117,6 +124,23 @@ export class NewProjectController {
   @ApiResponse({ status: 200, description: 'Validation verdict' })
   async validateGithub(@Body() dto: ValidateGithubDto) {
     return this.newProject.validateGithub(dto.github);
+  }
+
+  @Post('improve-description')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Rewrite the project description with AI (uses the user's AI key)",
+  })
+  @ApiResponse({ status: 200, description: 'Improved description' })
+  async improveDescription(
+    @UserId() userId: string,
+    @Body() dto: ImproveDescriptionDto,
+  ) {
+    const description = await this.newProject.improveDescription(
+      userId,
+      dto.description,
+    );
+    return { description };
   }
 
   @Post()

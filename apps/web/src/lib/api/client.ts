@@ -754,6 +754,14 @@ export const api = {
       { method: "POST", body: JSON.stringify({ github }), token },
     ),
 
+  // "Improve with AI" for the wizard's description (uses the user's AI key).
+  newProjectImproveDescription: (description: string, token: string) =>
+    request<{ description: string }>("/new-project/improve-description", {
+      method: "POST",
+      body: JSON.stringify({ description }),
+      token,
+    }),
+
   plugins: {
     list: (token: string) =>
       request<{ plugins: Plugin[] }>("/plugins", { token }),

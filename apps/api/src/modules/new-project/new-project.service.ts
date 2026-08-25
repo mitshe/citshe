@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../infrastructure/persistence/prisma/prisma.service';
 import { EncryptionService } from '../../shared/encryption/encryption.service';
 import { GitHubAdapter } from '../../infrastructure/adapters/git-provider/github.adapter';
+import { AdapterFactoryService } from '../../infrastructure/adapters/adapter-factory.service';
 import { OrchestrationService } from '../mcp/orchestration/orchestration.service';
 import type { BuildSpec } from '@citshe/types';
 
@@ -50,7 +51,64 @@ export class NewProjectService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly orchestration: OrchestrationService,
+    private readonly adapterFactory: AdapterFactoryService,
   ) {}
+
+  private readonly IMPROVE_SYSTEM_PROMPT = `You help a non-technical person describe the website or app they want built, so an AI coding agent can build it well.
+
+Given their rough description, rewrite it into a clear, concrete brief. Keep THEIR intent and ideas — add clarity and the details a builder needs, never new scope they didn't ask for. Cover, when relevant: what the site is for, the main pages/sections, the visual style/vibe, key features, and any content/language notes. Keep it natural prose (2-6 sentences or short bullet lines), not a spec document. Write in the SAME language the user wrote in.
+
+Reply with ONLY the improved description text — no preamble, no quotes, no markdown headers.`;
+
+  /**
+   * "Improve with AI" for the new-project wizard's description box. The wizard
+   * runs BEFORE a portal exists (no org, no per-portal AI key), and the API host
+   * has no Claude CLI — so we borrow any AI credential the USER already has on
+   * one of their portals. If they have none, we say so plainly instead of
+   * failing cryptically. Returns the improved text; never creates anything.
+   */
+  async improveDescription(userId: string, draft: string): Promise<string> {
+    const text = draft?.trim();
+    if (!text) {
+      throw new BadRequestException('Write a few words first, then improve.');
+    }
+
+    // Find an org this user belongs to that has an AI credential.
+    const cred = await this.prisma.aICredential.findFirst({
+      where: { organization: { members: { some: { userId } } } },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { organizationId: true },
+    });
+    if (!cred) {
+      throw new BadRequestException(
+        'Add an AI key on one of your portals (Settings → AI) to use Improve with AI.',
+      );
+    }
+
+    const aiProvider = await this.adapterFactory.getDefaultAIProvider(
+      cred.organizationId,
+    );
+    if (!aiProvider) {
+      throw new BadRequestException(
+        'Add an AI key on one of your portals (Settings → AI) to use Improve with AI.',
+      );
+    }
+
+    try {
+      const res = await aiProvider.complete(
+        [{ role: 'user', content: `Description:\n${text}` }],
+        { systemPrompt: this.IMPROVE_SYSTEM_PROMPT, maxTokens: 700 },
+      );
+      const improved = (res.content ?? '').replace(/```/g, '').trim();
+      // If the model returned nothing usable, keep the user's original.
+      return improved || text;
+    } catch (err) {
+      this.logger.warn(`Improve-description failed: ${(err as Error).message}`);
+      throw new BadRequestException(
+        "Couldn't improve the description right now. Please try again in a moment.",
+      );
+    }
+  }
 
   /**
    * Pre-flight check for the wizard's GitHub token, run when the user leaves the

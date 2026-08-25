@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Rocket,
   Settings2,
+  Sparkles,
   Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,38 @@ const PROMPT_CHIPS = [
   "online store",
   "dark theme",
   "in Polish",
+];
+
+/**
+ * Style starters — clicking one appends a concrete visual brief to the
+ * description, so a non-designer doesn't have to find the words. Pure text; no
+ * backend. The `add` string is written as a sentence the build can act on.
+ */
+const STYLE_TEMPLATES: { label: string; add: string }[] = [
+  {
+    label: "Minimal / Linear",
+    add: "Clean, minimal, modern — lots of whitespace, thin borders, a single accent color, crisp sans-serif type. Understated like Linear or Vercel.",
+  },
+  {
+    label: "Bold & colorful",
+    add: "Bold and colorful — big confident headings, vivid gradients or accent colors, playful shapes, high energy.",
+  },
+  {
+    label: "Editorial / blog",
+    add: "Editorial and content-first — comfortable reading typography, clear article layout, generous line spacing, magazine feel.",
+  },
+  {
+    label: "Dark & sleek",
+    add: "Dark theme by default — near-black background, subtle glows, high contrast, premium and sleek.",
+  },
+  {
+    label: "Warm & friendly",
+    add: "Warm and friendly — soft rounded corners, gentle colors, approachable tone, a little personality.",
+  },
+  {
+    label: "Corporate / trust",
+    add: "Professional and trustworthy — calm blues/greys, structured layout, clear sections, corporate and credible.",
+  },
 ];
 
 /** The connectable tools, each a single key to paste (nothing is fetched). */
@@ -153,7 +186,36 @@ export function NewPortalPage() {
   const [githubError, setGithubError] = useState<string | null>(null);
   const [githubWarning, setGithubWarning] = useState<string | null>(null);
 
+  // "Improve with AI" on the description box.
+  const [improving, setImproving] = useState(false);
+  const [improveError, setImproveError] = useState<string | null>(null);
+
   const stepIndex = NEW_STEPS.indexOf(step);
+
+  const addStyle = (add: string) =>
+    setPrompt((p) => (p.trim() ? `${p.trim()}\n\n${add}` : add));
+
+  const improveWithAI = async () => {
+    if (improving || !prompt.trim()) return;
+    setImproving(true);
+    setImproveError(null);
+    try {
+      const token = await getToken();
+      const { description } = await api.newProjectImproveDescription(
+        prompt.trim(),
+        token,
+      );
+      if (description) setPrompt(description);
+    } catch (err) {
+      setImproveError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't improve the description.",
+      );
+    } finally {
+      setImproving(false);
+    }
+  };
 
   const leave = () => router.push("/home");
 
@@ -405,22 +467,46 @@ export function NewPortalPage() {
                 )}
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="prompt">
-                    {mode === "refresh"
-                      ? "What should be better?"
-                      : "Describe it"}
-                  </Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="prompt">
+                      {mode === "refresh"
+                        ? "What should be better?"
+                        : "Describe it"}
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => void improveWithAI()}
+                      disabled={improving || !prompt.trim()}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-primary transition-linear hover:bg-primary/[0.08] disabled:opacity-40 disabled:hover:bg-transparent"
+                    >
+                      {improving ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5" />
+                      )}
+                      Improve with AI
+                    </button>
+                  </div>
                   <Textarea
                     id="prompt"
                     rows={6}
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      if (improveError) setImproveError(null);
+                    }}
                     placeholder={
                       mode === "refresh"
                         ? "See what they do and their style. I want a faster, more modern version — same character, better UX."
                         : "A blog about drone-license exams in Poland. Clean, minimal style like Linear. Guides, categories per country, a newsletter."
                     }
                   />
+                  {improveError && (
+                    <p className="flex items-start gap-1.5 text-xs font-medium text-danger">
+                      <AlertCircle className="mt-px size-3.5 shrink-0" />
+                      {improveError}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {PROMPT_CHIPS.map((c) => (
                       <Chip
@@ -432,6 +518,19 @@ export function NewPortalPage() {
                         + {c}
                       </Chip>
                     ))}
+                  </div>
+
+                  <div className="pt-2">
+                    <p className="mb-1.5 text-xs font-medium text-text-subtle">
+                      Style
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STYLE_TEMPLATES.map((s) => (
+                        <Chip key={s.label} onClick={() => addStyle(s.add)}>
+                          {s.label}
+                        </Chip>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
