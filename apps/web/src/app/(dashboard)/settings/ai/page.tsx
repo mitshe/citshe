@@ -136,10 +136,14 @@ export default function AICredentialsPage() {
       {/* Pillar 2 — a cheap key for small in-panel helpers */}
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-medium text-foreground">Panel AI</h2>
+          <h2 className="text-sm font-medium text-foreground">
+            Panel AI · server-wide
+          </h2>
           <p className="text-xs text-muted-foreground">
-            Small in-panel helpers — “Improve with AI”, summaries. Optional.
-            This is the panel key, separate from the Claude Code engine above.
+            One key powers the small in-panel helpers — “Improve with AI”,
+            summaries, repo analysis — across ALL your portals. Optional, and
+            separate from the Claude Code engine above. (GitHub, Cloudflare,
+            Vercel and Neon stay per-project.)
           </p>
         </div>
 

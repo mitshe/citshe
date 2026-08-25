@@ -33,7 +33,9 @@ export class AdapterFactoryService {
    * (mode:'app') this mints a fresh installation access token and hands it to
    * the adapter as accessToken — so the rest of the code is App-agnostic.
    */
-  private async resolveGitConfig(config: AdapterConfig): Promise<AdapterConfig> {
+  private async resolveGitConfig(
+    config: AdapterConfig,
+  ): Promise<AdapterConfig> {
     if (config.mode === 'app' && config.installationId) {
       const accessToken = await this.githubApp.getInstallationToken(
         String(config.installationId),
@@ -139,14 +141,15 @@ export class AdapterFactoryService {
    * Create an AI provider from an AI credential ID
    */
   async createAIProviderFromCredential(
-    organizationId: string,
+    // Kept for signature compatibility; AI credentials are a SERVER-WIDE pool
+    // (like the Claude engine on subscription), so the key is resolved by id
+    // alone — not scoped to the calling org. GitHub/Cloudflare/etc. stay
+    // per-portal, only AI keys are shared.
+    _organizationId: string,
     credentialId: string,
   ): Promise<AIProviderPort> {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: {
-        id: credentialId,
-        organizationId,
-      },
+    const credential = await this.prisma.aICredential.findUnique({
+      where: { id: credentialId },
     });
 
     if (!credential) {
@@ -177,38 +180,40 @@ export class AdapterFactoryService {
   }
 
   /**
-   * Find the default AI provider for an organization
+   * Resolve the AI provider for a request. AI credentials are SERVER-WIDE (one
+   * key powers Improve-with-AI, refine and repo analysis across ALL portals),
+   * so this prefers the org's own key if it has one, then falls back to any key
+   * on the server. Returns null only when the server has NO AI key at all.
    */
   async getDefaultAIProvider(
     organizationId: string,
   ): Promise<AIProviderPort | null> {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: {
-        organizationId,
-        isDefault: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
+    // 1. The org's own key (default first, then oldest) — lets a portal pin a
+    //    specific key if it wants, without breaking the shared model.
+    const own = await this.prisma.aICredential.findFirst({
+      where: { organizationId },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
+    if (own) return this.createAIProviderFromCredential(organizationId, own.id);
 
-    if (!credential) {
-      const firstCredential = await this.prisma.aICredential.findFirst({
-        where: { organizationId },
-        orderBy: { createdAt: 'asc' },
-      });
+    // 2. Fall back to ANY key on the server (shared pool).
+    return this.getServerAIProvider();
+  }
 
-      if (!firstCredential) {
-        return null;
-      }
-
-      return this.createAIProviderFromCredential(
-        organizationId,
-        firstCredential.id,
-      );
-    }
-
-    return this.createAIProviderFromCredential(organizationId, credential.id);
+  /**
+   * Resolve any AI provider on the server, ignoring org entirely. Use from
+   * places that have no org context yet (e.g. the new-project wizard). Picks the
+   * server-wide default first, then the oldest key. Null if none exist.
+   */
+  async getServerAIProvider(): Promise<AIProviderPort | null> {
+    const credential = await this.prisma.aICredential.findFirst({
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+    if (!credential) return null;
+    return this.createAIProviderFromCredential(
+      credential.organizationId,
+      credential.id,
+    );
   }
 
   /**

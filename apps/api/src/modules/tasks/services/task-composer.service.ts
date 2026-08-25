@@ -44,7 +44,7 @@ Reply with ONLY a JSON object, no prose, no markdown fences:
       await this.adapterFactory.getDefaultAIProvider(organizationId);
     if (!aiProvider) {
       throw new BadRequestException(
-        'No AI provider configured for this portal. Add an AI key in Settings.',
+        'No AI provider configured. Add an AI key in Settings → AI.',
       );
     }
 
@@ -95,7 +95,9 @@ Reply with ONLY a JSON object, no prose, no markdown fences:
 
     const subtasks = Array.isArray(parsed.subtasks)
       ? parsed.subtasks
-          .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
+          .filter(
+            (s): s is Record<string, unknown> => !!s && typeof s === 'object',
+          )
           .map((s) => ({
             title: asString(s.title, '').slice(0, 200),
             description: asString(s.description, ''),

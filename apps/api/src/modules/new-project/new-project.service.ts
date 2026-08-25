@@ -73,24 +73,13 @@ Reply with ONLY the improved description text — no preamble, no quotes, no mar
       throw new BadRequestException('Write a few words first, then improve.');
     }
 
-    // Find an org this user belongs to that has an AI credential.
-    const cred = await this.prisma.aICredential.findFirst({
-      where: { organization: { members: { some: { userId } } } },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-      select: { organizationId: true },
-    });
-    if (!cred) {
-      throw new BadRequestException(
-        'Add an AI key on one of your portals (Settings → AI) to use Improve with AI.',
-      );
-    }
-
-    const aiProvider = await this.adapterFactory.getDefaultAIProvider(
-      cred.organizationId,
-    );
+    // AI keys are server-wide, so any key on the server works here — the wizard
+    // runs before a portal exists. (userId kept for future per-user scoping.)
+    void userId;
+    const aiProvider = await this.adapterFactory.getServerAIProvider();
     if (!aiProvider) {
       throw new BadRequestException(
-        'Add an AI key on one of your portals (Settings → AI) to use Improve with AI.',
+        'Add an AI key in Settings → AI to use Improve with AI.',
       );
     }
 

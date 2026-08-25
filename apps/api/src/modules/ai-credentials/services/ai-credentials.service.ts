@@ -20,6 +20,10 @@ export class AICredentialsService {
     private readonly adapterFactory: AdapterFactoryService,
   ) {}
 
+  // AI credentials are a SERVER-WIDE pool (one key powers Improve-with-AI,
+  // refine and repo analysis across ALL portals). The `organizationId` on a row
+  // is only a storage anchor (the portal it was added from) — reads and CRUD
+  // operate on the whole pool, and `isDefault` is a single server-wide default.
   async create(organizationId: string, dto: CreateAICredentialDto) {
     // Encrypt API key
     const { encrypted, iv } = this.encryption.encrypt(dto.apiKey);
@@ -28,10 +32,10 @@ export class AICredentialsService {
       // Use transaction to atomically handle isDefault flag
       // This prevents race conditions when multiple credentials are created
       const credential = await this.prisma.$transaction(async (tx) => {
-        // If this is set as default, unset other defaults atomically
+        // If this is set as default, unset the default on ALL keys (server-wide).
         if (dto.isDefault) {
           await tx.aICredential.updateMany({
-            where: { organizationId },
+            where: { isDefault: true },
             data: { isDefault: false },
           });
         }
@@ -62,18 +66,19 @@ export class AICredentialsService {
     }
   }
 
-  async findAll(organizationId: string) {
+  // Server-wide pool: list every AI key regardless of the portal it was added
+  // from. (organizationId param kept for signature/controller compatibility.)
+  async findAll(_organizationId: string) {
     const credentials = await this.prisma.aICredential.findMany({
-      where: { organizationId },
       orderBy: { createdAt: 'desc' },
     });
 
     return credentials.map((c) => this.toResponse(c));
   }
 
-  async findOne(organizationId: string, id: string) {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: { id, organizationId },
+  async findOne(_organizationId: string, id: string) {
+    const credential = await this.prisma.aICredential.findUnique({
+      where: { id },
     });
 
     if (!credential) {
@@ -83,7 +88,11 @@ export class AICredentialsService {
     return this.toResponse(credential);
   }
 
-  async update(organizationId: string, id: string, dto: UpdateAICredentialDto) {
+  async update(
+    _organizationId: string,
+    id: string,
+    dto: UpdateAICredentialDto,
+  ) {
     // Prepare update data
     const data: any = {};
 
@@ -100,18 +109,18 @@ export class AICredentialsService {
     // Use transaction to atomically handle isDefault flag changes
     // This prevents race conditions when multiple updates set isDefault
     const updated = await this.prisma.$transaction(async (tx) => {
-      const credential = await tx.aICredential.findFirst({
-        where: { id, organizationId },
+      const credential = await tx.aICredential.findUnique({
+        where: { id },
       });
 
       if (!credential) {
         throw new NotFoundException(`AI credential ${id} not found`);
       }
 
-      // If setting this as default, unset other defaults atomically
+      // If setting this as default, unset the default on ALL other keys.
       if (dto.isDefault === true) {
         await tx.aICredential.updateMany({
-          where: { organizationId, id: { not: id } },
+          where: { id: { not: id }, isDefault: true },
           data: { isDefault: false },
         });
       }
@@ -125,9 +134,9 @@ export class AICredentialsService {
     return this.toResponse(updated, dto.apiKey);
   }
 
-  async remove(organizationId: string, id: string) {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: { id, organizationId },
+  async remove(_organizationId: string, id: string) {
+    const credential = await this.prisma.aICredential.findUnique({
+      where: { id },
     });
 
     if (!credential) {
@@ -142,11 +151,11 @@ export class AICredentialsService {
   // =========================================================================
 
   async testConnection(
-    organizationId: string,
+    _organizationId: string,
     id: string,
   ): Promise<{ success: boolean; message: string }> {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: { id, organizationId },
+    const credential = await this.prisma.aICredential.findUnique({
+      where: { id },
     });
 
     if (!credential) {
@@ -184,8 +193,8 @@ export class AICredentialsService {
     totalUsage: number;
     remaining: number;
   } | null> {
-    const credential = await this.prisma.aICredential.findFirst({
-      where: { id, organizationId },
+    const credential = await this.prisma.aICredential.findUnique({
+      where: { id },
     });
 
     if (!credential) {
