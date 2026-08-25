@@ -1191,6 +1191,10 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     // REVIEW ~0.5s after START, with an empty result).
     const DONEFILE = '/tmp/citshe-agent.done';
     const DONE = '__CITSHE_DONE__'; // legacy marker (kept for cleanTranscript)
+    // The stream formatter, referenced by ABSOLUTE path — never PATH-dependent.
+    // session-server installs it at runtime, so it can lag a worker that starts
+    // the instant the container is RUNNING (race → "citshe-stream: not found").
+    const STREAM = '/home/executor/bin/citshe-stream';
     const tmux = 'tmux -f /etc/tmux.conf';
     const bash = (script: string) =>
       this.containerService.execCommand(
@@ -1230,16 +1234,18 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         // also writes the plain final text to ${OUT} for the task summary.
         // Completion is signalled by writing ${DONEFILE} AFTER claude exits —
         // never by a pane marker (which the shell echo would false-trigger).
-        // Export PATH too (not just HOME): tmux runs an already-started shell
-        // whose PATH was frozen by /etc/profile, which resets it and drops
-        // ~/bin — so `citshe-stream` (installed in /home/executor/bin) was
-        // "command not found". Prepend it explicitly so the pipe formatter is
-        // always found, regardless of how the shell was launched.
+        // Reference the formatter by ABSOLUTE path (not via PATH) and, since
+        // session-server writes it at runtime, wait for it to appear before
+        // launching (up to ~15s) so a worker that starts the instant the
+        // container is RUNNING doesn't race the install. If it's still missing,
+        // fall back to `cat` so the raw output always flows (never a dead pipe /
+        // "command not found"). HOME is exported so claude finds its creds.
         `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; ` +
-          `export PATH="/home/executor/bin:$PATH"; ` +
+          `for i in $(seq 1 30); do [ -x ${STREAM} ] && break || sleep 0.5; done; ` +
+          `if [ -x ${STREAM} ]; then PIPE="${STREAM} ${OUT}"; else PIPE="tee ${OUT}"; fi; ` +
           `claude --print --permission-mode bypassPermissions ` +
           `--output-format stream-json --include-partial-messages --verbose ` +
-          `< ${PROMPT} 2>&1 | citshe-stream ${OUT}; ` +
+          `< ${PROMPT} 2>&1 | $PIPE; ` +
           `echo $? > ${DONEFILE}' Enter`,
       ].join('; '),
     );
