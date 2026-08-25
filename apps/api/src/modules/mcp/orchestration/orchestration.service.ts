@@ -1087,6 +1087,30 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Put a task's worker to sleep when the task is closed. Stops the container
+   * (frees RAM immediately instead of waiting for the 30-min idle reaper) but
+   * KEEPS the per-org home volume, so Reopen/Resume just spins a fresh container
+   * with the same auth — closing a task sleeps its terminal, it doesn't delete
+   * it. No-op if the task has no live worker. Best-effort: never blocks close.
+   */
+  async stopTaskWorker(organizationId: string, taskId: string): Promise<void> {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId },
+      select: { sessionId: true },
+    });
+    if (!task?.sessionId) return;
+    const live = await this.prisma.agentSession.findFirst({
+      where: {
+        id: task.sessionId,
+        status: { in: ['CREATING', 'RUNNING'] },
+      },
+      select: { id: true },
+    });
+    if (!live) return;
+    await this.stopWorker(organizationId, task.sessionId);
+  }
+
+  /**
    * Append an entry to the task's persisted activity feed (task.agentLogs) AND
    * emit it live. emitAgentLog alone only pushes a WS event, so re-opening a
    * task later showed "No activity yet" even though the worker had run.

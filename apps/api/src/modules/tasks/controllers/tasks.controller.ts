@@ -284,6 +284,12 @@ export class TasksController {
     @Param('id') id: string,
   ) {
     const task = await this.tasksService.close(organizationId, id);
+    // Closing a task sleeps its worker terminal: stop the container now (free
+    // RAM) instead of waiting for the 30-min idle reaper. The home volume stays,
+    // so Reopen/Resume brings it back. Best-effort — never fail the close.
+    await this.orchestration
+      .stopTaskWorker(organizationId, id)
+      .catch(() => undefined);
     return { task, message: 'Task closed' };
   }
 
