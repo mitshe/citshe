@@ -482,18 +482,17 @@ export class SessionContainerService implements OnModuleInit {
    * process, wait for a fresh credential to be written, sync it to the shared
    * seed, and tear down the container.
    */
-  async reloginSubmit(
-    code: string,
-  ): Promise<{ ok: boolean; error?: string }> {
+  async reloginSubmit(code: string): Promise<{ ok: boolean; error?: string }> {
     const clean = (code || '').trim();
-    if (!clean) return { ok: false, error: 'Paste the code from Claude first.' };
+    if (!clean)
+      return { ok: false, error: 'Paste the code from Claude first.' };
     try {
       // Type the code into the waiting prompt.
       await this.reloginExec([
         'bash',
         '-c',
         `export HOME=/home/executor; ` +
-          `${this.RELOGIN_TMUX} send-keys -t citshe:login '${clean.replace(/'/g, "")}' Enter`,
+          `${this.RELOGIN_TMUX} send-keys -t citshe:login '${clean.replace(/'/g, '')}' Enter`,
       ]);
 
       // Wait for a valid, non-expired credential to land (up to ~30s).
@@ -539,9 +538,7 @@ export class SessionContainerService implements OnModuleInit {
   private extractOauthUrl(log: string): string | undefined {
     // The URL may be wrapped in OSC-8 hyperlink escapes and repeated; grab the
     // first clean https://claude.com/…authorize?…state=… occurrence.
-    const m = log.match(
-      /https:\/\/claude\.com\/[^\s"]*authorize\?[^\s"]*/,
-    );
+    const m = log.match(/https:\/\/claude\.com\/\S*authorize\?\S*/);
     return m ? m[0] : undefined;
   }
 
