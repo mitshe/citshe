@@ -52,9 +52,24 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       // Keep the shared Claude login warm even when every portal is idle, so a
       // new build never seeds a dead token after a quiet night.
       void this.containerService.keepClaudeAuthWarm().catch(() => undefined);
+      // Remove Docker containers/volumes whose org/session no longer exists in
+      // the DB (e.g. an org deleted directly in the DB).
+      void this.sweepOrphanedDockerResources().catch(() => undefined);
     }, this.WATCHDOG_INTERVAL_MS);
     // Don't keep the process alive just for the timer.
     this.watchdogTimer.unref?.();
+  }
+
+  /** Build the live-id sets from the DB and hand them to the container sweep. */
+  private async sweepOrphanedDockerResources(): Promise<void> {
+    const [sessions, orgs] = await Promise.all([
+      this.prisma.agentSession.findMany({ select: { id: true } }),
+      this.prisma.organization.findMany({ select: { id: true } }),
+    ]);
+    await this.containerService.sweepOrphans(
+      new Set(sessions.map((s) => s.id)),
+      new Set(orgs.map((o) => o.id)),
+    );
   }
 
   onModuleDestroy() {

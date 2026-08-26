@@ -320,7 +320,10 @@ export class PluginsService {
   }
 
   private asType(type: string): PluginType {
-    if (!['CLOUDFLARE', 'VERCEL', 'NEON', 'GOOGLE_ADS', 'VPS'].includes(type)) {
+    // Accept any registered PluginType — not a hand-maintained subset that
+    // silently rejected EXPO / APPLE_DEVELOPER (connect/test threw for them
+    // while getStatus worked, an inconsistent surface).
+    if (!(Object.values(PluginType) as string[]).includes(type)) {
       throw new BadRequestException(`Unknown plugin type: ${type}`);
     }
     return type as PluginType;

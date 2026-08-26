@@ -11,6 +11,7 @@ import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
 import { PrismaService } from '@/infrastructure/persistence/prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
+import { SessionContainerService } from '../sessions/services/session-container.service';
 
 export interface RegisterDto {
   email: string;
@@ -57,6 +58,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly containerService: SessionContainerService,
   ) {
     const secret = this.configService.get<string>('JWT_SECRET');
     if (!secret) {
@@ -522,6 +524,38 @@ export class UsersService {
       );
     }
 
+    // AI credentials are SERVER-WIDE (the org is just a storage anchor), but the
+    // FK cascades on org-delete — so deleting this org would silently destroy a
+    // shared AI key that other portals rely on. Re-anchor any AI keys here to a
+    // surviving org BEFORE the delete, so the shared key lives on.
+    const aiKeys = await this.prisma.aICredential.findMany({
+      where: { organizationId },
+      select: { id: true },
+    });
+    if (aiKeys.length > 0) {
+      const survivor = await this.prisma.organization.findFirst({
+        where: { id: { not: organizationId } },
+        select: { id: true },
+      });
+      if (survivor) {
+        // Move each key, dodging the @@unique([organizationId, provider]) — if
+        // the survivor already has that provider, drop the duplicate instead.
+        for (const k of aiKeys) {
+          await this.prisma.aICredential
+            .update({
+              where: { id: k.id },
+              data: { organizationId: survivor.id },
+            })
+            .catch(async () => {
+              await this.prisma.aICredential
+                .delete({ where: { id: k.id } })
+                .catch(() => undefined);
+            });
+        }
+      }
+      // No survivor → the last org; its keys go with it (nothing to preserve).
+    }
+
     // Kasujemy zależne wiersze i org w transakcji (integracje/pluginy/członkowie).
     await this.prisma.$transaction(async (tx) => {
       await tx.integration.deleteMany({ where: { organizationId } });
@@ -530,6 +564,12 @@ export class UsersService {
       await tx.organizationMember.deleteMany({ where: { organizationId } });
       await tx.organization.delete({ where: { id: organizationId } });
     });
+
+    // Clean up the org's Docker home volume (holds its Claude auth) — the DB
+    // rows cascade, but the volume would otherwise be orphaned on the host.
+    await this.containerService
+      .removeOrgDockerResources(organizationId)
+      .catch(() => undefined);
   }
 
   // ============================================================================

@@ -302,6 +302,85 @@ export class SessionContainerService implements OnModuleInit {
     }
   }
 
+  /**
+   * Remove an org's per-org home volume (citshe-executor-home-<org>) and any of
+   * its lingering session containers. Called when a portal is deleted — the DB
+   * rows cascade, but the Docker volume (which held the org's Claude auth) and
+   * stopped containers would otherwise be orphaned on the host forever.
+   * Best-effort; never throws.
+   */
+  async removeOrgDockerResources(organizationId: string): Promise<void> {
+    // Stop+remove any session containers for this org's sessions. We can't map
+    // container→org by name (name is by sessionId), so this is handled by the
+    // orphan sweep; here we just drop the per-org home volume which IS named by
+    // org.
+    try {
+      const vol = this.docker.getVolume(
+        `citshe-executor-home-${organizationId}`,
+      );
+      await vol.remove({ force: true });
+      this.logger.log(`Removed home volume for deleted org ${organizationId}.`);
+    } catch (err) {
+      const msg = (err as Error).message || '';
+      if (!/no such volume|not found|404/i.test(msg)) {
+        this.logger.warn(
+          `Could not remove home volume for ${organizationId}: ${msg}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Orphan sweep: remove citshe session containers and per-org home volumes
+   * whose backing DB row no longer exists (e.g. an org deleted directly in the
+   * DB, or a container left after a crash). Called on startup + periodically.
+   * `liveSessionIds` / `liveOrgIds` are the sets that DO exist in the DB.
+   * Best-effort; never throws.
+   */
+  async sweepOrphans(
+    liveSessionIds: Set<string>,
+    liveOrgIds: Set<string>,
+  ): Promise<void> {
+    // Orphaned session containers.
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+      for (const c of containers) {
+        const name = (c.Names?.[0] || '').replace(/^\//, '');
+        const m = name.match(/^citshe-session-(.+)$/);
+        if (!m) continue;
+        if (liveSessionIds.has(m[1])) continue;
+        try {
+          const container = this.docker.getContainer(c.Id);
+          await container.remove({ force: true });
+          this.logger.log(`Swept orphan session container ${name}.`);
+        } catch {
+          /* best-effort */
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Orphan container sweep failed: ${(err as Error).message}`,
+      );
+    }
+    // Orphaned per-org home volumes.
+    try {
+      const { Volumes } = await this.docker.listVolumes();
+      for (const v of Volumes || []) {
+        const m = v.Name.match(/^citshe-executor-home-(.+)$/);
+        if (!m) continue;
+        if (liveOrgIds.has(m[1])) continue;
+        try {
+          await this.docker.getVolume(v.Name).remove({ force: true });
+          this.logger.log(`Swept orphan home volume ${v.Name}.`);
+        } catch {
+          /* volume may be in use — skip */
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Orphan volume sweep failed: ${(err as Error).message}`);
+    }
+  }
+
   // ─── Container Lifecycle ────────────────────────────────────────
 
   async createAndStart(

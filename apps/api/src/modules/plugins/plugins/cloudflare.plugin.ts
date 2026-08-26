@@ -672,6 +672,13 @@ class CloudflarePlugin implements StackPlugin {
           `/accounts/${accountId}/pages/projects`,
         );
         let projects: Array<Record<string, unknown>> = json?.result ?? [];
+        // Scope to THIS portal (like listResources does) so the headline "Live"
+        // and the redeploy/add-domain actions target the portal's own Pages
+        // project — not whatever site deployed most recently account-wide.
+        const scopeRepos = this.cfg(config).scopeRepos;
+        projects = projects.filter((p) =>
+          inScope(String(p.name ?? ''), scopeRepos),
+        );
         if (filtered)
           projects = projects.filter((p) => selPages.has(p.name as string));
         metrics.push({
