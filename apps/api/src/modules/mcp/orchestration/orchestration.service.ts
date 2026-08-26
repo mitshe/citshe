@@ -49,6 +49,9 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       void this.sweepStuckTasks().catch(() => undefined);
       void this.reapIdleWorkers().catch(() => undefined);
       void this.reconcileUnstartedTasks().catch(() => undefined);
+      // Keep the shared Claude login warm even when every portal is idle, so a
+      // new build never seeds a dead token after a quiet night.
+      void this.containerService.keepClaudeAuthWarm().catch(() => undefined);
     }, this.WATCHDOG_INTERVAL_MS);
     // Don't keep the process alive just for the timer.
     this.watchdogTimer.unref?.();

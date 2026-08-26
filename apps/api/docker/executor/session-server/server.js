@@ -1009,20 +1009,21 @@ function startClaudeAuthSeedSync() {
   const syncOnce = () => {
     try {
       const mine = readExpiry(MINE);
-      // PROACTIVE REFRESH: the access token lives only ~8h. If we wait for it to
-      // expire, a NEW portal seeding from here gets a dead token ("OAuth session
-      // expired"). So when OUR token is within ~2h of expiry, poke `claude auth
-      // status` — that makes the CLI refresh the access token from the (long-
-      // lived) refresh token BEFORE it dies. Cheap, no inference call.
+      // PROACTIVE REFRESH: the access token lives only ~8h. If we let it expire,
+      // a NEW portal seeding from here gets a dead token ("OAuth session
+      // expired"). `claude auth status` does NOT refresh (verified). The
+      // reliable trigger is a tiny real call that runs the SDK's refresh path.
+      // Only do it when within ~2h of expiry so it's rare.
       const now = Date.now();
       if (typeof mine === 'number' && mine > 0 && mine - now < 2 * 3600_000) {
         try {
-          execSilent('claude auth status', {
-            env: { ...process.env, HOME: HOME_DIR },
-            timeout: 20_000,
-          });
+          execSilent(
+            'printf ok | claude --print --permission-mode bypassPermissions ' +
+              "--output-format stream-json --verbose --max-turns 1 >/dev/null 2>&1 || true",
+            { env: { ...process.env, HOME: HOME_DIR }, timeout: 60_000 },
+          );
         } catch {
-          // status may exit non-zero; the refresh side-effect still happens.
+          // Best-effort — the refresh side-effect happens regardless of exit.
         }
       }
 

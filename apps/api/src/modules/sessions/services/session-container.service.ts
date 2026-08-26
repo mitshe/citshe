@@ -150,18 +150,25 @@ export class SessionContainerService implements OnModuleInit {
       const parsed = JSON.parse(raw.slice(jsonStart)) as {
         claudeAiOauth?: {
           accessToken?: string;
+          expiresAt?: number;
           refreshToken?: string;
           refreshTokenExpiresAt?: number;
         };
       };
       const oauth = parsed.claudeAiOauth;
       if (!oauth) return { ok: false, reason: 'not-logged-in' };
-      const hasAccess = !!oauth.accessToken;
+      // A usable engine = access token that is present AND NOT expired, OR a
+      // live refresh token to mint a new one. Presence alone is NOT enough — an
+      // expired-but-non-empty token passed the gate and then died in the worker.
+      const accessUsable =
+        !!oauth.accessToken &&
+        typeof oauth.expiresAt === 'number' &&
+        oauth.expiresAt > Date.now();
       const canRefresh =
         !!oauth.refreshToken &&
         typeof oauth.refreshTokenExpiresAt === 'number' &&
         oauth.refreshTokenExpiresAt > Date.now();
-      if (hasAccess || canRefresh) return { ok: true };
+      if (accessUsable || canRefresh) return { ok: true };
       return { ok: false, reason: 'expired' };
     } catch (err) {
       // Fail CLOSED: if we can't verify the engine login, block the build with a
@@ -189,17 +196,110 @@ export class SessionContainerService implements OnModuleInit {
    */
   private claudeAuthSeedCmd(): string {
     if (!this.claudeAuthSeedVolume()) return '';
-    // Copy the seed in when the org has NO credentials yet OR its accessToken is
-    // blank (Claude zeroes the token after a failed refresh, which left orgs
-    // stuck "OAuth session expired"). An org with a live token keeps its own.
+    // Copy the seed in when the org's own login is MISSING, BLANK, or STALER
+    // than the seed. Previously we only re-seeded on missing/blank tokens, so an
+    // org whose token was non-empty-but-expired (and un-refreshable) stayed
+    // stuck on a dead login forever even after /seed was healed. A tiny node
+    // comparison of expiresAt decides "should I take the seed?". Fails safe:
+    // any error → fall back to the old missing/blank check.
+    const decide =
+      `node -e '` +
+      `try{` +
+      `const fs=require("fs");` +
+      `const S=JSON.parse(fs.readFileSync("/seed/.credentials.json","utf8")).claudeAiOauth||{};` +
+      `let M={};try{M=JSON.parse(fs.readFileSync("/home/executor/.claude/.credentials.json","utf8")).claudeAiOauth||{}}catch(e){process.exit(0)/*mine missing → seed*/}` +
+      `const mineDead=!M.accessToken||(typeof M.expiresAt==="number"&&M.expiresAt<=Date.now());` +
+      `const seedNewer=(S.expiresAt||0)>(M.expiresAt||0);` +
+      `process.exit(mineDead||seedNewer?0:1);` +
+      `}catch(e){process.exit(1)}` +
+      `'`;
     return (
       `if [ -s /seed/.credentials.json ] && ` +
-      `( [ ! -s /home/executor/.claude/.credentials.json ] || ` +
-      `  grep -q '"accessToken":""' /home/executor/.claude/.credentials.json 2>/dev/null ); then ` +
+      `( [ ! -s /home/executor/.claude/.credentials.json ] || ${decide} ); then ` +
       `mkdir -p /home/executor/.claude && ` +
       `cp /seed/.credentials.json /home/executor/.claude/.credentials.json && ` +
       `chown -R executor:executor /home/executor/.claude; fi; `
     );
+  }
+
+  /**
+   * Keep the shared Claude login warm INDEPENDENTLY of any running portal. The
+   * access token lives ~8h and was only ever refreshed as a side-effect of an
+   * active container — so if every portal idles for >8h, the seed rotted and
+   * the next new portal got a dead login ("OAuth session expired"). This spins a
+   * throwaway executor that mounts the seed read-write, and — only when the
+   * token is within ~2h of expiry — forces a real refresh (a tiny `claude
+   * --print`, since `claude auth status` does NOT refresh) and writes the fresh
+   * credentials back to the seed. Runs off the watchdog (~every 5 min); the
+   * refresh itself fires rarely (near expiry). Best-effort; never throws.
+   */
+  async keepClaudeAuthWarm(): Promise<void> {
+    const vol = this.claudeAuthSeedVolume();
+    if (!vol) return;
+    // Only act when the seed token is within 2h of expiry (or already dead).
+    // Cheap pre-check via a tiny alpine read so we don't spin an executor every
+    // 5 min for nothing.
+    const NEAR_EXPIRY_MS = 2 * 3600_000;
+    try {
+      const probe = await this.docker.createContainer({
+        Image: 'alpine',
+        Entrypoint: ['sh', '-c'],
+        Cmd: [
+          `grep -o '"expiresAt":[0-9]*' /seed/.credentials.json 2>/dev/null | head -1 | grep -o '[0-9]*' || echo 0`,
+        ],
+        HostConfig: { Binds: [`${vol}:/seed:ro`], AutoRemove: true },
+      });
+      await probe.start();
+      const logs = await probe.logs({
+        stdout: true,
+        stderr: false,
+        follow: true,
+      });
+      const raw = await new Promise<string>((resolve) => {
+        const chunks: Buffer[] = [];
+        logs.on('data', (c: Buffer) => chunks.push(c));
+        logs.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        logs.on('error', () => resolve(''));
+      });
+      const expiresAt = parseInt(raw.replace(/[^0-9]/g, ''), 10) || 0;
+      if (expiresAt && expiresAt - Date.now() > NEAR_EXPIRY_MS) return; // still fresh
+    } catch {
+      return; // can't probe → skip quietly
+    }
+
+    // Near expiry: spin a full executor to force a refresh, then push back.
+    this.logger.log('Claude seed near expiry — refreshing it (keep-warm).');
+    try {
+      const refresher = await this.docker.createContainer({
+        Image: this.executorImage,
+        User: 'root',
+        Entrypoint: ['bash', '-c'],
+        Cmd: [
+          // seed → home, force refresh via a tiny print, push fresh token back.
+          `mkdir -p /home/executor/.claude && ` +
+            `cp /seed/.credentials.json /home/executor/.claude/.credentials.json && ` +
+            `chown -R executor:executor /home/executor/.claude && ` +
+            `su -s /bin/bash executor -c 'export HOME=/home/executor; ` +
+            `printf ok | claude --print --permission-mode bypassPermissions ` +
+            `--output-format stream-json --verbose --max-turns 1 >/dev/null 2>&1 || true' && ` +
+            // Only overwrite the seed if the refreshed token is newer.
+            `node -e 'const fs=require("fs");` +
+            `const S=JSON.parse(fs.readFileSync("/seed/.credentials.json","utf8")).claudeAiOauth||{};` +
+            `const M=JSON.parse(fs.readFileSync("/home/executor/.claude/.credentials.json","utf8")).claudeAiOauth||{};` +
+            `if((M.expiresAt||0)>(S.expiresAt||0)){fs.copyFileSync("/home/executor/.claude/.credentials.json","/seed/.credentials.json.tmp");fs.renameSync("/seed/.credentials.json.tmp","/seed/.credentials.json");console.log("seed refreshed")}'`,
+        ],
+        HostConfig: {
+          Binds: [`${vol}:/seed:rw`],
+          AutoRemove: true,
+          NetworkMode: 'bridge',
+        },
+      });
+      await refresher.start();
+      await refresher.wait();
+      this.logger.log('Claude seed keep-warm cycle done.');
+    } catch (err) {
+      this.logger.warn(`Claude keep-warm failed: ${(err as Error).message}`);
+    }
   }
 
   // ─── Container Lifecycle ────────────────────────────────────────
