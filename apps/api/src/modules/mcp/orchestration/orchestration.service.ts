@@ -196,6 +196,16 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     return this.containerService.checkEngineAuth();
   }
 
+  /** Start a panel-driven Claude re-login — returns the authorize URL. */
+  async reloginStart() {
+    return this.containerService.reloginStart();
+  }
+
+  /** Finish a panel-driven re-login with the pasted code. */
+  async reloginSubmit(code: string) {
+    return this.containerService.reloginSubmit(code);
+  }
+
   async setQueuePaused(organizationId: string, paused: boolean) {
     await this.prisma.organization.update({
       where: { id: organizationId },

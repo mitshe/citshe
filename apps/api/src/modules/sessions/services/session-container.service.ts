@@ -381,6 +381,183 @@ export class SessionContainerService implements OnModuleInit {
     }
   }
 
+  // ─── Claude re-login from the panel (no terminal) ────────────────
+  // The engine login (Claude subscription) occasionally expires. Instead of
+  // making the user SSH in and run `claude /login`, we drive `claude
+  // setup-token` (a LONG-LIVED, ~1-year token) from the panel: start() spins a
+  // dedicated container, runs setup-token in a tmux window, and returns the
+  // authorize URL; the user opens it, approves, copies the code, pastes it in
+  // the panel; submit() feeds the code to the waiting process and, on success,
+  // writes the fresh long-lived token to the shared seed for all portals.
+
+  private readonly RELOGIN_CONTAINER = 'citshe-relogin';
+  private readonly RELOGIN_TMUX = 'tmux -f /etc/tmux.conf';
+
+  /** Run a command in the relogin container; returns stdout (best-effort). */
+  private async reloginExec(cmd: string[]): Promise<string> {
+    const c = this.docker.getContainer(this.RELOGIN_CONTAINER);
+    const exec = await c.exec({
+      Cmd: cmd,
+      AttachStdout: true,
+      AttachStderr: true,
+      User: 'executor',
+      Env: ['HOME=/home/executor'],
+      Tty: false,
+    });
+    const stream = await exec.start({});
+    return new Promise<string>((resolve) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (d: Buffer) => chunks.push(d));
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      stream.on('error', () => resolve(''));
+    });
+  }
+
+  /**
+   * Start a panel-driven Claude re-login. Spins a dedicated container, launches
+   * `claude setup-token` inside a tmux window, waits for the authorize URL to
+   * appear, and returns it. The container stays up until submit() (or a reap).
+   */
+  async reloginStart(): Promise<{ ok: boolean; url?: string; error?: string }> {
+    // Clean any leftover container from a previous attempt.
+    await this.reloginCleanup();
+    try {
+      const container = await this.docker.createContainer({
+        name: this.RELOGIN_CONTAINER,
+        Image: this.executorImage,
+        User: 'root',
+        Entrypoint: ['bash', '-c'],
+        // Keep the container alive and start the shared tmux as executor.
+        Cmd: [
+          `chown -R executor:executor /home/executor 2>/dev/null; ` +
+            `su -s /bin/bash executor -c '${this.RELOGIN_TMUX} new-session -d -s citshe -x 200 -y 50'; ` +
+            `sleep 3600`,
+        ],
+        HostConfig: {
+          Binds: this.claudeAuthSeedVolume()
+            ? [`${this.claudeAuthSeedVolume()}:/seed:rw`]
+            : [],
+          AutoRemove: false,
+          NetworkMode: 'bridge',
+        },
+      });
+      await container.start();
+      // Give tmux a moment, then launch setup-token in a window and pipe its
+      // pane to a log we can read the URL from.
+      await this.sleepMs(1500);
+      await this.reloginExec([
+        'bash',
+        '-c',
+        `export HOME=/home/executor; ` +
+          `${this.RELOGIN_TMUX} new-window -t citshe -n login; ` +
+          `${this.RELOGIN_TMUX} pipe-pane -t citshe:login -o 'cat >> /tmp/relogin.log'; ` +
+          `${this.RELOGIN_TMUX} send-keys -t citshe:login 'claude setup-token' Enter`,
+      ]);
+
+      // Poll the log for the authorize URL (up to ~20s).
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        const log = await this.reloginExec([
+          'sh',
+          '-c',
+          'cat /tmp/relogin.log 2>/dev/null || true',
+        ]);
+        const url = this.extractOauthUrl(log);
+        if (url) return { ok: true, url };
+        await this.sleepMs(1500);
+      }
+      await this.reloginCleanup();
+      return {
+        ok: false,
+        error: "Couldn't get the sign-in link from Claude. Try again.",
+      };
+    } catch (err) {
+      await this.reloginCleanup();
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  /**
+   * Finish a panel-driven re-login: paste the code into the waiting setup-token
+   * process, wait for a fresh credential to be written, sync it to the shared
+   * seed, and tear down the container.
+   */
+  async reloginSubmit(
+    code: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const clean = (code || '').trim();
+    if (!clean) return { ok: false, error: 'Paste the code from Claude first.' };
+    try {
+      // Type the code into the waiting prompt.
+      await this.reloginExec([
+        'bash',
+        '-c',
+        `export HOME=/home/executor; ` +
+          `${this.RELOGIN_TMUX} send-keys -t citshe:login '${clean.replace(/'/g, "")}' Enter`,
+      ]);
+
+      // Wait for a valid, non-expired credential to land (up to ~30s).
+      const deadline = Date.now() + 30_000;
+      let ok = false;
+      while (Date.now() < deadline) {
+        const check = await this.reloginExec([
+          'node',
+          '-e',
+          `try{const o=require('/home/executor/.claude/.credentials.json').claudeAiOauth||{};` +
+            `process.stdout.write(o.accessToken&&(!o.expiresAt||o.expiresAt>Date.now())?'OK':'NO')}catch(e){process.stdout.write('NO')}`,
+        ]);
+        if (check.includes('OK')) {
+          ok = true;
+          break;
+        }
+        await this.sleepMs(2000);
+      }
+      if (!ok) {
+        await this.reloginCleanup();
+        return {
+          ok: false,
+          error: 'That code was rejected or timed out. Start again and retry.',
+        };
+      }
+
+      // Push the fresh (long-lived) token to the shared seed for all portals.
+      await this.reloginExec([
+        'sh',
+        '-c',
+        `cp /home/executor/.claude/.credentials.json /seed/.credentials.json.tmp && ` +
+          `mv /seed/.credentials.json.tmp /seed/.credentials.json`,
+      ]);
+      await this.reloginCleanup();
+      return { ok: true };
+    } catch (err) {
+      await this.reloginCleanup();
+      return { ok: false, error: (err as Error).message };
+    }
+  }
+
+  /** Pull the Claude OAuth authorize URL out of the setup-token pane log. */
+  private extractOauthUrl(log: string): string | undefined {
+    // The URL may be wrapped in OSC-8 hyperlink escapes and repeated; grab the
+    // first clean https://claude.com/…authorize?…state=… occurrence.
+    const m = log.match(
+      /https:\/\/claude\.com\/[^\s"]*authorize\?[^\s"]*/,
+    );
+    return m ? m[0] : undefined;
+  }
+
+  private async reloginCleanup(): Promise<void> {
+    try {
+      const c = this.docker.getContainer(this.RELOGIN_CONTAINER);
+      await c.remove({ force: true });
+    } catch {
+      /* not present — fine */
+    }
+  }
+
+  private sleepMs(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   // ─── Container Lifecycle ────────────────────────────────────────
 
   async createAndStart(

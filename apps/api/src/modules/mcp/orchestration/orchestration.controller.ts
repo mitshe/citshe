@@ -36,6 +36,24 @@ export class OrchestrationController {
     return this.orchestration.engineStatus();
   }
 
+  @Post('engine/relogin/start')
+  @ApiOperation({
+    summary: 'Start a panel-driven Claude re-login — returns the sign-in URL',
+  })
+  @ApiResponse({ status: 200, description: 'Authorize URL (or error)' })
+  async reloginStart() {
+    return this.orchestration.reloginStart();
+  }
+
+  @Post('engine/relogin/submit')
+  @ApiOperation({
+    summary: 'Finish the re-login with the code copied from Claude',
+  })
+  @ApiResponse({ status: 200, description: 'Success or error' })
+  async reloginSubmit(@Body() body: { code: string }) {
+    return this.orchestration.reloginSubmit(body?.code ?? '');
+  }
+
   @Post('queue/pause')
   @ApiOperation({ summary: 'Pause or resume automatic worker dispatch' })
   @ApiResponse({ status: 200, description: 'New pause state' })

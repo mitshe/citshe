@@ -32,6 +32,8 @@ import {
   useDeleteAICredential,
   useTestAICredentialBeforeConnect,
 } from "@/lib/api/hooks";
+import { useAuthToken } from "@/lib/api/hooks/shared";
+import { api } from "@/lib/api/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { AICredential, AIProvider } from "@/lib/api/types";
@@ -120,14 +122,14 @@ export default function AICredentialsPage() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Runs inside each worker container. Authenticated once on your
-                server with{" "}
-                <code className="rounded-sm border border-border bg-surface-inset px-1 py-0.5 font-mono text-xs">
-                  claude /login
-                </code>{" "}
-                — no API key here. This is the engine; it uses your Claude
-                subscription, not per-token billing.
+                Runs inside each worker container, using your Claude
+                subscription (no API key here). citshe keeps the login fresh
+                automatically. If it ever expires, reconnect it right here — no
+                terminal needed.
               </p>
+              <div className="mt-3">
+                <ReconnectClaude />
+              </div>
             </div>
           </div>
         </div>
@@ -369,5 +371,150 @@ function ConnectKeyDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Reconnect the Claude engine from the panel — no terminal. Two steps:
+ *  1. Start → the server runs `claude setup-token` and returns a sign-in URL.
+ *  2. You open it, approve, copy the code, paste it here → the server finishes
+ *     the login and stores a long-lived (~1-year) token for every portal.
+ */
+function ReconnectClaude() {
+  const getToken = useAuthToken();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setUrl(null);
+    setCode("");
+    setError(null);
+    setStarting(false);
+    setSubmitting(false);
+  };
+
+  const start = async () => {
+    setOpen(true);
+    reset();
+    setStarting(true);
+    try {
+      const token = await getToken();
+      const res = await api.orchestration.reloginStart(token);
+      if (res.ok && res.url) setUrl(res.url);
+      else setError(res.error ?? "Couldn't start sign-in. Try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start sign-in.");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!code.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res = await api.orchestration.reloginSubmit(code.trim(), token);
+      if (res.ok) {
+        toast.success("Claude reconnected — the engine is ready.");
+        setOpen(false);
+        reset();
+      } else {
+        setError(res.error ?? "That code didn't work. Try again.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't finish sign-in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={start}>
+        Reconnect Claude
+      </Button>
+
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) reset();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reconnect Claude</DialogTitle>
+            <DialogDescription>
+              Sign in with your Claude subscription — this gives citshe a
+              long-lived token, so you won&apos;t get logged out.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            {starting ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Getting your sign-in link…
+              </div>
+            ) : url ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>1. Open this link and approve</Label>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 truncate rounded-md border border-border bg-surface-inset px-3 py-2 text-sm text-primary transition-linear hover:bg-surface-hover"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Sign in to Claude</span>
+                  </a>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="relogin-code">2. Paste the code here</Label>
+                  <Input
+                    id="relogin-code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="Paste the code from Claude"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            ) : null}
+            {error && (
+              <p className="flex items-start gap-1.5 text-xs font-medium text-danger">
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+                {error}
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={submit} disabled={!url || !code.trim() || submitting}>
+              {submitting ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-1.5 h-4 w-4" />
+              )}
+              Finish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

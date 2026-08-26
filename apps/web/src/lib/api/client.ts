@@ -702,6 +702,19 @@ export const api = {
         { token },
       ),
 
+    // Panel-driven Claude re-login: start → returns a sign-in URL; submit →
+    // finishes with the code the user pasted. No terminal needed.
+    reloginStart: (token: string) =>
+      request<{ ok: boolean; url?: string; error?: string }>(
+        "/orchestration/engine/relogin/start",
+        { method: "POST", token },
+      ),
+    reloginSubmit: (code: string, token: string) =>
+      request<{ ok: boolean; error?: string }>(
+        "/orchestration/engine/relogin/submit",
+        { method: "POST", body: JSON.stringify({ code }), token },
+      ),
+
     setPaused: (paused: boolean, token: string) =>
       request<{ queuePaused: boolean }>("/orchestration/queue/pause", {
         method: "POST",
