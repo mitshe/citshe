@@ -149,7 +149,9 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       this.prisma.agentSession.count({
         where: {
           organizationId,
-          status: 'RUNNING',
+          // Count workers that are spinning up too, not just RUNNING — else the
+          // UI shows "0 of 3 running" for ~90s while a worker's container starts.
+          status: { in: ['CREATING', 'RUNNING'] },
           tasks: { some: {} },
         },
       }),
@@ -184,6 +186,14 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       where: { id: organizationId },
       data: { queuePaused: paused },
     });
+    if (paused) {
+      // Pull the org's waiting jobs so nothing starts while paused (active jobs
+      // finish; anything mid-pull reverts to QUEUED — see executeTask).
+      await this.removeOrgPendingJobs(organizationId).catch(() => undefined);
+    } else {
+      // On resume, re-enqueue the org's QUEUED tasks (respecting autoPull).
+      await this.enqueueOrgQueue(organizationId).catch(() => undefined);
+    }
     return { queuePaused: paused };
   }
 
@@ -282,10 +292,27 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   async enqueueTask(organizationId: string, taskId: string) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, organizationId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, sessionId: true },
     });
     if (!task) {
       return { status: 'error', message: `Task ${taskId} not found.` };
+    }
+
+    // RE-RUN handling ("Send back to Claude" on a REVIEW/COMPLETED task): the
+    // previous run's worker container is left RUNNING for ~30 min (for "Continue
+    // with Claude"). If we don't stop it, the new run hits the live-worker guard
+    // in executeTask and silently no-ops → the task sits QUEUED. So stop the old
+    // worker and detach it before re-queuing, so the fresh run gets a fresh
+    // container. The per-org home volume (and its Claude auth) survives.
+    if (
+      task.sessionId &&
+      (task.status === TaskStatus.REVIEW ||
+        task.status === TaskStatus.COMPLETED)
+    ) {
+      await this.stopTaskWorker(organizationId, taskId).catch(() => undefined);
+      await this.prisma.task
+        .update({ where: { id: taskId }, data: { sessionId: null } })
+        .catch(() => undefined);
     }
 
     const last = await this.prisma.task.findFirst({
@@ -384,12 +411,15 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       data: { queueOrder: newQueueOrder },
     });
 
-    // Re-prioritize the pending job if one exists (remove + re-add).
+    // Re-prioritize the pending job IN PLACE. The old remove+re-add left a
+    // window where a crash between the two dropped the job entirely (task stuck
+    // QUEUED with no job until the 3-min reconcile). changePriority is atomic.
     const job = await this.findPendingJob(organizationId, taskId);
     if (job) {
       try {
-        await job.remove();
-        await this.addTaskJob(organizationId, taskId, newQueueOrder);
+        await job.changePriority({
+          priority: this.queueOrderToPriority(newQueueOrder),
+        });
       } catch (err) {
         this.logger.warn(
           `Failed to reprioritize job for task ${taskId}: ${(err as Error).message}`,
@@ -439,20 +469,30 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       await stale.remove().catch(() => undefined);
     }
 
-    await this.taskQueue.add(
-      'run',
-      { taskId, organizationId },
-      {
-        // BullMQ forbids ':' in custom job ids ("Custom Id cannot contain :"),
-        // which made auto-pull 500. Use a dash-delimited id instead.
-        jobId: `task-${taskId}`,
-        priority: this.queueOrderToPriority(queueOrder),
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: 100,
-        removeOnFail: 50,
-      },
-    );
+    try {
+      await this.taskQueue.add(
+        'run',
+        { taskId, organizationId },
+        {
+          // BullMQ forbids ':' in custom job ids ("Custom Id cannot contain :"),
+          // which made auto-pull 500. Use a dash-delimited id instead.
+          jobId: `task-${taskId}`,
+          priority: this.queueOrderToPriority(queueOrder),
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: 100,
+          removeOnFail: 50,
+        },
+      );
+    } catch (err) {
+      // A concurrent add for the same stable jobId (double-click / watchdog
+      // racing the click) rejects with "job already exists". That's fine — it's
+      // already enqueued. Don't 500 the caller.
+      this.logger.warn(
+        `addTaskJob: job for ${taskId} already enqueued (${(err as Error).message}).`,
+      );
+      return false;
+    }
     return true;
   }
 
@@ -517,7 +557,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       select: { queuePaused: true },
     });
     const runningWorkers = await this.prisma.agentSession.count({
-      where: { organizationId, status: 'RUNNING' },
+      where: { organizationId, status: { in: ['CREATING', 'RUNNING'] } },
     });
 
     // Paused or at capacity → hold in the queue.
@@ -649,7 +689,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
 
     while (true) {
       const running = await this.prisma.agentSession.count({
-        where: { organizationId, status: 'RUNNING' },
+        where: { organizationId, status: { in: ['CREATING', 'RUNNING'] } },
       });
       if (running >= this.MAX_CONCURRENT_WORKERS) break;
 
@@ -713,13 +753,25 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Respect the hard global stop even if a job slipped through.
+    // Respect the hard global stop even if a job slipped through. Do NOT throw
+    // (that would burn a BullMQ attempt and, after 3, mark a perfectly healthy
+    // task FAILED just for being paused). Instead leave it QUEUED and return —
+    // resume (setQueuePaused(false)) re-enqueues it.
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { queuePaused: true },
     });
     if (org?.queuePaused) {
-      throw new Error('Queue is paused — retry later.');
+      await this.prisma.task
+        .updateMany({
+          where: { id: taskId, status: { not: TaskStatus.QUEUED } },
+          data: { status: TaskStatus.QUEUED },
+        })
+        .catch(() => undefined);
+      this.logger.log(
+        `executeTask: queue paused — task ${taskId} held QUEUED.`,
+      );
+      return;
     }
 
     // A build task clones the repo the wizard created up-front (so the worker
