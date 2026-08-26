@@ -944,13 +944,29 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       // can watch it live and even take over (attach to the same window). We
       // pipe the window to a log to capture the transcript, and detect the end
       // via a printed marker.
-      const output = await this.runClaudeInTmux(session.containerId, prompt);
+      const { output, exitCode } = await this.runClaudeInTmux(
+        session.containerId,
+        prompt,
+      );
 
-      // Claude never actually ran (e.g. not authenticated) — the worker printed
-      // an error and exited 0, so don't mislabel it as "ready for review".
+      // Claude failed to actually do the work — don't mislabel it as "ready for
+      // review". Two signals: (1) a non-zero REAL exit code (now via PIPESTATUS
+      // — auth expired, rate-limit, crash all exit non-zero); (2) a recognizable
+      // error string in the output (belt-and-suspenders for the exit-0 cases).
       const hardError = this.detectWorkerHardError(output);
-      if (hardError) {
-        throw new Error(hardError);
+      if (exitCode > 0 || hardError) {
+        throw new Error(
+          hardError ||
+            `The build agent exited with an error (code ${exitCode}). ` +
+              `This usually means the Claude login expired or a rate limit was ` +
+              `hit — try again in a moment.`,
+        );
+      }
+      // Exit 0 but no output at all → the agent produced nothing (silent stall).
+      if (exitCode === 0 && !output.trim()) {
+        throw new Error(
+          'The build agent finished without doing anything. Try running it again.',
+        );
       }
 
       const delivery = this.parseDeliveryResult(output);
@@ -1228,7 +1244,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   private async runClaudeInTmux(
     containerId: string,
     prompt: string,
-  ): Promise<string> {
+  ): Promise<{ output: string; exitCode: number }> {
     const promptB64 = Buffer.from(prompt).toString('base64');
     const LOG = '/tmp/citshe-agent.log';
     const OUT = '/tmp/citshe-agent.out';
@@ -1288,13 +1304,24 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         // container is RUNNING doesn't race the install. If it's still missing,
         // fall back to `cat` so the raw output always flows (never a dead pipe /
         // "command not found"). HOME is exported so claude finds its creds.
-        `${tmux} send-keys -t citshe:agent 'export HOME=/home/executor; ` +
+        // `set -o pipefail` + ${PIPESTATUS[0]} so the done-file records CLAUDE's
+        // real exit code, not the pipe's (citshe-stream/tee always exit 0). A
+        // non-zero code = a genuine failure (auth expired, rate-limit, crash) →
+        // the task is FAILED with a clear reason instead of landing in REVIEW
+        // empty. If the formatter is missing we fall back to plain --print (no
+        // stream-json) piped to tee, so the transcript stays HUMAN-READABLE
+        // instead of a wall of raw NDJSON.
+        `${tmux} send-keys -t citshe:agent 'set -o pipefail; export HOME=/home/executor; ` +
           `for i in $(seq 1 30); do [ -x ${STREAM} ] && break || sleep 0.5; done; ` +
-          `if [ -x ${STREAM} ]; then PIPE="${STREAM} ${OUT}"; else PIPE="tee ${OUT}"; fi; ` +
+          `if [ -x ${STREAM} ]; then ` +
           `claude --print --permission-mode bypassPermissions ` +
           `--output-format stream-json --include-partial-messages --verbose ` +
-          `< ${PROMPT} 2>&1 | $PIPE; ` +
-          `echo $? > ${DONEFILE}' Enter`,
+          `< ${PROMPT} 2>&1 | ${STREAM} ${OUT}; ` +
+          `else ` +
+          `claude --print --permission-mode bypassPermissions ` +
+          `< ${PROMPT} 2>&1 | tee ${OUT}; ` +
+          `fi; ` +
+          `echo \${PIPESTATUS[0]} > ${DONEFILE}' Enter`,
       ].join('; '),
     );
 
@@ -1318,12 +1345,17 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       await this.sleep(3000);
     }
 
+    // Read Claude's REAL exit code (via PIPESTATUS) from the done-file. Empty /
+    // unreadable → treat as unknown (-1). Non-zero = genuine failure.
+    const codeRaw = (await bash(`cat ${DONEFILE} 2>/dev/null || true`)).trim();
+    const exitCode = /^\d+$/.test(codeRaw) ? parseInt(codeRaw, 10) : -1;
+
     // The formatter wrote Claude's plain final text to ${OUT}. Fall back to
     // scrubbing the noisy pane capture only if that's empty.
     const out = (await bash(`cat ${OUT} 2>/dev/null || true`)).trim();
-    if (out) return out;
+    if (out) return { output: out, exitCode };
     const raw = await bash(`cat ${LOG} 2>/dev/null || true`);
-    return this.cleanTranscript(raw, DONE);
+    return { output: this.cleanTranscript(raw, DONE), exitCode };
   }
 
   /**
@@ -1764,10 +1796,13 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
    * REVIEW with an empty result. Returns a human message or null.
    */
   private detectWorkerHardError(output: string): string | null {
-    const head = output.slice(0, 4000);
+    // Scan BOTH ends — auth errors come at the start, rate-limit / crashes often
+    // at the very end after some streamed text.
+    const scan = output.slice(0, 4000) + '\n' + output.slice(-4000);
+
     if (
-      /Not logged in|Please run \/login|Invalid API key|Credit balance|OAuth session expired|could not be refreshed|Failed to authenticate/i.test(
-        head,
+      /Not logged in|Please run \/login|Invalid API key|Credit balance|OAuth session expired|could not be refreshed|Failed to authenticate|cannot be used with root/i.test(
+        scan,
       )
     ) {
       return (
@@ -1775,6 +1810,20 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         '`claude /login` once, then retry the task. If the whole engine went ' +
         'stale, the login has to be refreshed on the server.'
       );
+    }
+    if (
+      /rate limit|rate_limit|429|overloaded|Usage limit reached|quota exceeded|too many requests/i.test(
+        scan,
+      )
+    ) {
+      return 'Claude hit a rate/usage limit. Wait a few minutes and run the task again.';
+    }
+    if (
+      /ECONNREFUSED|ENOTFOUND|getaddrinfo|socket hang up|network error|fetch failed|ETIMEDOUT/i.test(
+        scan,
+      )
+    ) {
+      return "Couldn't reach Claude (a network error). Try running the task again.";
     }
     return null;
   }
