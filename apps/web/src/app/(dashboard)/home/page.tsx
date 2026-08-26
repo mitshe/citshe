@@ -522,14 +522,19 @@ function BuildHero({
     return null;
   })();
 
-  // States: building, deployed (has URL), built-but-not-deployed, failed.
+  // States: building, deployed (has URL), built-but-not-deployed, failed, stuck.
+  // "stuck" = a working-status task with no live worker that hasn't moved in a
+  // while — don't pulse "Building…" forever when nothing is actually running.
+  const stuck = isStuck(task);
   const state = failed
     ? "failed"
     : siteUrl
       ? "live"
       : deployError
         ? "nodeploy"
-        : "building";
+        : stuck
+          ? "stuck"
+          : "building";
   const title =
     state === "live"
       ? "Site is live"
@@ -537,13 +542,15 @@ function BuildHero({
         ? "Build failed"
         : state === "nodeploy"
           ? "Built — not deployed"
-          : spec.mode === "refresh"
-            ? "Refreshing your site"
-          : "Building your project";
+          : state === "stuck"
+            ? "Build didn't start"
+            : spec.mode === "refresh"
+              ? "Refreshing your site"
+              : "Building your project";
   const dotState =
     state === "live"
       ? "ok"
-      : state === "failed"
+      : state === "failed" || state === "stuck"
         ? "failed"
         : state === "nodeploy"
           ? "warn"
@@ -567,6 +574,10 @@ function BuildHero({
         </a>
       ) : state === "nodeploy" && deployError ? (
         <span className="truncate text-sm text-warn">{deployError}</span>
+      ) : state === "stuck" ? (
+        <span className="truncate text-sm text-muted-foreground">
+          Nothing picked this up. Open the task and run it again.
+        </span>
       ) : state === "building" ? (
         // Show the live worker note once it arrives; until then reassure rather
         // than showing an opaque repo slug (or nothing) beside the pulse.
