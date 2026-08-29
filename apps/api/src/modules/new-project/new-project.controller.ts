@@ -47,6 +47,10 @@ class NewProjectBuildSpecDto {
   @IsIn(['scratch', 'refresh'])
   mode: 'scratch' | 'refresh';
 
+  @IsIn(['website', 'webapp', 'api', 'scraper', 'worker'])
+  @IsOptional()
+  projectType?: 'website' | 'webapp' | 'api' | 'scraper' | 'worker';
+
   @IsString()
   @MinLength(1)
   @MaxLength(10000)

@@ -51,7 +51,7 @@ export const pluginCatalog: PluginDef[] = [
         type: "password",
         required: true,
         helpText:
-          "Token with Pages, R2 and Workers read access. citshe discovers everything the token can see — no need to name a project or bucket.",
+          "Create Custom Token with: Account → Cloudflare Pages → Edit (needed to deploy), Account → Workers Scripts → Edit, Account → Workers R2 Storage → Edit, Zone → DNS → Edit (custom domains). Scope to all accounts + zones. A zone-only (DNS) token connects but can't deploy.",
       },
       {
         key: "accountId",

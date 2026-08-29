@@ -196,7 +196,7 @@ const KEY_FIELDS: KeyField[] = [
     // Deploying to Pages needs the ACCOUNT-level Cloudflare Pages permission —
     // a zone-only (DNS) token connects but then fails at deploy time.
     guide:
-      'dash.cloudflare.com/profile/api-tokens → "Create Custom Token" → add Account · Cloudflare Pages · Edit (a zone-only token won\'t deploy).',
+      'dash.cloudflare.com/profile/api-tokens → Create Custom Token. Add these permissions: Account → Cloudflare Pages → Edit (required to deploy), Account → Workers Scripts → Edit, Account → Workers R2 Storage → Edit, and Zone → DNS → Edit (for custom domains). Scope: all accounts + all zones.',
   },
   {
     key: "vercel",
