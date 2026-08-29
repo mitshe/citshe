@@ -54,6 +54,7 @@ import {
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Eyebrow } from "@/components/ui/section-header";
+import { SitePreview } from "./site-preview";
 import { ClaudeLogo } from "@/components/ui/claude-logo";
 import { formatDistanceToNow, cn } from "@/lib/utils";
 import {
@@ -771,6 +772,11 @@ export function TaskDetail({
     </div>
   );
 
+  // Phase 1 visual editor: show the deployed site (or API) right in the panel.
+  // Only for things with a browsable URL (site/api), not headless scrapers.
+  const previewCard =
+    hasClickableUrl && siteUrl ? <SitePreview url={siteUrl} /> : null;
+
   // Description in its own bordered card (the big visual change).
   const descriptionCard = (
     <section className="space-y-2">
@@ -1175,6 +1181,7 @@ export function TaskDetail({
 
         {titleBlock}
         {primaryActions}
+        {previewCard}
         {descriptionCard}
         {detailsPanel}
         {activityBlock}
@@ -1211,6 +1218,7 @@ export function TaskDetail({
         <div className="min-w-0 space-y-6">
           {titleBlock}
           {primaryActions}
+          {previewCard}
           {descriptionCard}
           {activityBlock}
         </div>
