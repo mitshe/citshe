@@ -477,23 +477,10 @@ export function NewPortalPage() {
                       ?.description
                   }
                 </p>
-              </div>
-            </StepShell>
-          )}
 
-          {step === "describe" && (
-            <StepShell
-              title={
-                mode === "refresh"
-                  ? "Which site are we refreshing?"
-                  : "Describe your project"
-              }
-              subtitle="Claude picks the right stack and setup automatically."
-            >
-              <div className="space-y-5">
                 {/* Website-only: build new vs refresh an existing site. */}
                 {projectType === "website" && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2 pt-3">
                     <Label htmlFor="build-mode">Build</Label>
                     <Select
                       value={mode}
@@ -517,9 +504,27 @@ export function NewPortalPage() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="pt-0.5 text-sm text-muted-foreground">
+                      {mode === "refresh"
+                        ? "Point Claude at a live site and it builds a fresh, better version."
+                        : "Claude builds a brand-new site from your description."}
+                    </p>
                   </div>
                 )}
+              </div>
+            </StepShell>
+          )}
 
+          {step === "describe" && (
+            <StepShell
+              title={
+                mode === "refresh"
+                  ? "Which site are we refreshing?"
+                  : "Describe your project"
+              }
+              subtitle="Claude picks the right stack and setup automatically."
+            >
+              <div className="space-y-5">
                 <div className="space-y-1.5">
                   <Label htmlFor="portal-name">Project name</Label>
                   <Input
