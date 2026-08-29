@@ -1704,6 +1704,15 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       `You are a worker agent. Complete this task end-to-end in the current ` +
       `repository. Do not ask for confirmation — make reasonable decisions.\n\n` +
       `${delivery}\n\n` +
+      // If this task touches the UI, hold it to the house design bar.
+      `IF THIS TASK TOUCHES THE UI / FRONTEND, apply the house design bar: ` +
+      `professional, spacious, modern (Linear/Vercel/Stripe level) — a cohesive ` +
+      `palette with one accent, a real type scale, generous whitespace on a ` +
+      `4/8px rhythm, styled buttons with hover/focus, real specific copy (never ` +
+      `Lorem ipsum), crafted visuals over broken/placeholder images, mobile-` +
+      `first responsive, accessible (semantic HTML, alt text, focus rings, AA ` +
+      `contrast). Match the existing site's style unless asked to change it. ` +
+      `Don't ship something plainer than what's already there.\n\n` +
       this.commitIdentityRule() +
       this.secretsRule() +
       `Use the "citshe" skill to keep the human updated: leave a note at ` +
@@ -1837,10 +1846,13 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       '\n\n' +
       hostingRules +
       '\n\n' +
+      this.designRules() +
+      '\n\n' +
       `STEPS:\n` +
       repoStep +
-      `2. Scaffold and build the site per the stack rules. Make it genuinely ` +
-      `good — real content, clean design, responsive, sensible SEO.\n` +
+      `2. Scaffold and build the site per the stack + DESIGN rules above. The ` +
+      `design bar is NON-NEGOTIABLE — even if the prompt is short, ship a site ` +
+      `that looks like a real, professional product, not a template.\n` +
       `3. Commit and push (the default branch, origin is already set).\n` +
       `4. Deploy it to the chosen host so it is live on a public URL.\n` +
       `5. Report the live URL: run ` +
@@ -1859,6 +1871,74 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       `(repo created, framework scaffolded, deploying…) and attach a screenshot ` +
       `of the deployed site. Report meaningfully, don't spam.`
     );
+  }
+
+  /**
+   * The house design system. Injected into EVERY build so sites come out
+   * looking like a real, professional product even when the user's prompt is
+   * one lazy sentence. Concrete and opinionated on purpose — vague guidance
+   * ("make it clean") is what produces generic AI slop.
+   */
+  private designRules(): string {
+    return [
+      'DESIGN RULES — THE HOUSE STYLE (mandatory, applies to every build):',
+      'Ship something that looks designed, not generated. Reference bar: Linear,',
+      'Vercel, Stripe, Apple — calm, confident, spacious, modern. NEVER the',
+      'default-Bootstrap / generic-AI look. If the prompt is short, make the',
+      'tasteful decisions yourself — do not ship something plain.',
+      '',
+      'FOUNDATIONS',
+      '- Pick ONE cohesive palette and commit: a neutral base (near-white or a',
+      '  deep near-black, slightly tinted — never pure #fff/#000), ONE brand',
+      '  accent used sparingly, and 2–3 supporting shades. Define them as CSS',
+      '  variables / theme tokens; never hardcode ad-hoc hex all over.',
+      '- Type: a real typographic scale (e.g. 12/14/16/20/28/40/56), generous',
+      '  line-height (1.5–1.7 body), tight tracking on big headings. Use a',
+      '  quality font (Inter, Geist, or a tasteful Google font pairing) via the',
+      "  framework's font system — not the browser default.",
+      '- Spacing on a 4/8px rhythm. Be GENEROUS with whitespace — cramped is the',
+      '  #1 tell of an amateur site. Section padding ~80–120px vertical on',
+      '  desktop. Content in a centred max-width (~1100–1280px), never full-bleed',
+      '  text.',
+      '- Consistent radius (one small + one large), thin subtle borders, and',
+      '  restrained shadows. Flat-but-crafted beats heavy drop-shadows.',
+      '',
+      'LAYOUT & COMPONENTS',
+      '- Real structure: a proper sticky header with nav + a clear CTA, a strong',
+      '  hero (headline + subcopy + primary/secondary buttons), well-spaced',
+      '  content sections with eyebrow labels, and a proper multi-column footer.',
+      '- Use grids and cards with consistent internal padding and alignment.',
+      '  Everything on a shared baseline — no elements floating at random.',
+      '- Buttons: a clear primary (filled accent) and secondary (outline/ghost)',
+      '  with hover + focus states. Never a bare unstyled <button>.',
+      '- Responsive and mobile-first: it MUST look intentional at 375px — stack',
+      '  gracefully, keep tap targets ≥44px, no horizontal scroll.',
+      '- Subtle motion only: gentle hover transitions (~150ms), maybe one soft',
+      '  entrance. No gaudy animations.',
+      '',
+      'CONTENT & IMAGERY (this is what makes it look real)',
+      "- Write REAL, specific copy in the site's language — headlines with a",
+      '  point of view, concrete benefits, believable details. NEVER "Lorem',
+      '  ipsum", "Your text here", or empty placeholder sections.',
+      '- No broken images and no ugly stock-photo boxes. Prefer crafted visuals:',
+      '  tasteful CSS gradients, geometric/abstract SVG, duotone shapes, or',
+      '  inline icons (lucide/heroicons). If you use photos, use real ones from a',
+      '  free source (e.g. Unsplash source URLs) that fit the theme — never a',
+      '  grey "image" placeholder.',
+      '- Give it a tiny identity: a simple wordmark/logo (styled text or a small',
+      '  SVG mark) and a favicon.',
+      '',
+      'POLISH & CORRECTNESS',
+      '- Accessible: semantic HTML, real heading order, alt text, labelled',
+      '  controls, visible focus rings, AA contrast in both light and (if used)',
+      '  dark mode.',
+      '- SEO basics: <title>, meta description, Open Graph tags, sensible',
+      '  headings, clean routes.',
+      '- Verify the build succeeds AND spot-check the rendered pages (headless',
+      '  browser / screenshot) before deploying — no blank sections, overflow,',
+      '  or obviously-broken layout. If it looks plain or unfinished, iterate',
+      '  once before shipping.',
+    ].join('\n');
   }
 
   /**
