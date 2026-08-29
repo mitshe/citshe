@@ -183,12 +183,6 @@ export function NewPortalPage() {
   const [buildStep, setBuildStep] = useState<string | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
 
-  // GitHub token pre-flight (runs when leaving the "access" step). A blocking
-  // error keeps the user on the step; a warning lets them through with a note.
-  const [checkingGithub, setCheckingGithub] = useState(false);
-  const [githubError, setGithubError] = useState<string | null>(null);
-  const [githubWarning, setGithubWarning] = useState<string | null>(null);
-
   // "Improve with AI" on the description box.
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
@@ -252,35 +246,9 @@ export function NewPortalPage() {
     }
   };
 
-  const advance = async () => {
-    // Pre-flight the GitHub token when leaving "access" — catch an expired token
-    // or a missing "repo" scope here, with a clear fix, instead of failing the
-    // build later. A warning (e.g. no "workflow" scope) is non-blocking.
-    if (step === "access") {
-      const gh = keys.github?.trim();
-      if (gh) {
-        setCheckingGithub(true);
-        setGithubError(null);
-        setGithubWarning(null);
-        try {
-          const token = await getToken();
-          const v = await api.newProjectValidateGithub(gh, token);
-          if (!v.ok) {
-            setGithubError(
-              v.error ?? "That GitHub token didn't work. Please check it.",
-            );
-            return;
-          }
-          setGithubWarning(v.warning ?? null);
-        } catch {
-          // Don't hard-block on a transient check failure — the atomic build
-          // still validates for real. Let them proceed.
-          setGithubWarning(null);
-        } finally {
-          setCheckingGithub(false);
-        }
-      }
-    }
+  const advance = () => {
+    // Keys are validated inline by each ConnectBlock, so a set key is already a
+    // GOOD key — no re-check needed here.
     const next = NEW_STEPS[stepIndex + 1];
     if (next) setStep(next);
   };
@@ -391,20 +359,11 @@ export function NewPortalPage() {
               <Button
                 variant="primary"
                 className="ml-auto min-w-40"
-                onClick={() => void advance()}
-                disabled={!canContinue() || checkingGithub}
+                onClick={advance}
+                disabled={!canContinue()}
               >
-                {checkingGithub ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    Checking GitHub…
-                  </>
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight className="size-4" />
-                  </>
-                )}
+                Continue
+                <ArrowRight className="size-4" />
               </Button>
             )}
           </div>
@@ -554,44 +513,24 @@ export function NewPortalPage() {
           {step === "access" && (
             <StepShell
               title="Connect your accounts"
-              subtitle="citshe needs permission to save your code to GitHub. Paste the code below — GitHub is required, the rest are optional."
+              subtitle="GitHub is required — it's where your code lives. Connect a host so Claude can put the site online; add a database only if the project needs one."
             >
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {KEY_FIELDS.map((f) => (
-                  <KeyRow
+                  <ConnectBlock
                     key={f.key}
                     def={f}
                     value={keys[f.key] ?? ""}
-                    onChange={(v) => {
-                      setKeys((prev) => ({ ...prev, [f.key]: v }));
-                      // Editing the GitHub token invalidates the last check.
-                      if (f.key === "github") {
-                        setGithubError(null);
-                        setGithubWarning(null);
-                      }
-                    }}
+                    getToken={getToken}
+                    onChange={(v) =>
+                      setKeys((prev) => ({ ...prev, [f.key]: v }))
+                    }
                   />
                 ))}
               </div>
-              {githubError ? (
-                <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-danger">
-                  <AlertCircle className="mt-px size-3.5 shrink-0" />
-                  {githubError}
-                </p>
-              ) : githubWarning ? (
-                <p className="mt-3 flex items-start gap-1.5 text-xs font-medium text-warn">
-                  <AlertCircle className="mt-px size-3.5 shrink-0" />
-                  {githubWarning}
-                </p>
-              ) : !keys.github?.trim() ? (
-                <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-warn">
-                  <AlertCircle className="size-3.5" />
-                  GitHub is required — your project needs a place for its code.
-                </p>
-              ) : null}
-              <p className="mt-2 text-xs text-text-subtle">
-                Keys are encrypted. Cloudflare/Vercel/Neon are optional — Claude
-                uses whichever you provide.
+              <p className="mt-3 text-xs text-text-subtle">
+                Keys are encrypted and used only for this project. You can change
+                them later in the portal.
               </p>
             </StepShell>
           )}
@@ -694,47 +633,179 @@ export function NewPortalPage() {
   );
 }
 
-function KeyRow({
+/**
+ * One collapsible "connect a service" block. Collapsed it's a tidy row (icon-ish
+ * dot · name · status · Connect); expanded it takes the key, validates it inline
+ * (spinner → ✓ Connected / clear error), then collapses to a connected state.
+ * This scales cleanly to many integrations instead of a wall of always-open
+ * password inputs. The key is only lifted up (onChange) once it VALIDATES, so a
+ * set key is always a good key.
+ */
+function ConnectBlock({
   def,
   value,
+  getToken,
   onChange,
 }: {
   def: KeyField;
   value: string;
+  getToken: () => Promise<string | undefined>;
   onChange: (v: string) => void;
 }) {
+  const connected = !!value.trim();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  const validate = async () => {
+    const k = draft.trim();
+    if (!k) return;
+    setChecking(true);
+    setError(null);
+    setWarning(null);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in.");
+      if (def.key === "github") {
+        const v = await api.newProjectValidateGithub(k, token);
+        if (!v.ok) {
+          setError(v.error ?? "That token didn't work.");
+          return;
+        }
+        if (v.warning) setWarning(v.warning);
+      } else {
+        const v = await api.newProjectValidateKey(def.key, k, token);
+        if (!v.ok) {
+          setError(v.error ?? "That key didn't work.");
+          return;
+        }
+      }
+      // Validated → lift it up and collapse to the connected state.
+      onChange(k);
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't verify the key.");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const disconnect = () => {
+    onChange("");
+    setDraft("");
+    setError(null);
+    setWarning(null);
+    setOpen(false);
+  };
+
   return (
-    <div className="rounded-lg border border-border bg-surface-card p-3.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{def.name}</span>
-          {def.required ? (
-            <span className="rounded bg-surface-inset px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-subtle">
-              required
+    <div className="rounded-lg border border-border bg-surface-card">
+      {/* Header row — always visible. */}
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <span
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            connected ? "bg-ok" : "bg-text-subtle/40",
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">
+              {def.name}
             </span>
-          ) : (
-            <span className="text-xs text-text-subtle">optional</span>
+            {def.required && !connected && (
+              <span className="rounded bg-surface-inset px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-subtle">
+                required
+              </span>
+            )}
+          </div>
+          <p className="truncate text-xs text-text-subtle">
+            {connected ? "Connected" : def.purpose}
+          </p>
+        </div>
+        {connected ? (
+          <button
+            type="button"
+            onClick={disconnect}
+            className="shrink-0 text-xs font-medium text-text-subtle transition-linear hover:text-danger"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-linear hover:bg-surface-hover"
+          >
+            {open ? "Cancel" : "Connect"}
+          </button>
+        )}
+      </div>
+
+      {/* Expanded key entry. */}
+      {open && !connected && (
+        <div className="space-y-2 border-t border-border px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor={`key-${def.key}`} className="text-xs">
+              {def.label}
+            </Label>
+            <a
+              href={def.docsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-linear hover:underline"
+            >
+              How to get it <ExternalLink className="size-3" />
+            </a>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              id={`key-${def.key}`}
+              type="password"
+              autoComplete="off"
+              autoFocus
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void validate();
+              }}
+              placeholder={`Paste your ${def.name} ${def.label.toLowerCase()}`}
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void validate()}
+              disabled={!draft.trim() || checking}
+            >
+              {checking ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                "Connect"
+              )}
+            </Button>
+          </div>
+          <p className="text-xs text-text-subtle">{def.guide}</p>
+          {error && (
+            <p className="flex items-start gap-1.5 text-xs font-medium text-danger">
+              <AlertCircle className="mt-px size-3.5 shrink-0" />
+              {error}
+            </p>
           )}
         </div>
-        <a
-          href={def.docsUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-linear hover:underline"
-        >
-          How to get it <ExternalLink className="size-3" />
-        </a>
-      </div>
-      <p className="mt-0.5 text-xs text-text-subtle">{def.purpose}</p>
-      <Input
-        type="password"
-        autoComplete="off"
-        className="mt-2.5"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={`Paste your ${def.name} ${def.label.toLowerCase()}`}
-      />
-      <p className="mt-1.5 text-xs text-text-subtle">{def.guide}</p>
+      )}
+
+      {/* Non-blocking heads-up (e.g. GitHub missing workflow scope). */}
+      {connected && warning && (
+        <p className="flex items-start gap-1.5 border-t border-border px-3.5 py-2 text-xs font-medium text-warn">
+          <AlertCircle className="mt-px size-3.5 shrink-0" />
+          {warning}
+        </p>
+      )}
     </div>
   );
 }

@@ -83,6 +83,16 @@ class ImproveDescriptionDto {
   description: string;
 }
 
+class ValidateStackKeyDto {
+  @IsIn(['cloudflare', 'vercel', 'neon'])
+  provider: 'cloudflare' | 'vercel' | 'neon';
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  key: string;
+}
+
 class CreateNewProjectDto {
   @IsString()
   @MinLength(1)
@@ -124,6 +134,16 @@ export class NewProjectController {
   @ApiResponse({ status: 200, description: 'Validation verdict' })
   async validateGithub(@Body() dto: ValidateGithubDto) {
     return this.newProject.validateGithub(dto.github);
+  }
+
+  @Post('validate-key')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Validate a stack key (Cloudflare/Vercel/Neon) at add-time',
+  })
+  @ApiResponse({ status: 200, description: 'Validation verdict' })
+  async validateKey(@Body() dto: ValidateStackKeyDto) {
+    return this.newProject.validateStackKey(dto.provider, dto.key);
   }
 
   @Post('improve-description')

@@ -773,6 +773,18 @@ export const api = {
       { method: "POST", body: JSON.stringify({ github }), token },
     ),
 
+  // Validate a stack key (Cloudflare/Vercel/Neon) at add-time.
+  newProjectValidateKey: (
+    provider: "cloudflare" | "vercel" | "neon",
+    key: string,
+    token: string,
+  ) =>
+    request<{ ok: boolean; error?: string }>("/new-project/validate-key", {
+      method: "POST",
+      body: JSON.stringify({ provider, key }),
+      token,
+    }),
+
   // "Improve with AI" for the wizard's description (uses the user's AI key).
   newProjectImproveDescription: (description: string, token: string) =>
     request<{ description: string }>("/new-project/improve-description", {

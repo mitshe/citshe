@@ -10,6 +10,12 @@ import { EncryptionService } from '../../shared/encryption/encryption.service';
 import { GitHubAdapter } from '../../infrastructure/adapters/git-provider/github.adapter';
 import { AdapterFactoryService } from '../../infrastructure/adapters/adapter-factory.service';
 import { OrchestrationService } from '../mcp/orchestration/orchestration.service';
+import { pluginRegistry } from '../plugins/plugins/plugin.registry';
+// Register the concrete stack plugins (side-effect imports) so testConnection
+// works from the wizard even before any plugin route was hit.
+import '../plugins/plugins/cloudflare.plugin';
+import '../plugins/plugins/vercel.plugin';
+import '../plugins/plugins/neon.plugin';
 import type { BuildSpec } from '@citshe/types';
 
 export interface NewProjectKeys {
@@ -143,6 +149,33 @@ Reply with ONLY the improved description text — no preamble, no quotes, no mar
         ? 'Heads up: this token has no "workflow" scope. The build works, but it won\'t be able to add GitHub Actions files if it needs to.'
         : undefined;
     return { ok: true, login: v.login, warning };
+  }
+
+  /**
+   * Validate a stack key (Cloudflare / Vercel / Neon) at wizard time by running
+   * the plugin's own testConnection — so a bad or wrong-scope token is caught
+   * with a clear message WHEN YOU ADD IT, not silently later at deploy time.
+   */
+  async validateStackKey(
+    provider: 'cloudflare' | 'vercel' | 'neon',
+    key: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const k = key?.trim();
+    if (!k) return { ok: false, error: 'Paste the key to continue.' };
+    const map = {
+      cloudflare: { type: PluginType.CLOUDFLARE, config: { apiToken: k } },
+      vercel: { type: PluginType.VERCEL, config: { apiToken: k } },
+      neon: { type: PluginType.NEON, config: { apiKey: k } },
+    } as const;
+    const entry = map[provider];
+    if (!entry) return { ok: false, error: 'Unknown provider.' };
+    try {
+      const plugin = pluginRegistry.get(entry.type);
+      const res = await plugin.testConnection(entry.config);
+      return res.ok ? { ok: true } : { ok: false, error: res.error };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
 
   async create(
