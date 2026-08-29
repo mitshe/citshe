@@ -384,6 +384,42 @@ export function NewPortalPage() {
     }
   };
 
+  // Back + primary action — reused at the top and bottom of every step so the
+  // action is always reachable without scrolling back up.
+  const navButtons = (
+    <>
+      <Button variant="ghost" onClick={goBack}>
+        <ArrowLeft className="size-4" />
+        Back
+      </Button>
+      {step === "review" ? (
+        <Button
+          variant="primary"
+          className="ml-auto min-w-40"
+          onClick={build}
+          disabled={building}
+        >
+          {building ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Rocket className="size-4" />
+          )}
+          Build project
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          className="ml-auto min-w-40"
+          onClick={advance}
+          disabled={!canContinue()}
+        >
+          Continue
+          <ArrowRight className="size-4" />
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-background">
       {/* Top bar */}
@@ -407,37 +443,7 @@ export function NewPortalPage() {
           </div>
 
           {/* Nav at the TOP */}
-          <div className="mb-8 flex items-center gap-3">
-            <Button variant="ghost" onClick={goBack}>
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
-            {step === "review" ? (
-              <Button
-                variant="primary"
-                className="ml-auto min-w-40"
-                onClick={build}
-                disabled={building}
-              >
-                {building ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Rocket className="size-4" />
-                )}
-                Build project
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                className="ml-auto min-w-40"
-                onClick={advance}
-                disabled={!canContinue()}
-              >
-                Continue
-                <ArrowRight className="size-4" />
-              </Button>
-            )}
-          </div>
+          <div className="mb-8 flex items-center gap-3">{navButtons}</div>
 
           {step === "type" && (
             <StepShell
@@ -756,6 +762,11 @@ export function NewPortalPage() {
               )}
             </StepShell>
           )}
+
+          {/* Same nav at the BOTTOM so the action is reachable after scrolling. */}
+          <div className="mt-10 flex items-center gap-3 border-t border-border pt-6">
+            {navButtons}
+          </div>
         </div>
       </div>
     </div>
