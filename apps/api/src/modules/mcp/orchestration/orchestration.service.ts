@@ -1075,6 +1075,13 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             ...(delivery.prUrl ? { prUrl: delivery.prUrl } : {}),
             ...(delivery.branch ? { branch: delivery.branch } : {}),
             ...(delivery.siteUrl ? { siteUrl: delivery.siteUrl } : {}),
+            ...(delivery.deliverableKind
+              ? { deliverableKind: delivery.deliverableKind }
+              : {}),
+            ...(delivery.deliverableSummary
+              ? { deliverableSummary: delivery.deliverableSummary }
+              : {}),
+            ...(delivery.cron ? { cron: delivery.cron } : {}),
             ...(delivery.deployError
               ? { deployError: delivery.deployError }
               : {}),
@@ -2151,26 +2158,49 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     branch?: string;
     siteUrl?: string;
     deployError?: string;
+    /** The KIND of thing built, so the panel can render the right card. */
+    deliverableKind?: 'site' | 'api' | 'scraper' | 'worker';
+    /** For scraper/worker: the human summary from SCRAPER_OK/WORKER_OK. */
+    deliverableSummary?: string;
+    /** For scraper/worker: the cron expression it armed, if it reported one. */
+    cron?: string;
   } {
     const result: {
       prUrl?: string;
       branch?: string;
       siteUrl?: string;
       deployError?: string;
+      deliverableKind?: 'site' | 'api' | 'scraper' | 'worker';
+      deliverableSummary?: string;
+      cron?: string;
     } = {};
     // A build task reports its deployed thing with a machine-readable marker.
     // Sites/apps use SITE_URL; an API uses ENDPOINT; a scraper/worker uses a
     // SCRAPER_OK/WORKER_OK line (which may have no URL, just a summary). Treat
     // any of them as the "deployed" signal (last one wins).
-    const urlMatch =
-      lastMatch(output, /SITE_URL:\s*(\S+)/g) ??
-      lastMatch(output, /ENDPOINT:\s*(\S+)/g);
-    if (urlMatch) result.siteUrl = urlMatch;
+    const siteUrl = lastMatch(output, /SITE_URL:\s*(\S+)/g);
+    const endpoint = lastMatch(output, /ENDPOINT:\s*(\S+)/g);
+    if (siteUrl) {
+      result.siteUrl = siteUrl;
+      result.deliverableKind = 'site';
+    } else if (endpoint) {
+      result.siteUrl = endpoint;
+      result.deliverableKind = 'api';
+    }
     // Scraper/worker success without a URL — keep the summary so the panel can
     // still show "done" instead of an empty result.
     if (!result.siteUrl) {
-      const okLine = output.match(/(?:SCRAPER_OK|WORKER_OK):\s*(.+)/);
-      if (okLine) result.siteUrl = okLine[1].trim().slice(0, 200);
+      const scraper = lastMatch(output, /SCRAPER_OK:\s*(.+)/g);
+      const worker = lastMatch(output, /WORKER_OK:\s*(.+)/g);
+      const okLine = scraper ?? worker;
+      if (okLine) {
+        result.siteUrl = okLine.trim().slice(0, 200);
+        result.deliverableKind = scraper ? 'scraper' : 'worker';
+        result.deliverableSummary = okLine.trim().slice(0, 200);
+        // Both markers end with "cron <expr>" — pull the schedule out.
+        const cronMatch = okLine.match(/cron\s+([-\d*/,\s]+)/i);
+        if (cronMatch) result.cron = cronMatch[1].trim();
+      }
     }
     // The worker built + pushed but couldn't deploy — surface the reason so the
     // panel shows "couldn't put it online: …" instead of an empty result.

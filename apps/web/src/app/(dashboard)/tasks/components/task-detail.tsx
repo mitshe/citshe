@@ -48,6 +48,8 @@ import {
   ChevronDown,
   Globe,
   Link as LinkIcon,
+  Database,
+  Clock,
 } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -337,6 +339,33 @@ function extractSiteUrl(result: Task["result"]): string | null {
   return null;
 }
 
+type DeliverableKind = "site" | "api" | "scraper" | "worker";
+
+/** What KIND of thing the build produced + its summary/cron (build tasks). */
+function extractDeliverable(result: Task["result"]): {
+  kind: DeliverableKind;
+  summary: string | null;
+  cron: string | null;
+} | null {
+  if (!isRecord(result)) return null;
+  const kind = result["deliverableKind"];
+  if (
+    kind !== "site" &&
+    kind !== "api" &&
+    kind !== "scraper" &&
+    kind !== "worker"
+  ) {
+    return null;
+  }
+  const summary = result["deliverableSummary"];
+  const cron = result["cron"];
+  return {
+    kind,
+    summary: typeof summary === "string" ? summary : null,
+    cron: typeof cron === "string" ? cron : null,
+  };
+}
+
 const CLOSED_STATUSES: TaskStatus[] = ["COMPLETED", "CANCELLED", "FAILED"];
 const OPEN_STATUSES: TaskStatus[] = ["PENDING", "QUEUED"];
 // Statuses from which the user can (re)run the task through a worker. REVIEW and
@@ -552,6 +581,13 @@ export function TaskDetail({
   const resultSummary = extractResultSummary(task.result);
   const prUrl = extractPrUrl(task.result);
   const siteUrl = extractSiteUrl(task.result);
+  const deliverable = extractDeliverable(task.result);
+  // Scraper/worker have no clickable URL — their siteUrl is really a summary.
+  const hasClickableUrl =
+    !!siteUrl &&
+    (!deliverable ||
+      deliverable.kind === "site" ||
+      deliverable.kind === "api");
   const saving = updateTask.isPending;
   const liveWorker =
     !!task.sessionId &&
@@ -698,11 +734,11 @@ export function TaskDetail({
           {runLabel}
         </Button>
       )}
-      {siteUrl && (
+      {hasClickableUrl && siteUrl && (
         <a href={siteUrl} target="_blank" rel="noopener noreferrer">
           <Button variant="primary" size="sm">
             <Globe className="mr-2 h-3.5 w-3.5" />
-            Open site
+            {deliverable?.kind === "api" ? "Open API" : "Open site"}
             <ExternalLink className="ml-1.5 h-3 w-3 opacity-70" />
           </Button>
         </a>
@@ -790,6 +826,37 @@ export function TaskDetail({
 
       {/* Comment box sits at the TOP since the feed is newest-first. */}
       <CommentBox taskId={task.id} />
+
+      {/* Scraper/worker have no URL — show what ran + its schedule instead. */}
+      {deliverable &&
+        (deliverable.kind === "scraper" || deliverable.kind === "worker") && (
+          <div className="rounded-lg border border-border bg-surface-card p-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              {deliverable.kind === "scraper" ? (
+                <Database className="h-3.5 w-3.5" />
+              ) : (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              {deliverable.kind === "scraper" ? "Scraper" : "Worker"}
+              <StatusDot state="ok" size={8} className="ml-0.5" />
+              <span className="text-emerald-600 dark:text-emerald-400">
+                deployed
+              </span>
+            </div>
+            {deliverable.summary && (
+              <p className="text-sm text-foreground">{deliverable.summary}</p>
+            )}
+            {deliverable.cron && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                Runs on{" "}
+                <code className="rounded bg-surface-inset px-1 py-0.5 font-mono">
+                  {deliverable.cron}
+                </code>
+              </p>
+            )}
+          </div>
+        )}
 
       {resultSummary && (
         <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3">
