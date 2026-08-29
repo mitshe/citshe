@@ -471,7 +471,9 @@ export class SessionsService {
       );
       // GitHub App: mint a fresh short-lived installation token.
       if (config.mode === 'app' && config.installationId) {
-        token = await this.githubApp.getInstallationToken(config.installationId);
+        token = await this.githubApp.getInstallationToken(
+          config.installationId,
+        );
       } else {
         token = config.accessToken || config.apiToken || config.token;
       }

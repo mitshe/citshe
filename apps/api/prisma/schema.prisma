@@ -344,6 +344,8 @@ enum PluginType {
   VPS
   EXPO
   APPLE_DEVELOPER
+  STRIPE
+  CLERK
 }
 
 model Plugin {

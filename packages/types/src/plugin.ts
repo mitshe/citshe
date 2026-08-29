@@ -7,7 +7,9 @@ export type PluginType =
   | "GOOGLE_ADS"
   | "VPS"
   | "EXPO"
-  | "APPLE_DEVELOPER";
+  | "APPLE_DEVELOPER"
+  | "STRIPE"
+  | "CLERK";
 
 export type PluginConnStatus = "CONNECTED" | "ERROR" | "DISCONNECTED";
 

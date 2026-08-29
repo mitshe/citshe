@@ -1915,7 +1915,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             'source, then UPSERT into Neon Postgres (neonctl to create/get a ' +
             'project; DATABASE_URL via the worker secret, never committed). Be ' +
             'polite: reasonable rate, a real User-Agent, idempotent upserts so ' +
-            're-runs don\'t duplicate.' +
+            "re-runs don't duplicate." +
             stackForce,
           deployRules:
             'DEPLOY: ' +
@@ -1995,7 +1995,8 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             'before reporting done.\n' +
             '4. Report the live URL: run ' +
             '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n5. ',
-          doneLine: 'As the VERY LAST line, print exactly: SITE_URL: <live url>',
+          doneLine:
+            'As the VERY LAST line, print exactly: SITE_URL: <live url>',
           wantsDesign: true,
         };
 
@@ -2026,7 +2027,8 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             '3. Verify the build and spot-check the pages before deploying.\n' +
             '4. Report the live URL: run ' +
             '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n5. ',
-          doneLine: 'As the VERY LAST line, print exactly: SITE_URL: <live url>',
+          doneLine:
+            'As the VERY LAST line, print exactly: SITE_URL: <live url>',
           wantsDesign: true,
         };
     }

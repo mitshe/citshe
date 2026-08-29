@@ -17,6 +17,8 @@ import {
   SiGoogleads,
   SiExpo,
   SiApple,
+  SiStripe,
+  SiClerk,
 } from "react-icons/si";
 import { TbWebhook } from "react-icons/tb";
 import { AiFillApi } from "react-icons/ai";
@@ -107,6 +109,16 @@ export function ExpoIcon({ className }: IconProps) {
  */
 export function AppleIcon({ className }: IconProps) {
   return <SiApple className={cn("text-foreground", className)} />;
+}
+
+/** Stripe — payments plugin. */
+export function StripeIcon({ className }: IconProps) {
+  return <SiStripe className={cn("text-[#635BFF]", className)} />;
+}
+
+/** Clerk — auth plugin. Logomark is dark; tint to foreground for the nav. */
+export function ClerkIcon({ className }: IconProps) {
+  return <SiClerk className={cn("text-foreground", className)} />;
 }
 
 // ============================================================================

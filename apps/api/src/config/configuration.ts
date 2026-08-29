@@ -13,10 +13,11 @@ import * as path from 'path';
 function readFromEnvFile(envVar: string): string | undefined {
   for (const file of ['.env', '../../.env']) {
     try {
-      const content = fs.readFileSync(path.resolve(process.cwd(), file), 'utf-8');
-      const match = content.match(
-        new RegExp(`^${envVar}=(.*)$`, 'm'),
+      const content = fs.readFileSync(
+        path.resolve(process.cwd(), file),
+        'utf-8',
       );
+      const match = content.match(new RegExp(`^${envVar}=(.*)$`, 'm'));
       if (match) {
         // strip surrounding quotes + inline comments
         const val = match[1]

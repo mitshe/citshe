@@ -106,9 +106,7 @@ export class GithubAppService {
   }
 
   /** List the repos this installation was granted access to. */
-  async listInstallationRepos(
-    installationId: string,
-  ): Promise<
+  async listInstallationRepos(installationId: string): Promise<
     Array<{
       id: number;
       name: string;
@@ -154,10 +152,8 @@ export class GithubAppService {
     const key = this.getPrivateKey();
     if (!appId || !key) throw new Error('GitHub App is not configured.');
     const now = Math.floor(Date.now() / 1000);
-    return jwt.sign(
-      { iat: now - 60, exp: now + 9 * 60, iss: appId },
-      key,
-      { algorithm: 'RS256' },
-    );
+    return jwt.sign({ iat: now - 60, exp: now + 9 * 60, iss: appId }, key, {
+      algorithm: 'RS256',
+    });
   }
 }

@@ -7,6 +7,8 @@ import {
   GoogleAdsIcon,
   ExpoIcon,
   AppleIcon,
+  StripeIcon,
+  ClerkIcon,
 } from "@/components/icons/brand-icons";
 
 export interface PluginField {
@@ -104,6 +106,59 @@ export const pluginCatalog: PluginDef[] = [
         label: "Project ID",
         placeholder: "e.g. cool-forest-12345678",
         required: true,
+      },
+    ],
+  },
+  {
+    type: "STRIPE",
+    name: "Stripe",
+    tagline: "Payments — live or test, revenue, webhooks",
+    icon: <StripeIcon className="h-5 w-5" />,
+    accent: "text-[#635BFF]",
+    docsUrl: "https://dashboard.stripe.com/apikeys",
+    fields: [
+      {
+        key: "secretKey",
+        label: "Secret key",
+        placeholder: "sk_test_… / sk_live_…",
+        type: "password",
+        required: true,
+        helpText:
+          "From Stripe → Developers → API keys. Used to read payments and injected into builds so a webapp can wire Checkout.",
+      },
+      {
+        key: "webhookSecret",
+        label: "Webhook signing secret",
+        placeholder: "whsec_… (optional)",
+        type: "password",
+        helpText:
+          "From Stripe → Developers → Webhooks → your endpoint. Lets a build verify Stripe events instead of trusting the client.",
+      },
+    ],
+  },
+  {
+    type: "CLERK",
+    name: "Clerk",
+    tagline: "Auth — users, sessions, drop-in login",
+    icon: <ClerkIcon className="h-5 w-5" />,
+    accent: "text-foreground",
+    docsUrl: "https://dashboard.clerk.com/last-active?path=api-keys",
+    fields: [
+      {
+        key: "secretKey",
+        label: "Secret key",
+        placeholder: "sk_test_… / sk_live_…",
+        type: "password",
+        required: true,
+        helpText:
+          "From Clerk → API keys → Secret keys. Used to read user counts and injected into builds so a webapp can wire Clerk auth.",
+      },
+      {
+        key: "publishableKey",
+        label: "Publishable key",
+        placeholder: "pk_test_… / pk_live_… (optional)",
+        helpText:
+          "From Clerk → API keys. The frontend needs it to mount Clerk components.",
       },
     ],
   },

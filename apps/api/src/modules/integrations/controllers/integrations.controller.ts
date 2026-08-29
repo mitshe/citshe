@@ -46,10 +46,7 @@ export class IntegrationsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get an integration' })
-  async get(
-    @OrganizationId() organizationId: string,
-    @Param('id') id: string,
-  ) {
+  async get(@OrganizationId() organizationId: string, @Param('id') id: string) {
     const integration = await this.integrations.findOne(organizationId, id);
     return { integration };
   }
@@ -93,7 +90,9 @@ export class IntegrationsController {
   }
 
   @Get('github/app/start')
-  @ApiOperation({ summary: 'Begin GitHub App install (SSO). Returns install URL.' })
+  @ApiOperation({
+    summary: 'Begin GitHub App install (SSO). Returns install URL.',
+  })
   startGithubApp(@OrganizationId() organizationId: string) {
     if (!this.githubApp.isConfigured()) {
       throw new BadRequestException(

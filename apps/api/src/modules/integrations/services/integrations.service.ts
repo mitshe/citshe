@@ -4,7 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Integration, IntegrationStatus, IntegrationType } from '@prisma/client';
+import {
+  Integration,
+  IntegrationStatus,
+  IntegrationType,
+} from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/persistence/prisma/prisma.service';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
 import { AdapterFactoryService } from '../../../infrastructure/adapters/adapter-factory.service';
@@ -32,7 +36,8 @@ export class IntegrationsService {
     const integration = await this.prisma.integration.findFirst({
       where: { id, organizationId },
     });
-    if (!integration) throw new NotFoundException(`Integration ${id} not found`);
+    if (!integration)
+      throw new NotFoundException(`Integration ${id} not found`);
     return this.toResponse(integration);
   }
 
@@ -112,13 +117,15 @@ export class IntegrationsService {
     const integration = await this.prisma.integration.findFirst({
       where: { id, organizationId },
     });
-    if (!integration) throw new NotFoundException(`Integration ${id} not found`);
+    if (!integration)
+      throw new NotFoundException(`Integration ${id} not found`);
 
     try {
-      const provider = await this.adapterFactory.createGitProviderFromIntegration(
-        organizationId,
-        id,
-      );
+      const provider =
+        await this.adapterFactory.createGitProviderFromIntegration(
+          organizationId,
+          id,
+        );
       const result = await provider.testConnection();
       return {
         success: result.success,

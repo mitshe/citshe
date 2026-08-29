@@ -85,7 +85,9 @@ class AppleDeveloperPlugin implements StackPlugin {
    */
   private mintJwt(c: AppleConfig): string {
     if (!c.keyId || !c.issuerId || !c.privateKey) {
-      throw new Error('Key ID, Issuer ID and the .p8 private key are all required.');
+      throw new Error(
+        'Key ID, Issuer ID and the .p8 private key are all required.',
+      );
     }
     const now = Math.floor(Date.now() / 1000);
     // Normalize escaped newlines so a pasted single-line .p8 still parses.
@@ -96,15 +98,23 @@ class AppleDeveloperPlugin implements StackPlugin {
       return jwt.sign(
         { iss: c.issuerId, iat: now, exp: now + 19 * 60, aud: AUDIENCE },
         key,
-        { algorithm: 'ES256', header: { alg: 'ES256', kid: c.keyId, typ: 'JWT' } },
+        {
+          algorithm: 'ES256',
+          header: { alg: 'ES256', kid: c.keyId, typ: 'JWT' },
+        },
       );
     } catch (err) {
-      throw new Error(`Could not sign JWT — check the .p8 key. (${(err as Error).message})`);
+      throw new Error(
+        `Could not sign JWT — check the .p8 key. (${(err as Error).message})`,
+      );
     }
   }
 
   /** Authed GET against the App Store Connect API. Throws on non-2xx. */
-  private async get(token: string, path: string): Promise<{ data?: Resource[] }> {
+  private async get(
+    token: string,
+    path: string,
+  ): Promise<{ data?: Resource[] }> {
     const res = await fetch(`${API}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -127,10 +137,16 @@ class AppleDeveloperPlugin implements StackPlugin {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        return { ok: false, error: 'Key rejected (401) — check key ID / issuer ID / key.' };
+        return {
+          ok: false,
+          error: 'Key rejected (401) — check key ID / issuer ID / key.',
+        };
       }
       if (!res.ok) {
-        return { ok: false, error: `App Store Connect rejected the request (${res.status}).` };
+        return {
+          ok: false,
+          error: `App Store Connect rejected the request (${res.status}).`,
+        };
       }
       return { ok: true };
     } catch (err) {
@@ -159,7 +175,10 @@ class AppleDeveloperPlugin implements StackPlugin {
         metrics: [{ label: 'Apple', value: 'JWT mint failed', state: 'down' }],
         error: (err as Error).message,
         links: [
-          { label: 'Open App Store Connect', url: 'https://appstoreconnect.apple.com' },
+          {
+            label: 'Open App Store Connect',
+            url: 'https://appstoreconnect.apple.com',
+          },
         ],
       };
     }
@@ -175,7 +194,9 @@ class AppleDeveloperPlugin implements StackPlugin {
       });
       const first = apps[0];
       if (first) {
-        const name = (first.attributes.name as string) || (first.attributes.bundleId as string);
+        const name =
+          (first.attributes.name as string) ||
+          (first.attributes.bundleId as string);
         if (name) {
           metrics.push({
             label: 'App',
@@ -288,7 +309,8 @@ class AppleDeveloperPlugin implements StackPlugin {
       if (build) {
         const version = (build.attributes.version as string) || undefined;
         const uploaded = build.attributes.uploadedDate as string | undefined;
-        const processing = (build.attributes.processingState as string) || undefined;
+        const processing =
+          (build.attributes.processingState as string) || undefined;
         const state: HealthState =
           processing === 'VALID'
             ? 'ok'
@@ -297,7 +319,7 @@ class AppleDeveloperPlugin implements StackPlugin {
               : 'warn';
         metrics.push({
           label: 'Latest build',
-          value: version ? `v${version}` : (processing || 'build'),
+          value: version ? `v${version}` : processing || 'build',
           hint: uploaded ? timeAgo(uploaded) : processing,
           state,
           section: 'details',
@@ -318,7 +340,10 @@ class AppleDeveloperPlugin implements StackPlugin {
       metrics,
       items: items.length ? items : undefined,
       links: [
-        { label: 'Open App Store Connect', url: 'https://appstoreconnect.apple.com' },
+        {
+          label: 'Open App Store Connect',
+          url: 'https://appstoreconnect.apple.com',
+        },
       ],
     };
   }
@@ -366,7 +391,10 @@ class AppleDeveloperPlugin implements StackPlugin {
           const details: PluginResourceDetail[] = [];
           if (type) details.push({ label: 'Type', value: type });
           if (x.attributes.platform)
-            details.push({ label: 'Platform', value: x.attributes.platform as string });
+            details.push({
+              label: 'Platform',
+              value: x.attributes.platform as string,
+            });
           if (exp)
             details.push({
               label: 'Expires',
@@ -374,7 +402,10 @@ class AppleDeveloperPlugin implements StackPlugin {
               state: h.state,
             });
           if (x.attributes.serialNumber)
-            details.push({ label: 'Serial', value: x.attributes.serialNumber as string });
+            details.push({
+              label: 'Serial',
+              value: x.attributes.serialNumber as string,
+            });
           const metaParts = [type, exp ? h.label : undefined].filter(
             Boolean,
           ) as string[];
@@ -413,7 +444,10 @@ class AppleDeveloperPlugin implements StackPlugin {
           const state: HealthState = pstate === 'INVALID' ? 'down' : h.state;
           const details: PluginResourceDetail[] = [];
           if (x.attributes.profileType)
-            details.push({ label: 'Type', value: x.attributes.profileType as string });
+            details.push({
+              label: 'Type',
+              value: x.attributes.profileType as string,
+            });
           if (pstate) details.push({ label: 'State', value: pstate, state });
           if (exp)
             details.push({

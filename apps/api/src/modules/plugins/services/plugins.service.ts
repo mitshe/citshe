@@ -19,6 +19,8 @@ import '../plugins/google-ads.plugin';
 import '../plugins/vps.plugin';
 import '../plugins/expo.plugin';
 import '../plugins/apple-developer.plugin';
+import '../plugins/stripe.plugin';
+import '../plugins/clerk.plugin';
 
 interface CachedStatus {
   status: PluginStatus;
@@ -440,6 +442,30 @@ export class PluginsService {
           tools.push({
             type: 'Google Ads',
             hint: 'GOOGLE_ADS_* env is set for the Google Ads API (no bundled CLI).',
+          });
+          break;
+        }
+        case PluginType.STRIPE: {
+          const secret = str('secretKey');
+          if (!secret) break;
+          env.STRIPE_SECRET_KEY = secret;
+          const webhook = str('webhookSecret');
+          if (webhook) env.STRIPE_WEBHOOK_SECRET = webhook;
+          tools.push({
+            type: 'Stripe',
+            hint: 'STRIPE_SECRET_KEY is set. Wire Checkout + a webhook route that verifies the signature (STRIPE_WEBHOOK_SECRET) — never trust the client for payment state.',
+          });
+          break;
+        }
+        case PluginType.CLERK: {
+          const secret = str('secretKey');
+          if (!secret) break;
+          env.CLERK_SECRET_KEY = secret;
+          const pk = str('publishableKey');
+          if (pk) env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = pk;
+          tools.push({
+            type: 'Clerk',
+            hint: 'CLERK_SECRET_KEY (+ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) is set. Use Clerk middleware + components for auth; protect routes with it — no custom password handling.',
           });
           break;
         }

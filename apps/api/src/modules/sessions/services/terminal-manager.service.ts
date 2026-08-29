@@ -120,9 +120,7 @@ export class TerminalManagerService {
   private buildTmuxAttachCommand(terminalId: string, cmd: string[]): string {
     const win = this.windowName(terminalId);
     // Shell-quote the command the window should run.
-    const runCmd = cmd
-      .map((c) => `'${c.replace(/'/g, `'\\''`)}'`)
-      .join(' ');
+    const runCmd = cmd.map((c) => `'${c.replace(/'/g, `'\\''`)}'`).join(' ');
     const tmux = 'tmux -f /etc/tmux.conf';
     return (
       `if command -v tmux >/dev/null 2>&1; then ` +

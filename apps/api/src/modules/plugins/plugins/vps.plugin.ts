@@ -190,14 +190,14 @@ class VpsPlugin implements StackPlugin {
     //   PROC|<name>|<%mem>            (top process by memory, from ps)
     const script = [
       "echo UPTIME\\|$(uptime -p 2>/dev/null | sed 's/^up //' || echo '?')",
-      "echo LOAD\\|$(cat /proc/loadavg 2>/dev/null | awk '{print $1\"|\"$2\"|\"$3}' || echo '?')",
+      'echo LOAD\\|$(cat /proc/loadavg 2>/dev/null | awk \'{print $1"|"$2"|"$3}\' || echo \'?\')',
       'echo CPUS\\|$(nproc 2>/dev/null || echo 1)',
-      "echo MEM\\|$(free -m 2>/dev/null | awk '/^Mem:/{print $3\"|\"$2}')",
-      "echo DISK\\|$(df -h / 2>/dev/null | awk 'NR==2{print $5\"|\"$6\"|\"$3\"|\"$2}')",
-      "echo OS\\|$( (. /etc/os-release 2>/dev/null && echo \"$PRETTY_NAME\") || uname -sr 2>/dev/null || echo '?')",
+      'echo MEM\\|$(free -m 2>/dev/null | awk \'/^Mem:/{print $3"|"$2}\')',
+      'echo DISK\\|$(df -h / 2>/dev/null | awk \'NR==2{print $5"|"$6"|"$3"|"$2}\')',
+      'echo OS\\|$( (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || uname -sr 2>/dev/null || echo \'?\')',
       'echo USERS\\|$(who 2>/dev/null | wc -l)',
       "echo SERVICES\\|$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l || echo '?')",
-      "echo PROC\\|$(ps -eo comm,pmem --sort=-pmem 2>/dev/null | awk 'NR==2{print $1\"|\"$2}')",
+      'echo PROC\\|$(ps -eo comm,pmem --sort=-pmem 2>/dev/null | awk \'NR==2{print $1"|"$2}\')',
     ].join('; ');
 
     let raw: string;
@@ -277,7 +277,10 @@ class VpsPlugin implements StackPlugin {
 
     // CPU count
     if (fields.get('CPUS')?.[0]) {
-      details.push({ label: 'CPU', value: `${cpus} core${cpus === 1 ? '' : 's'}` });
+      details.push({
+        label: 'CPU',
+        value: `${cpus} core${cpus === 1 ? '' : 's'}`,
+      });
       metaParts.push(`${cpus} CPU`);
     }
 
@@ -288,10 +291,20 @@ class VpsPlugin implements StackPlugin {
       const total = parseInt(mem[1], 10);
       if (total > 0) {
         const pct = Math.round((used / total) * 100);
-        const memState: HealthState = pct > 90 ? 'down' : pct > 75 ? 'warn' : 'ok';
+        const memState: HealthState =
+          pct > 90 ? 'down' : pct > 75 ? 'warn' : 'ok';
         const memHint = `${(used / 1024).toFixed(1)}/${(total / 1024).toFixed(1)} GB`;
-        metrics.push({ label: 'RAM', value: `${pct}%`, hint: memHint, state: memState });
-        details.push({ label: 'RAM', value: `${pct}% · ${memHint}`, state: memState });
+        metrics.push({
+          label: 'RAM',
+          value: `${pct}%`,
+          hint: memHint,
+          state: memState,
+        });
+        details.push({
+          label: 'RAM',
+          value: `${pct}% · ${memHint}`,
+          state: memState,
+        });
         metaParts.push(`ram ${pct}%`);
         if (pct > 90) {
           state = 'down';
@@ -308,11 +321,21 @@ class VpsPlugin implements StackPlugin {
       const pct = parseInt(disk[0].replace('%', ''), 10);
       if (!Number.isNaN(pct)) {
         result.diskPct = pct;
-        const diskState: HealthState = pct > 90 ? 'down' : pct > 80 ? 'warn' : 'ok';
+        const diskState: HealthState =
+          pct > 90 ? 'down' : pct > 80 ? 'warn' : 'ok';
         const usedTotal =
           disk[2] && disk[3] ? `${disk[2]}/${disk[3]}` : disk[1] || '/';
-        metrics.push({ label: 'Disk', value: `${pct}%`, hint: disk[1] || '/', state: diskState });
-        details.push({ label: 'Disk (/)', value: `${pct}% · ${usedTotal}`, state: diskState });
+        metrics.push({
+          label: 'Disk',
+          value: `${pct}%`,
+          hint: disk[1] || '/',
+          state: diskState,
+        });
+        details.push({
+          label: 'Disk (/)',
+          value: `${pct}% · ${usedTotal}`,
+          state: diskState,
+        });
         metaParts.push(`disk ${pct}%`);
         if (pct > 90) {
           state = 'down';
@@ -338,7 +361,10 @@ class VpsPlugin implements StackPlugin {
     // Running services
     const services = fields.get('SERVICES')?.[0];
     if (services && services !== '?' && !Number.isNaN(parseInt(services, 10))) {
-      details.push({ label: 'Services', value: `${parseInt(services, 10)} running` });
+      details.push({
+        label: 'Services',
+        value: `${parseInt(services, 10)} running`,
+      });
     }
 
     // Top process by memory
@@ -505,10 +531,7 @@ class VpsPlugin implements StackPlugin {
             state: h.state,
             meta: `${s.host} · ${h.meta}`,
             // Prefix the host so the detail panel always identifies the box.
-            details: [
-              { label: 'Host', value: s.host },
-              ...h.details,
-            ],
+            details: [{ label: 'Host', value: s.host }, ...h.details],
             ...(h.error ? { error: h.error } : {}),
           };
         }),

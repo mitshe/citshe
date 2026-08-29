@@ -108,7 +108,10 @@ class GoogleAdsPlugin implements StackPlugin {
         headline: { label: 'Active', state: 'ok' },
         metrics,
         links: [
-          { label: 'Open Google Ads', url: 'https://ads.google.com/aw/overview' },
+          {
+            label: 'Open Google Ads',
+            url: 'https://ads.google.com/aw/overview',
+          },
         ],
       };
     } catch (err) {
@@ -119,7 +122,10 @@ class GoogleAdsPlugin implements StackPlugin {
         metrics: [],
         error: (err as Error).message,
         links: [
-          { label: 'Open Google Ads', url: 'https://ads.google.com/aw/overview' },
+          {
+            label: 'Open Google Ads',
+            url: 'https://ads.google.com/aw/overview',
+          },
         ],
       };
     }

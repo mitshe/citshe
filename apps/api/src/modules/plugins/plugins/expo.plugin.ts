@@ -106,9 +106,10 @@ class ExpoPlugin implements StackPlugin {
   }
 
   /** The authenticated actor + the accounts they can see. */
-  private async meActor(
-    c: ExpoConfig,
-  ): Promise<{ displayName?: string; accounts: Array<{ id: string; name: string }> }> {
+  private async meActor(c: ExpoConfig): Promise<{
+    displayName?: string;
+    accounts: Array<{ id: string; name: string }>;
+  }> {
     const data = await this.gql<{ meActor?: Rec | null }>(
       c,
       `query CitsheMeActor {
@@ -121,7 +122,7 @@ class ExpoPlugin implements StackPlugin {
         }
       }`,
     );
-    const actor = (data.meActor ?? {}) as Rec;
+    const actor = data.meActor ?? {};
     const displayName =
       (actor.username as string) ||
       (actor.fullName as string) ||
@@ -161,7 +162,10 @@ class ExpoPlugin implements StackPlugin {
   }
 
   /** Apps under an account (id/name/slug/fullName + git repo). */
-  private async listApps(c: ExpoConfig, accountName: string): Promise<Array<Rec>> {
+  private async listApps(
+    c: ExpoConfig,
+    accountName: string,
+  ): Promise<Array<Rec>> {
     const data = await this.gql<{ account?: { byName?: Rec } }>(
       c,
       `query CitsheAccountApps($name: String!) {
@@ -242,11 +246,15 @@ class ExpoPlugin implements StackPlugin {
 
   async testConnection(config: PluginConfig) {
     const c = this.cfg(config);
-    if (!c.token) return { ok: false, error: 'An Expo access token is required.' };
+    if (!c.token)
+      return { ok: false, error: 'An Expo access token is required.' };
     try {
       const me = await this.meActor(c);
       if (!me.accounts.length && !me.displayName) {
-        return { ok: false, error: 'Token accepted but no account is visible.' };
+        return {
+          ok: false,
+          error: 'Token accepted but no account is visible.',
+        };
       }
       return { ok: true };
     } catch (err) {
@@ -277,7 +285,11 @@ class ExpoPlugin implements StackPlugin {
           section: 'details',
         });
       } else if (me.displayName) {
-        metrics.push({ label: 'Account', value: me.displayName, section: 'details' });
+        metrics.push({
+          label: 'Account',
+          value: me.displayName,
+          section: 'details',
+        });
       }
     } catch {
       // account optional — skip quietly
@@ -308,7 +320,8 @@ class ExpoPlugin implements StackPlugin {
             metrics.push({
               label: 'Last build',
               value: `${timeAgo(latest.createdAt as string)} · ${h.label}`,
-              hint: [latest._app, plat].filter(Boolean).join(' · ') || undefined,
+              hint:
+                [latest._app, plat].filter(Boolean).join(' · ') || undefined,
               state: h.state,
               section: 'hero',
             });
@@ -340,7 +353,9 @@ class ExpoPlugin implements StackPlugin {
             });
 
             // Build success rate over the fetched window (honest signal).
-            const finished = builds.filter((b) => b.status === 'FINISHED').length;
+            const finished = builds.filter(
+              (b) => b.status === 'FINISHED',
+            ).length;
             const errored = builds.filter(
               (b) => buildHealth(b.status as string).state === 'down',
             ).length;
