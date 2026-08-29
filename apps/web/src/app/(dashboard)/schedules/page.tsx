@@ -85,7 +85,7 @@ export default function SchedulesPage() {
   const isEmpty = !isLoading && schedules.length === 0;
 
   return (
-    <div className="w-full max-w-[1000px] space-y-5 px-4 py-5 sm:px-6 sm:py-6">
+    <div className="w-full max-w-[1400px] space-y-5 px-4 sm:px-6 py-6 sm:py-8">
       <PageHeader
         title="Schedules"
         description="Recurring tasks — a prompt on a cron. Each run lands on the board."

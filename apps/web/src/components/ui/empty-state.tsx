@@ -30,9 +30,10 @@ function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        // Cap the width so it never sprawls across a wide page — an empty state
-        // reads as a tidy panel, not a giant stretched box.
-        "flex max-w-xl flex-col gap-3 rounded-lg border border-dashed border-border bg-surface-inset/40 px-6 py-8",
+        // Fills its container (which the page constrains) so it lines up with
+        // the page header and other content — a consistent full-width panel,
+        // like the Repos page.
+        "flex w-full flex-col gap-3 rounded-lg border border-dashed border-border bg-surface-inset/40 px-6 py-8",
         centered
           ? "items-center justify-center py-12 text-center"
           : "items-start text-left",
