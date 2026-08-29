@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { TaskStatus } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
 import { TasksService } from '../services/tasks.service';
+import { SchedulesService } from '../../schedules/services/schedules.service';
 
 interface WorkerTokenPayload {
   organizationId: string;
@@ -32,6 +33,7 @@ interface WorkerTokenPayload {
 export class WorkerTasksController {
   constructor(
     private readonly tasksService: TasksService,
+    private readonly schedulesService: SchedulesService,
     private readonly config: ConfigService,
   ) {}
 
@@ -186,5 +188,39 @@ export class WorkerTasksController {
       url,
     );
     return { ok: true };
+  }
+
+  @Post('schedule')
+  @ApiOperation({
+    summary: 'Arm a citshe-side recurring task (cron) from inside a worker',
+  })
+  async schedule(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { name?: string; prompt?: string; cron?: string },
+  ) {
+    const payload = this.verifyWorker(authorization);
+
+    const name = (body.name || '').trim();
+    const prompt = (body.prompt || '').trim();
+    const cron = (body.cron || '').trim();
+    if (!name) throw new BadRequestException('name is required');
+    if (!prompt) throw new BadRequestException('prompt is required');
+    // A 5-field cron expression (minute hour dom month dow).
+    if (!/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/.test(cron)) {
+      throw new BadRequestException(
+        'cron must be a 5-field expression, e.g. "0 * * * *"',
+      );
+    }
+
+    const schedule = await this.schedulesService.create(
+      payload.organizationId,
+      payload.userId,
+      {
+        name: name.slice(0, 200),
+        prompt: prompt.slice(0, 10_000),
+        cron,
+      },
+    );
+    return { id: schedule.id, name: schedule.name, cron: schedule.cron };
   }
 }

@@ -4,9 +4,10 @@ import { TasksController } from './controllers/tasks.controller';
 import { WorkerTasksController } from './controllers/worker-tasks.controller';
 import { TasksService } from './services/tasks.service';
 import { TaskComposerService } from './services/task-composer.service';
+import { SchedulesModule } from '../schedules/schedules.module';
 
 @Module({
-  imports: [CqrsModule],
+  imports: [CqrsModule, SchedulesModule],
   controllers: [TasksController, WorkerTasksController],
   providers: [TasksService, TaskComposerService],
   exports: [TasksService],

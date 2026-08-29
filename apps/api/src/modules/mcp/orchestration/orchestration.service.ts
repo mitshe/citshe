@@ -1957,6 +1957,10 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
             'STACK: a Cloudflare Worker with a Cron Trigger (wrangler.toml ' +
             '`[triggers] crons`). Do the action in scheduled(). Use Neon for ' +
             'any state it needs. Make the run idempotent and logged.' +
+            ' If each run genuinely needs an AI agent (heavy reasoning, not a ' +
+            'fixed script), instead arm a citshe-side cron with ' +
+            '`citshe-schedule "<name>" "<what to do each run>" "<cron>"` and ' +
+            'skip the edge Worker.' +
             stackForce,
           deployRules:
             'DEPLOY: ' +

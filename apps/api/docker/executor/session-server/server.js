@@ -378,6 +378,40 @@ function installCitsheTaskCli() {
 }
 
 /**
+ * Install `citshe-schedule "name" "prompt" "<cron>"` so a worker building a
+ * scraper/worker project can arm a citshe-side recurring task (Model B) — used
+ * when each run genuinely needs the agent, instead of an edge cron. Reuses the
+ * worker token; the schedule shows up on the board's Schedules page.
+ */
+function installCitsheScheduleCli() {
+  if (!process.env.CITSHE_WORKER_TOKEN || !process.env.CITSHE_API_URL) return;
+  const binDir = '/home/executor/bin';
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    const script = [
+      '#!/bin/bash',
+      '# citshe-schedule "name" "prompt" "<cron>" — arm a recurring task (cron).',
+      'set -e',
+      'NAME="$1"; PROMPT="$2"; CRON="$3"',
+      'if [ -z "$NAME" ] || [ -z "$PROMPT" ] || [ -z "$CRON" ]; then',
+      '  echo "usage: citshe-schedule <name> <prompt> <cron>" >&2; exit 1; fi',
+      'jq -n --arg n "$NAME" --arg p "$PROMPT" --arg c "$CRON" \\',
+      "  '{name:$n, prompt:$p, cron:$c}' | \\",
+      '  curl -sS -X POST "$CITSHE_API_URL/api/v1/worker/tasks/schedule" \\',
+      '    -H "Authorization: Bearer $CITSHE_WORKER_TOKEN" \\',
+      '    -H "Content-Type: application/json" -d @-',
+      'echo',
+    ].join('\n');
+    fs.writeFileSync(path.join(binDir, 'citshe-schedule'), script, {
+      mode: 0o755,
+    });
+    log('Installed citshe-schedule CLI (agent can arm recurring tasks)');
+  } catch (err) {
+    log('Could not install citshe-schedule CLI: ' + err.message);
+  }
+}
+
+/**
  * Install `citshe-stream <out-file>` — a formatter for `claude --print
  * --output-format stream-json`. Reads the JSON event stream on stdin, prints a
  * clean, human-readable LIVE transcript to the pane (Claude's text as it
@@ -969,6 +1003,7 @@ async function setup() {
   ensureBinOnPath();
   installCitsheStreamCli();
   installCitsheTaskCli();
+  installCitsheScheduleCli();
   installCitsheShotCli();
   installCitsheSkill();
   preacceptClaudeBypass();
