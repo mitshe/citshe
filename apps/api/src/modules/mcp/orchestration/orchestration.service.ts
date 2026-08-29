@@ -1773,45 +1773,10 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
     spec: BuildSpec,
     comments: string[] = [],
   ): string {
+    const type = spec.projectType ?? 'website';
+    const recipe = this.projectTypeRecipe(spec);
     const visibilityFlag =
       spec.visibility === 'public' ? '--public' : '--private';
-
-    const stackRules = [
-      'STACK RULES (pick what fits what you are building):',
-      '- A web application (auth, dashboards, dynamic server logic) → Next.js.',
-      '- A static site (blog, docs, landing) → Astro.',
-      '- A content site that needs interactive islands → Astro + Svelte.',
-      '- If it needs a database → Neon (Postgres); use the neonctl CLI / NEON_API_KEY.',
-      spec.stackHint ? `The user forced the stack: use ${spec.stackHint}.` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const hostingRules = [
-      'HOSTING (deploy the finished site so it is live on a URL):',
-      'First run `env | grep -E "CLOUDFLARE|VERCEL|NEON"` to see which tokens are',
-      'connected. Only use a host whose token is present; if your first choice',
-      "isn't connected, use whichever IS and leave a citshe note about it.",
-      '- Astro / static / content → Cloudflare Pages. Deploy with:',
-      '    `wrangler pages project create <slug> --production-branch=main` (once),',
-      '    then `wrangler pages deploy <build-dir> --project-name=<slug>`',
-      '    (Astro build-dir is `dist`).',
-      '- Next.js / application → Vercel. Deploy with:',
-      '    `vercel deploy --prod --yes --token $VERCEL_TOKEN` (run `vercel pull`',
-      '    or accept defaults; do NOT open a browser).',
-      '- Next.js can also run on Cloudflare if that is what is connected.',
-      'This is a ONE-SHOT deploy from here — do NOT create GitHub Actions',
-      'workflows and do NOT put any token into the repo (see SECRETS).',
-      '- If the app needs a database → Neon. `neonctl projects create` (or use an',
-      '  existing project), get the Postgres connection string, and set it as the',
-      "  app's DATABASE_URL in the HOST's env vars (Cloudflare Pages / Vercel",
-      '  project env) — NEVER commit it. Run any migrations before deploy.',
-      spec.hostingHint
-        ? `The user forced the host: deploy to ${spec.hostingHint}.`
-        : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
 
     const source =
       spec.mode === 'refresh' && spec.sourceUrl
@@ -1819,7 +1784,7 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
           `First visit it (fetch it / open it) to understand what they do and ` +
           `their current style, then build a modern, faster, better version — ` +
           `same character, improved UX. Do NOT copy it verbatim.\n\n`
-        : `This is a brand-new project, built from scratch.\n\n`;
+        : `This is a brand-new ${recipe.label}, built from scratch.\n\n`;
 
     const extra =
       comments.length > 0
@@ -1837,40 +1802,234 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
         `${visibilityFlag} --source . --remote origin (initialise git in ` +
         `/workspace first; the repo MUST be ${spec.visibility}).\n`;
 
+    // The design system only matters for things with a UI. A pure API/scraper/
+    // worker doesn't need a hero section.
+    const designBlock = recipe.wantsDesign ? this.designRules() + '\n\n' : '';
+
     return (
-      `You are a builder agent. Build a project and deploy it live. Do not ask ` +
-      `for confirmation — make reasonable decisions.\n\n` +
+      `You are a builder agent. ${recipe.goal} Do not ask for confirmation — ` +
+      `make reasonable decisions.\n\n` +
       source +
       `WHAT THE USER WANTS:\n${spec.prompt.trim()}${extra}\n\n` +
-      stackRules +
+      recipe.stackRules +
       '\n\n' +
-      hostingRules +
+      recipe.deployRules +
       '\n\n' +
-      this.designRules() +
-      '\n\n' +
+      designBlock +
       `STEPS:\n` +
       repoStep +
-      `2. Scaffold and build the site per the stack + DESIGN rules above. The ` +
-      `design bar is NON-NEGOTIABLE — even if the prompt is short, ship a site ` +
-      `that looks like a real, professional product, not a template.\n` +
-      `3. Commit and push (the default branch, origin is already set).\n` +
-      `4. Deploy it to the chosen host so it is live on a public URL.\n` +
-      `5. Report the live URL: run ` +
-      `\${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n` +
-      `6. FINISH: run \${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review — this ` +
+      recipe.buildStep +
+      `Commit and push (the default branch, origin is already set), then deploy.\n` +
+      recipe.deliverStep +
+      `FINISH: run \${CLAUDE_SKILL_DIR}/scripts/citshe-status.sh review — this ` +
       `is how the panel knows you are DONE. The task stays "in progress" until ` +
-      `you run it, so ONLY run it when the site is actually live. Also print, as ` +
-      `the VERY LAST line of your output, exactly: SITE_URL: <live url>\n` +
-      `If you CANNOT deploy (no hosting token connected, or deploy failed), do ` +
-      `the build + commit + push anyway, then instead of SITE_URL print exactly: ` +
+      `you run it, so ONLY run it when it is actually working. ` +
+      recipe.doneLine +
+      `\nIf you CANNOT deploy (no token connected, or deploy failed), do the ` +
+      `build + commit + push anyway, then instead print exactly: ` +
       `DEPLOY_FAILED: <one-line reason> — so the panel can tell the human what ` +
       `to fix, rather than showing an empty result.\n\n` +
       this.commitIdentityRule() +
       this.secretsRule() +
       `Use the "citshe" skill throughout: leave a note at meaningful milestones ` +
-      `(repo created, framework scaffolded, deploying…) and attach a screenshot ` +
-      `of the deployed site. Report meaningfully, don't spam.`
+      `and ${recipe.wantsDesign ? 'attach a screenshot of the deployed site' : 'attach output/proof it works'}. ` +
+      `Report meaningfully, don't spam. (project type: ${type})`
     );
+  }
+
+  /**
+   * The per-project-type recipe: goal, stack, deploy target, build/deliver
+   * steps, the machine-readable "done" marker, and whether the house design
+   * system applies. This is what turns a task from "always build a website"
+   * into "build the RIGHT kind of thing" (API / scraper / cron worker / app).
+   */
+  private projectTypeRecipe(spec: BuildSpec): {
+    label: string;
+    goal: string;
+    stackRules: string;
+    deployRules: string;
+    buildStep: string;
+    deliverStep: string;
+    doneLine: string;
+    wantsDesign: boolean;
+  } {
+    const type = spec.projectType ?? 'website';
+    const stackForce = spec.stackHint
+      ? `\nThe user forced the stack: use ${spec.stackHint}.`
+      : '';
+    const hostForce = spec.hostingHint
+      ? `\nThe user forced the host: deploy to ${spec.hostingHint}.`
+      : '';
+    const envCheck =
+      'First run `env | grep -E "CLOUDFLARE|VERCEL|NEON|STRIPE|CLERK"` to see ' +
+      'which tokens are connected; only use a service whose token is present, ' +
+      'and leave a citshe note if a needed one is missing.';
+    const secretsToHost =
+      'App runtime secrets (DATABASE_URL, STRIPE_SECRET_KEY, CLERK_SECRET_KEY, ' +
+      "…) go in the HOST's env vars (Cloudflare/Vercel project env), NEVER in " +
+      'the repo. This is a ONE-SHOT deploy — do NOT create GitHub Actions.';
+
+    switch (type) {
+      case 'api':
+        return {
+          label: 'API / backend service',
+          goal: 'Build an HTTP API and deploy it live.',
+          stackRules:
+            'STACK: a small HTTP API — Hono or itty-router on Cloudflare ' +
+            'Workers (preferred, edge, cheap) OR Next.js route handlers on ' +
+            'Vercel. Add Neon (Postgres) if it needs persistence (neonctl / ' +
+            'NEON_API_KEY). Return JSON, validate input, handle errors and CORS.' +
+            stackForce,
+          deployRules:
+            'DEPLOY: ' +
+            envCheck +
+            '\n- Cloudflare Worker → `wrangler deploy` (define routes in ' +
+            'wrangler.toml).\n- Next.js API → `vercel deploy --prod --yes ' +
+            '--token $VERCEL_TOKEN`.\n' +
+            secretsToHost +
+            hostForce,
+          buildStep:
+            '2. Build the API: real endpoints, input validation, sane status ' +
+            'codes, a short README documenting each route with an example ' +
+            'curl. Add a health route (GET /health → 200).\n',
+          deliverStep:
+            '3. Verify a couple of endpoints actually respond (curl the ' +
+            'deployed URL) before reporting done.\n' +
+            '4. Report the base URL: run ' +
+            '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<api base url>".\n5. ',
+          doneLine:
+            'As the VERY LAST line, print exactly: ENDPOINT: <api base url>',
+          wantsDesign: false,
+        };
+
+      case 'scraper':
+        return {
+          label: 'scraper',
+          goal:
+            'Build a scraper that pulls data on a schedule into a database, ' +
+            'and deploy it so it runs automatically.',
+          stackRules:
+            'STACK: a Cloudflare Worker with a Cron Trigger ' +
+            '(wrangler.toml `[triggers] crons = ["0 * * * *"]` — pick a sane ' +
+            'cadence from the task, hourly if unsure). Fetch + parse the ' +
+            'source, then UPSERT into Neon Postgres (neonctl to create/get a ' +
+            'project; DATABASE_URL via the worker secret, never committed). Be ' +
+            'polite: reasonable rate, a real User-Agent, idempotent upserts so ' +
+            're-runs don\'t duplicate.' +
+            stackForce,
+          deployRules:
+            'DEPLOY: ' +
+            envCheck +
+            '\n- `wrangler deploy` publishes the Worker AND arms its cron on ' +
+            "Cloudflare's edge — no citshe container needed after that.\n- Set " +
+            'DATABASE_URL as a Worker secret: `wrangler secret put DATABASE_URL`.\n' +
+            secretsToHost +
+            hostForce,
+          buildStep:
+            '2. Build the scraper: create the Neon table(s) with a migration/' +
+            'DDL, write the fetch+parse+upsert, and the scheduled() handler. ' +
+            'RUN IT ONCE now (locally or a manual trigger) to prove it writes ' +
+            'rows, then confirm with a `SELECT count(*)`.\n',
+          deliverStep:
+            '3. Confirm the cron is armed and the first run wrote rows.\n' +
+            '4. Report it: run ${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh ' +
+            '"<worker url or dashboard link>".\n5. ',
+          doneLine:
+            'As the VERY LAST line, print exactly: SCRAPER_OK: <N> rows, ' +
+            'cron <expr>',
+          wantsDesign: false,
+        };
+
+      case 'worker':
+        return {
+          label: 'scheduled worker / job',
+          goal:
+            'Build a recurring job (a scheduled action) and deploy it so it ' +
+            'runs automatically.',
+          stackRules:
+            'STACK: a Cloudflare Worker with a Cron Trigger (wrangler.toml ' +
+            '`[triggers] crons`). Do the action in scheduled(). Use Neon for ' +
+            'any state it needs. Make the run idempotent and logged.' +
+            stackForce,
+          deployRules:
+            'DEPLOY: ' +
+            envCheck +
+            '\n- `wrangler deploy` publishes the Worker and arms its cron.\n' +
+            secretsToHost +
+            hostForce,
+          buildStep:
+            '2. Build the job in scheduled(); trigger it once to prove it does ' +
+            'the action end-to-end and logs a clear result.\n',
+          deliverStep:
+            '3. Confirm the cron is armed and one run succeeded.\n' +
+            '4. Report it: run ${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh ' +
+            '"<worker url or dashboard link>".\n5. ',
+          doneLine:
+            'As the VERY LAST line, print exactly: WORKER_OK: cron <expr>',
+          wantsDesign: false,
+        };
+
+      case 'webapp':
+        return {
+          label: 'web application',
+          goal: 'Build a web application and deploy it live.',
+          stackRules:
+            'STACK: Next.js (App Router). Use Neon (Postgres) for data. If it ' +
+            'needs sign-in, use Clerk (CLERK_* keys) — never hand-roll auth. If ' +
+            'it takes payments, use Stripe (Checkout + a signature-verified ' +
+            'webhook) — never trust the client for price/paid state.' +
+            stackForce,
+          deployRules:
+            'DEPLOY: ' +
+            envCheck +
+            '\n- Next.js → Vercel: `vercel deploy --prod --yes --token ' +
+            '$VERCEL_TOKEN` (or Cloudflare if that is what is connected).\n' +
+            secretsToHost +
+            '\nRun DB migrations before deploy.' +
+            hostForce,
+          buildStep:
+            '2. Build the app per the DESIGN rules — real screens, wired data, ' +
+            'working auth/payments if requested. No dead buttons.\n',
+          deliverStep:
+            '3. Spot-check the deployed app (load it, try the main flow) ' +
+            'before reporting done.\n' +
+            '4. Report the live URL: run ' +
+            '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n5. ',
+          doneLine: 'As the VERY LAST line, print exactly: SITE_URL: <live url>',
+          wantsDesign: true,
+        };
+
+      case 'website':
+      default:
+        return {
+          label: 'website',
+          goal: 'Build a website and deploy it live.',
+          stackRules:
+            'STACK: a static/content site → Astro (blog/docs/landing), or ' +
+            'Astro + Svelte if it needs interactive islands. Add Neon only if ' +
+            'it genuinely needs a database.' +
+            stackForce,
+          deployRules:
+            'HOSTING: ' +
+            envCheck +
+            '\n- Astro/static → Cloudflare Pages: `wrangler pages project ' +
+            'create <slug> --production-branch=main` (once), then `wrangler ' +
+            'pages deploy dist --project-name=<slug>`.\n- If Next.js is used → ' +
+            'Vercel: `vercel deploy --prod --yes --token $VERCEL_TOKEN`.\n' +
+            secretsToHost +
+            hostForce,
+          buildStep:
+            '2. Scaffold and build the site per the stack + DESIGN rules. The ' +
+            'design bar is NON-NEGOTIABLE — even if the prompt is short, ship a ' +
+            'site that looks like a real, professional product, not a template.\n',
+          deliverStep:
+            '3. Verify the build and spot-check the pages before deploying.\n' +
+            '4. Report the live URL: run ' +
+            '${CLAUDE_SKILL_DIR}/scripts/citshe-site.sh "<live url>".\n5. ',
+          doneLine: 'As the VERY LAST line, print exactly: SITE_URL: <live url>',
+          wantsDesign: true,
+        };
+    }
   }
 
   /**
@@ -1997,12 +2156,19 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
       siteUrl?: string;
       deployError?: string;
     } = {};
-    // A build task deploys a site — capture its live URL (last one wins).
-    const siteMatches = output.match(/SITE_URL:\s*(\S+)/g);
-    if (siteMatches) {
-      const last = siteMatches[siteMatches.length - 1];
-      const m = last.match(/SITE_URL:\s*(\S+)/);
-      if (m) result.siteUrl = m[1];
+    // A build task reports its deployed thing with a machine-readable marker.
+    // Sites/apps use SITE_URL; an API uses ENDPOINT; a scraper/worker uses a
+    // SCRAPER_OK/WORKER_OK line (which may have no URL, just a summary). Treat
+    // any of them as the "deployed" signal (last one wins).
+    const urlMatch =
+      lastMatch(output, /SITE_URL:\s*(\S+)/g) ??
+      lastMatch(output, /ENDPOINT:\s*(\S+)/g);
+    if (urlMatch) result.siteUrl = urlMatch;
+    // Scraper/worker success without a URL — keep the summary so the panel can
+    // still show "done" instead of an empty result.
+    if (!result.siteUrl) {
+      const okLine = output.match(/(?:SCRAPER_OK|WORKER_OK):\s*(.+)/);
+      if (okLine) result.siteUrl = okLine[1].trim().slice(0, 200);
     }
     // The worker built + pushed but couldn't deploy — surface the reason so the
     // panel shows "couldn't put it online: …" instead of an empty result.
@@ -2020,4 +2186,11 @@ export class OrchestrationService implements OnModuleInit, OnModuleDestroy {
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+}
+
+/** Last capture group of a global-flag regex over the text, or undefined. */
+function lastMatch(text: string, re: RegExp): string | undefined {
+  const all = [...text.matchAll(re)];
+  const m = all[all.length - 1];
+  return m?.[1];
 }

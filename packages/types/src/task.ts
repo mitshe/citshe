@@ -18,6 +18,18 @@ export type DeliveryMode = "PR" | "DIRECT_PUSH";
 /** Build a brand-new project, or refresh an existing live site. */
 export type BuildMode = "scratch" | "refresh";
 
+/**
+ * What KIND of thing the worker is building. Each type gets its own prompt,
+ * stack and deploy recipe (see buildBuilderInstructions). `website` is the
+ * default and the historical behaviour.
+ */
+export type ProjectType =
+  | "website" // marketing / content / landing / blog
+  | "webapp" // app with auth, dashboard, dynamic server logic
+  | "api" // an HTTP API / backend service
+  | "scraper" // pulls data on a schedule into a database
+  | "worker"; // a recurring job / action (cron)
+
 /** Who can see the repo the worker creates. Defaults to private. */
 export type RepoVisibility = "private" | "public";
 
@@ -28,6 +40,8 @@ export type RepoVisibility = "private" | "public";
  */
 export interface BuildSpec {
   mode: BuildMode;
+  /** What KIND of project this is. Defaults to "website" for back-compat. */
+  projectType?: ProjectType;
   /** What the user wants built, in their own words. */
   prompt: string;
   /** For "refresh": the existing site the worker should look at and improve. */

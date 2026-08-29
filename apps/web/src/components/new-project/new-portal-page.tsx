@@ -13,6 +13,11 @@ import {
   Settings2,
   Sparkles,
   Wand2,
+  Globe,
+  LayoutDashboard,
+  Server,
+  Database,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,7 +31,12 @@ import { WizardProgress } from "@/components/ui/wizard-progress";
 import { useAuthContext } from "@/lib/auth";
 import { useAuthToken } from "@/lib/api/hooks/shared";
 import { api } from "@/lib/api/client";
-import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
+import type {
+  BuildMode,
+  BuildSpec,
+  ProjectType,
+  RepoVisibility,
+} from "@citshe/types";
 
 /**
  * The "New portal" flow, rendered as a full page (route: /new-portal).
@@ -44,9 +54,9 @@ import type { BuildMode, BuildSpec, RepoVisibility } from "@citshe/types";
  * repo, and starts the build — all-or-nothing, so a failure leaves no orphan.
  */
 
-type Step = "mode" | "describe" | "access" | "repo" | "review";
+type Step = "type" | "describe" | "access" | "repo" | "review";
 
-const NEW_STEPS: Step[] = ["mode", "describe", "access", "repo", "review"];
+const NEW_STEPS: Step[] = ["type", "describe", "access", "repo", "review"];
 
 /** GitHub-safe repo slug from a portal name (letters/digits/-, lowercased). */
 function slugify(s: string): string {
@@ -57,6 +67,57 @@ function slugify(s: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 90);
 }
+
+/** The kinds of project the wizard can start. Drives the builder's recipe. */
+const PROJECT_TYPES: {
+  type: ProjectType;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  /** Placeholder for the "describe" step, tailored to the type. */
+  placeholder: string;
+}[] = [
+  {
+    type: "website",
+    name: "Website",
+    description: "A landing page, blog or content site.",
+    icon: <Globe className="size-4" />,
+    placeholder:
+      "A blog about drone-license exams in Poland. Clean, minimal, guides per country, a newsletter.",
+  },
+  {
+    type: "webapp",
+    name: "Web app",
+    description: "An app with login, dashboards, dynamic data.",
+    icon: <LayoutDashboard className="size-4" />,
+    placeholder:
+      "A habit tracker with email login, a dashboard of streaks, and a weekly summary.",
+  },
+  {
+    type: "api",
+    name: "API",
+    description: "An HTTP backend / service with endpoints.",
+    icon: <Server className="size-4" />,
+    placeholder:
+      "A REST API that stores short notes: create, list, delete. JSON in/out.",
+  },
+  {
+    type: "scraper",
+    name: "Scraper",
+    description: "Pulls data on a schedule into a database.",
+    icon: <Database className="size-4" />,
+    placeholder:
+      "Scrape new listings from example.com every hour into a Postgres table (title, price, url).",
+  },
+  {
+    type: "worker",
+    name: "Scheduled job",
+    description: "A recurring action that runs on a cron.",
+    icon: <Clock className="size-4" />,
+    placeholder:
+      "Every morning at 8:00, fetch yesterday's signups and post a summary to a webhook.",
+  },
+];
 
 const PROMPT_CHIPS = [
   "content blog",
@@ -156,8 +217,10 @@ export function NewPortalPage() {
   const { switchOrganization } = useAuthContext();
   const getToken = useAuthToken();
 
-  const [step, setStep] = useState<Step>("mode");
-  const [mode, setMode] = useState<BuildMode | null>(null);
+  const [step, setStep] = useState<Step>("type");
+  const [projectType, setProjectType] = useState<ProjectType | null>(null);
+  // scratch/refresh only applies to a website; default scratch for everything.
+  const [mode, setMode] = useState<BuildMode>("scratch");
 
   const [name, setName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -226,8 +289,8 @@ export function NewPortalPage() {
 
   const canContinue = (): boolean => {
     switch (step) {
-      case "mode":
-        return mode !== null;
+      case "type":
+        return projectType !== null;
       case "describe":
         return (
           name.trim().length > 0 &&
@@ -254,7 +317,7 @@ export function NewPortalPage() {
   };
 
   const build = async () => {
-    if (building || !mode) return;
+    if (building || !projectType) return;
     setBuilding(true);
     setBuildError(null);
     try {
@@ -276,6 +339,7 @@ export function NewPortalPage() {
       setBuildStep("Creating your project…");
       const buildSpec: Record<string, unknown> = {
         mode,
+        projectType,
         prompt: prompt.trim(),
         visibility,
         ...(mode === "refresh" && sourceUrl.trim()
@@ -368,26 +432,26 @@ export function NewPortalPage() {
             )}
           </div>
 
-          {step === "mode" && (
+          {step === "type" && (
             <StepShell
-              title="How should we start?"
-              subtitle="Pick how Claude should begin your project."
+              title="What are you building?"
+              subtitle="Pick the kind of project — Claude uses the right stack and setup for it."
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <RadioCard
-                  selected={mode === "scratch"}
-                  onSelect={() => setMode("scratch")}
-                  icon={<Wand2 className="size-4" />}
-                  title="Completely from scratch"
-                  description="Describe the idea — Claude designs and builds it."
-                />
-                <RadioCard
-                  selected={mode === "refresh"}
-                  onSelect={() => setMode("refresh")}
-                  icon={<RefreshCw className="size-4" />}
-                  title="Refresh an existing site"
-                  description="Give a URL — Claude looks at it and builds a better version."
-                />
+                {PROJECT_TYPES.map((t) => (
+                  <RadioCard
+                    key={t.type}
+                    selected={projectType === t.type}
+                    onSelect={() => {
+                      setProjectType(t.type);
+                      // Refresh only makes sense for a website.
+                      if (t.type !== "website") setMode("scratch");
+                    }}
+                    icon={t.icon}
+                    title={t.name}
+                    description={t.description}
+                  />
+                ))}
               </div>
             </StepShell>
           )}
@@ -397,11 +461,38 @@ export function NewPortalPage() {
               title={
                 mode === "refresh"
                   ? "Which site are we refreshing?"
-                  : "What do you want to build?"
+                  : "Describe your project"
               }
-              subtitle="Claude picks the right tools automatically."
+              subtitle="Claude picks the right stack and setup automatically."
             >
               <div className="space-y-5">
+                {/* Website-only: build new vs refresh an existing site. */}
+                {projectType === "website" && (
+                  <div className="inline-flex rounded-md border border-border bg-surface-inset p-0.5 text-sm">
+                    {(
+                      [
+                        ["scratch", "New site", <Wand2 key="w" className="size-3.5" />],
+                        ["refresh", "Refresh existing", <RefreshCw key="r" className="size-3.5" />],
+                      ] as const
+                    ).map(([m, label, icon]) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMode(m)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded px-3 py-1.5 font-medium transition-linear",
+                          mode === m
+                            ? "bg-surface-card text-foreground shadow-sm"
+                            : "text-text-subtle hover:text-foreground",
+                        )}
+                      >
+                        {icon}
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label htmlFor="portal-name">Project name</Label>
                   <Input
@@ -460,7 +551,9 @@ export function NewPortalPage() {
                     placeholder={
                       mode === "refresh"
                         ? "See what they do and their style. I want a faster, more modern version — same character, better UX."
-                        : "A blog about drone-license exams in Poland. Clean, minimal style like Linear. Guides, categories per country, a newsletter."
+                        : (PROJECT_TYPES.find((t) => t.type === projectType)
+                            ?.placeholder ??
+                          "Describe what you want built…")
                     }
                   />
                   {improveError && (
@@ -482,18 +575,22 @@ export function NewPortalPage() {
                     ))}
                   </div>
 
-                  <div className="pt-2">
-                    <p className="mb-1.5 text-xs font-medium text-text-subtle">
-                      Style
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {STYLE_TEMPLATES.map((s) => (
-                        <Chip key={s.label} onClick={() => addStyle(s.add)}>
-                          {s.label}
-                        </Chip>
-                      ))}
+                  {/* Style starters only matter for things with a UI. */}
+                  {(projectType === "website" ||
+                    projectType === "webapp") && (
+                    <div className="pt-2">
+                      <p className="mb-1.5 text-xs font-medium text-text-subtle">
+                        Style
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {STYLE_TEMPLATES.map((s) => (
+                          <Chip key={s.label} onClick={() => addStyle(s.add)}>
+                            {s.label}
+                          </Chip>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <AdvancedPanel
