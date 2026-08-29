@@ -167,6 +167,18 @@ const STYLE_TEMPLATES: { label: string; add: string }[] = [
 ];
 
 /** The connectable tools, each a single key to paste (nothing is fetched). */
+/** One row in a token's permissions table. */
+interface Permission {
+  /** The scope/group as it appears in the provider's UI (e.g. "Account"). */
+  scope: string;
+  /** The permission to grant (e.g. "Cloudflare Pages · Edit", "repo"). */
+  grant: string;
+  /** Why citshe needs it, in plain words. */
+  why: string;
+  /** Required vs optional (optional = extra features, connect still works). */
+  required: boolean;
+}
+
 interface KeyField {
   key: "github" | "cloudflare" | "vercel" | "neon";
   name: string;
@@ -174,7 +186,10 @@ interface KeyField {
   required?: boolean;
   label: string;
   docsUrl: string;
-  guide: string;
+  /** Where to click to create the token (short, one line). */
+  where: string;
+  /** The exact permissions to enable — rendered as a table. */
+  permissions?: Permission[];
 }
 
 const KEY_FIELDS: KeyField[] = [
@@ -185,7 +200,21 @@ const KEY_FIELDS: KeyField[] = [
     required: true,
     label: "Personal access token",
     docsUrl: "https://github.com/settings/tokens/new",
-    guide: 'github.com/settings/tokens (classic) → scopes "repo" + "workflow".',
+    where: "github.com/settings/tokens → Generate new token (classic).",
+    permissions: [
+      {
+        scope: "Scopes",
+        grant: "repo",
+        why: "Create the repo and push your project's code.",
+        required: true,
+      },
+      {
+        scope: "Scopes",
+        grant: "workflow",
+        why: "Add CI/deploy workflow files to the repo.",
+        required: true,
+      },
+    ],
   },
   {
     key: "cloudflare",
@@ -193,10 +222,44 @@ const KEY_FIELDS: KeyField[] = [
     purpose: "Hosting for websites",
     label: "API token",
     docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
-    // Deploying to Pages needs the ACCOUNT-level Cloudflare Pages permission —
-    // a zone-only (DNS) token connects but then fails at deploy time.
-    guide:
-      'dash.cloudflare.com/profile/api-tokens → Create Custom Token. Add these permissions: Account → Cloudflare Pages → Edit (required to deploy), Account → Workers Scripts → Edit, Account → Workers R2 Storage → Edit, and Zone → DNS → Edit (for custom domains). Scope: all accounts + all zones.',
+    where:
+      "dash.cloudflare.com/profile/api-tokens → Create Custom Token. Under Permissions add each row below (scope + resource + Edit/Read).",
+    // Verified against what the deploy + status plugin actually call:
+    // Pages deploy (wrangler pages deploy), Workers (wrangler deploy for
+    // api/scraper/worker), R2 buckets, DNS records for custom domains, and
+    // account analytics for the status card. A zone-only token can't deploy.
+    permissions: [
+      {
+        scope: "Account",
+        grant: "Cloudflare Pages · Edit",
+        why: "Deploy the website to Pages. Without this the deploy fails.",
+        required: true,
+      },
+      {
+        scope: "Account",
+        grant: "Workers Scripts · Edit",
+        why: "Deploy APIs, scrapers and cron workers.",
+        required: true,
+      },
+      {
+        scope: "Account",
+        grant: "Workers R2 Storage · Edit",
+        why: "Read/write file storage (R2) when a project uses it.",
+        required: false,
+      },
+      {
+        scope: "Zone",
+        grant: "DNS · Edit",
+        why: "Point a custom domain at the deployed site.",
+        required: false,
+      },
+      {
+        scope: "Account",
+        grant: "Account Analytics · Read",
+        why: "Show traffic/health on the portal dashboard.",
+        required: false,
+      },
+    ],
   },
   {
     key: "vercel",
@@ -204,7 +267,10 @@ const KEY_FIELDS: KeyField[] = [
     purpose: "Hosting for apps",
     label: "Token",
     docsUrl: "https://vercel.com/account/tokens",
-    guide: "vercel.com/account/tokens → Create Token.",
+    // Vercel tokens are full-access (no per-permission scopes) — the only
+    // choice is the account/team scope. So no permissions table, just this.
+    where:
+      "vercel.com/account/tokens → Create Token. Vercel tokens are full-access — just set Scope to the team that owns the project (or your personal account), and no expiration if you want it to last.",
   },
   {
     key: "neon",
@@ -212,7 +278,9 @@ const KEY_FIELDS: KeyField[] = [
     purpose: "Database (when the project needs one)",
     label: "API key",
     docsUrl: "https://console.neon.tech/app/settings/api-keys",
-    guide: "console.neon.tech/app/settings/api-keys → Create new API key.",
+    // Neon API keys are account-wide (no granular scopes).
+    where:
+      "console.neon.tech/app/settings/api-keys → Create new API key. Neon keys are account-wide — no extra permissions to pick.",
   },
 ];
 
@@ -926,7 +994,56 @@ function ConnectBlock({
               )}
             </Button>
           </div>
-          <p className="text-xs text-text-subtle">{def.guide}</p>
+          <p className="text-xs leading-relaxed text-text-subtle">
+            {def.where}
+          </p>
+          {def.permissions && (
+            <div className="overflow-hidden rounded-md border border-border">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-surface-inset text-text-subtle">
+                  <tr>
+                    <th className="px-2.5 py-1.5 font-medium">Scope</th>
+                    <th className="px-2.5 py-1.5 font-medium">Permission</th>
+                    <th className="hidden px-2.5 py-1.5 font-medium sm:table-cell">
+                      What it&apos;s for
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {def.permissions.map((p) => (
+                    <tr
+                      key={`${p.scope}-${p.grant}`}
+                      className="border-t border-border align-top"
+                    >
+                      <td className="whitespace-nowrap px-2.5 py-1.5 text-text-subtle">
+                        {p.scope}
+                      </td>
+                      <td className="px-2.5 py-1.5">
+                        <span className="font-medium text-foreground">
+                          {p.grant}
+                        </span>
+                        {p.required ? (
+                          <span className="ml-1.5 rounded bg-ok/10 px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ok">
+                            required
+                          </span>
+                        ) : (
+                          <span className="ml-1.5 rounded bg-surface-inset px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text-subtle">
+                            optional
+                          </span>
+                        )}
+                        <span className="mt-0.5 block text-text-subtle sm:hidden">
+                          {p.why}
+                        </span>
+                      </td>
+                      <td className="hidden px-2.5 py-1.5 text-text-subtle sm:table-cell">
+                        {p.why}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {error && (
             <p className="flex items-start gap-1.5 text-xs font-medium text-danger">
               <AlertCircle className="mt-px size-3.5 shrink-0" />
