@@ -25,7 +25,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
-import { RadioCard } from "@/components/ui/radio-card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusDot } from "@/components/ui/status-dot";
 import { WizardProgress } from "@/components/ui/wizard-progress";
 import { useAuthContext } from "@/lib/auth";
@@ -218,7 +224,8 @@ export function NewPortalPage() {
   const getToken = useAuthToken();
 
   const [step, setStep] = useState<Step>("type");
-  const [projectType, setProjectType] = useState<ProjectType | null>(null);
+  // Defaults to "website"; the dropdown always shows a valid selection.
+  const [projectType, setProjectType] = useState<ProjectType>("website");
   // scratch/refresh only applies to a website; default scratch for everything.
   const [mode, setMode] = useState<BuildMode>("scratch");
 
@@ -290,7 +297,7 @@ export function NewPortalPage() {
   const canContinue = (): boolean => {
     switch (step) {
       case "type":
-        return projectType !== null;
+        return true;
       case "describe":
         return (
           name.trim().length > 0 &&
@@ -317,7 +324,7 @@ export function NewPortalPage() {
   };
 
   const build = async () => {
-    if (building || !projectType) return;
+    if (building) return;
     setBuilding(true);
     setBuildError(null);
     try {
@@ -437,21 +444,39 @@ export function NewPortalPage() {
               title="What are you building?"
               subtitle="Pick the kind of project — Claude uses the right stack and setup for it."
             >
-              <div className="grid gap-3 sm:grid-cols-2">
-                {PROJECT_TYPES.map((t) => (
-                  <RadioCard
-                    key={t.type}
-                    selected={projectType === t.type}
-                    onSelect={() => {
-                      setProjectType(t.type);
-                      // Refresh only makes sense for a website.
-                      if (t.type !== "website") setMode("scratch");
-                    }}
-                    icon={t.icon}
-                    title={t.name}
-                    description={t.description}
-                  />
-                ))}
+              <div className="space-y-2">
+                <Label htmlFor="project-type">Project type</Label>
+                <Select
+                  value={projectType}
+                  onValueChange={(v) => {
+                    const type = v as ProjectType;
+                    setProjectType(type);
+                    // Refresh only makes sense for a website.
+                    if (type !== "website") setMode("scratch");
+                  }}
+                >
+                  <SelectTrigger id="project-type" className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TYPES.map((t) => (
+                      <SelectItem key={t.type} value={t.type}>
+                        <span className="flex items-center gap-2.5">
+                          <span className="text-muted-foreground">
+                            {t.icon}
+                          </span>
+                          {t.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="pt-0.5 text-sm text-muted-foreground">
+                  {
+                    PROJECT_TYPES.find((t) => t.type === projectType)
+                      ?.description
+                  }
+                </p>
               </div>
             </StepShell>
           )}
@@ -468,28 +493,30 @@ export function NewPortalPage() {
               <div className="space-y-5">
                 {/* Website-only: build new vs refresh an existing site. */}
                 {projectType === "website" && (
-                  <div className="inline-flex rounded-md border border-border bg-surface-inset p-0.5 text-sm">
-                    {(
-                      [
-                        ["scratch", "New site", <Wand2 key="w" className="size-3.5" />],
-                        ["refresh", "Refresh existing", <RefreshCw key="r" className="size-3.5" />],
-                      ] as const
-                    ).map(([m, label, icon]) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMode(m)}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded px-3 py-1.5 font-medium transition-linear",
-                          mode === m
-                            ? "bg-surface-card text-foreground shadow-sm"
-                            : "text-text-subtle hover:text-foreground",
-                        )}
-                      >
-                        {icon}
-                        {label}
-                      </button>
-                    ))}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="build-mode">Build</Label>
+                    <Select
+                      value={mode}
+                      onValueChange={(v) => setMode(v as BuildMode)}
+                    >
+                      <SelectTrigger id="build-mode" className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="scratch">
+                          <span className="flex items-center gap-2.5">
+                            <Wand2 className="size-4 text-muted-foreground" />
+                            New site
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="refresh">
+                          <span className="flex items-center gap-2.5">
+                            <RefreshCw className="size-4 text-muted-foreground" />
+                            Refresh an existing site
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 
