@@ -189,7 +189,7 @@ export default function SkillsPage() {
   };
 
   return (
-    <div className="w-full max-w-[1400px] space-y-5 px-4 py-5 sm:px-6 sm:py-6">
+    <div className="w-full max-w-[1000px] space-y-5 px-4 py-5 sm:px-6 sm:py-6">
       <PageHeader
         title="Skills"
         description="Reusable instructions installed as Claude Code slash commands in sessions."

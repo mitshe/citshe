@@ -126,7 +126,10 @@ const KEY_FIELDS: KeyField[] = [
     purpose: "Hosting for websites",
     label: "API token",
     docsUrl: "https://dash.cloudflare.com/profile/api-tokens",
-    guide: 'dash.cloudflare.com/profile/api-tokens → "Edit Cloudflare Workers".',
+    // Deploying to Pages needs the ACCOUNT-level Cloudflare Pages permission —
+    // a zone-only (DNS) token connects but then fails at deploy time.
+    guide:
+      'dash.cloudflare.com/profile/api-tokens → "Create Custom Token" → add Account · Cloudflare Pages · Edit (a zone-only token won\'t deploy).',
   },
   {
     key: "vercel",

@@ -60,7 +60,6 @@ import {
   useDeleteSessionFile,
   useWriteSessionFile,
   usePushAndCreatePR,
-  useTaskBySession,
   queryKeys,
 } from "@/lib/api/hooks";
 import { useSocket } from "@/lib/socket/socket-context";
@@ -113,9 +112,6 @@ export default function SessionDetailPage() {
 
   const queryClient = useQueryClient();
   const { data: session, isLoading, refetch } = useSession(sessionId);
-  // The task this session is a worker for (null for an ad-hoc terminal). Powers
-  // the "Progress" tab — the human activity feed next to the raw terminal.
-  const { data: workerTask } = useTaskBySession(sessionId);
   const { data: files = [], isLoading: filesLoading } = useSessionFiles(sessionId);
   const { data: gitStatuses = [] } = useSessionGitStatus(sessionId);
   const resumeSession = useResumeSession();
@@ -130,7 +126,6 @@ export default function SessionDetailPage() {
 
   // Tab state
   const agentTerminalId = `${sessionId}:agent`;
-  const progressTabId = `${sessionId}:progress`;
 
   // Build agent terminal command from session config
   const buildAgentCmd = useCallback((): string[] => {
@@ -158,34 +153,26 @@ export default function SessionDetailPage() {
 
   const [activeTabId, setActiveTabId] = useState(agentTerminalId);
 
-  // Initialize tabs when session loads. A worker session (one running a task)
-  // gets a "Progress" tab FIRST — the human activity feed (Claude's notes,
-  // screenshots, summary) — shown by default so a non-dev watches that instead
-  // of the raw terminal. The Terminal tab stays for the developer view.
+  // Initialize tabs when session loads — just the terminal. The worker's live
+  // stream (citshe-stream: "› Bash …", Claude's text) IS the readable view, so
+  // a separate Progress tab was redundant.
   useEffect(() => {
     if (!session || tabs.length > 0) return;
     const hasAgent = !!session.aiCredentialId;
     const agentTitle = hasAgent
       ? `Agent: ${session.name}`
       : `Terminal: ${session.name}`;
-    const terminalTab: Tab = {
-      id: agentTerminalId,
-      title: agentTitle,
-      type: "terminal",
-      closeable: true,
-      terminalId: agentTerminalId,
-      cmd: buildAgentCmd(),
-    };
-    if (workerTask) {
-      setTabs([
-        { id: progressTabId, title: "Progress", type: "progress", closeable: false },
-        terminalTab,
-      ]);
-      setActiveTabId(progressTabId);
-    } else {
-      setTabs([terminalTab]);
-    }
-  }, [session, workerTask]); // eslint-disable-line react-hooks/exhaustive-deps
+    setTabs([
+      {
+        id: agentTerminalId,
+        title: agentTitle,
+        type: "terminal",
+        closeable: true,
+        terminalId: agentTerminalId,
+        cmd: buildAgentCmd(),
+      },
+    ]);
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inline session-name editing (header)
   const [editingName, setEditingName] = useState(false);
@@ -265,24 +252,6 @@ export default function SessionDetailPage() {
       socket.off("session:status", handleStatus);
     };
   }, [socket, sessionId, refetch]);
-
-  // Keep the Progress tab live: refetch the worker task when the agent logs
-  // activity or the task status changes (notes/screenshots/summary arrive).
-  useEffect(() => {
-    if (!socket || !sessionId) return;
-    const refresh = () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.tasks.bySession(sessionId),
-      });
-    socket.on("agent:log", refresh);
-    socket.on("task:update", refresh);
-    socket.on("task:completed", refresh);
-    return () => {
-      socket.off("agent:log", refresh);
-      socket.off("task:update", refresh);
-      socket.off("task:completed", refresh);
-    };
-  }, [socket, sessionId, queryClient]);
 
   // Fallback polling when session is CREATING
   const currentStatus = session?.status as string | undefined;
@@ -1057,40 +1026,6 @@ export default function SessionDetailPage() {
 
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-hidden">
-            {/* Progress tab — the SAME live, formatted stream the worker prints
-                ("› Bash …", "› Skill", Claude's own text) rendered read-only.
-                This is the human read-through of what Claude is doing; the
-                interactive Terminal tab (below) owns the attach, this one just
-                watches the shared output stream. */}
-            {tabs
-              .filter((t) => t.type === "progress")
-              .map((tab) => (
-                <div
-                  key={tab.id}
-                  className="bg-surface-inset"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    display: activeTabId === tab.id ? "block" : "none",
-                  }}
-                >
-                  {isCreating ? (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      Starting up — Claude will begin shortly…
-                    </div>
-                  ) : (
-                    <TerminalView
-                      sessionId={sessionId}
-                      terminalId={agentTerminalId}
-                      isRunning={isRunning}
-                      cmd={buildAgentCmd()}
-                      isVisible={activeTabId === tab.id}
-                      readOnly
-                    />
-                  )}
-                </div>
-              ))}
-
             {/* Terminal tabs */}
             {tabs
               .filter((t) => t.type === "terminal")

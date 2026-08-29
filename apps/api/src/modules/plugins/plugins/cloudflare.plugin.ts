@@ -635,10 +635,31 @@ class CloudflarePlugin implements StackPlugin {
     const { apiToken } = this.cfg(config);
     if (!apiToken) return { ok: false, error: 'An API token is required.' };
     try {
-      // Token is valid if it can list at least one account.
+      // 1. Token must see at least one account.
       const json = await this.get(apiToken, '/accounts');
-      if (!json?.result?.length) {
-        return { ok: false, error: 'Token has no account access.' };
+      const accountId = json?.result?.[0]?.id as string | undefined;
+      if (!accountId) {
+        return {
+          ok: false,
+          error:
+            'This token can\'t see any account. Create it with the "Account" resource included (Account → your account), not zone-only.',
+        };
+      }
+      // 2. Verify it can actually reach Pages — this is what a deploy needs, and
+      // the #1 cause of "it connected but the deploy failed later". A zone-only
+      // (DNS) token lists accounts but 403s here.
+      try {
+        await this.get(apiToken, `/accounts/${accountId}/pages/projects`);
+      } catch (err) {
+        const msg = (err as Error).message || '';
+        if (/403|forbidden|not authorized|9109|authentication/i.test(msg)) {
+          return {
+            ok: false,
+            error:
+              'The token is missing the "Cloudflare Pages" permission, so citshe can\'t deploy sites. Edit the token and add Account → Cloudflare Pages → Edit, then reconnect.',
+          };
+        }
+        // A non-permission error (network etc.) shouldn't block connecting.
       }
       return { ok: true };
     } catch (err) {
