@@ -438,12 +438,9 @@ export function NewPortalPage() {
       {/* Scrollable content, centered */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl px-4 pb-12 pt-6 sm:px-6 sm:pt-10">
-          <div className="mb-5">
+          <div className="mb-8">
             <WizardProgress current={stepIndex + 1} total={NEW_STEPS.length} />
           </div>
-
-          {/* Nav at the TOP */}
-          <div className="mb-8 flex items-center gap-3">{navButtons}</div>
 
           {step === "type" && (
             <StepShell
